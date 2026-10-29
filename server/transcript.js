@@ -102,7 +102,8 @@ const blank = () => ({
 // Hook feedback is the same turn continuing, so it does not reset the count.
 const TURN_CONTINUATION = 'Stop hook feedback:';
 const SUBAGENT_TOOLS = new Set(['Agent', 'Task']);
-const TASK_ID = /<task-id>([^<\s]+)<\/task-id>/g;
+const TASK_ID_ONE = /<task-id>([^<\s]+)<\/task-id>/;
+const WAITING_ON_OWN_WORK = /is waiting on its own background work|stopped with background work of its own still running/;
 // Stopping a job by hand sends no notice at all, only the stop itself, so the
 // stop is what ends it (otherwise a stopped command reads as still running).
 const STOP_TOOLS = new Set(['TaskStop', 'KillShell']);
@@ -148,8 +149,15 @@ function trackBackground(state, record) {
     : record.type === 'attachment' && record.attachment?.type === 'queued_command' ? record.attachment.prompt : null;
   if (typeof text !== 'string') return;
   if (record.type === 'user' && text.trimStart().startsWith(RUNNER_START)) state.background.clear();
-  // Several notices can arrive in one message.
-  if (text.includes('<task-notification>')) for (const [, id] of text.matchAll(TASK_ID)) state.background.delete(id);
+  // Several notices can arrive in one message. A subagent that stopped while work of
+  // its own still runs is not over: Claude Code says so in its notice, and the same
+  // task notifies again when it is.
+  if (text.includes('<task-notification>')) {
+    for (const notice of text.split('<task-notification>').slice(1)) {
+      const body = notice.split('</task-notification>')[0], id = TASK_ID_ONE.exec(body)?.[1];
+      if (id && !WAITING_ON_OWN_WORK.test(body)) state.background.delete(id);
+    }
+  }
 }
 
 // Whether Claude is in a turn, whoever started it. The server learns of a turn when
