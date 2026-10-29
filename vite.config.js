@@ -55,7 +55,13 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
-      includeAssets: ['agent-symbol-64.png', 'agent-symbol-128.png', 'agent-symbol-256.png', 'agent-symbol-app-180.png', 'agent-symbol-app-1024.png'],
+      // The manifest's 1024 icon is fetched by the browser through the manifest/
+      // apple-touch link; precaching it (the plugin's default) only added dead
+      // weight to every update check. It stays out of the SW manifest entirely.
+      includeManifestIcons: false,
+      // No includeAssets: every public/ file worth caching is already picked up by
+      // globPatterns below, and listing the agent-symbol PNGs here put each one in the
+      // precache manifest twice (the two sources both match).
       manifest: {
         name: 'CC Agent',
         short_name: 'CC Agent',
@@ -83,7 +89,10 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,jpg,jpeg,webp,ico,woff,woff2,json}'],
         // version.json must always come from the network; a precached copy would
         // answer the update check with the build the app is already running.
-        globIgnores: ['version.json'],
+        // The 1024 icon is fetched by the browser only through the manifest/
+        // apple-touch link (1.19MB of precache that update checks never used), and
+        // browsers that run the woff2 never ask for the fallback .woff.
+        globIgnores: ['version.json', '**/agent-symbol-app-1024.png', '**/*.woff'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//, /^\/bridge\//, /^\/terminal\//, /\.[a-z0-9]+$/i],
         cleanupOutdatedCaches: true,

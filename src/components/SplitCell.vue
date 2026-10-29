@@ -179,7 +179,9 @@ async function refresh(){
   const merged=merge(detail.value?.messages,d.messages||[]);
   const changed=merged.at(-1)?.id!==detail.value?.messages?.at(-1)?.id||merged.length!==detail.value?.messages?.length;
   const first=!detail.value;
-  detail.value={...d,messages:merged,hasOlder:merged.length>(d.messages||[]).length?(detail.value?.hasOlder??d.hasOlder):d.hasOlder};
+  const next={...d,messages:merged,hasOlder:merged.length>(d.messages||[]).length?(detail.value?.hasOlder??d.hasOlder):d.hasOlder};
+  // Same as the main chat: an unchanged answer is not assigned, so the messages are not rendered again.
+  if(JSON.stringify(next)!==JSON.stringify(detail.value))detail.value=next;
   failed.value='';
   if(first||changed&&atBottom.value)toBottom();
  }catch(e){failed.value=e.message||ct('無法載入這個 Agent');}

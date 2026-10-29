@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID, randomBytes, timingSafeEqual, createHash } = require('node:crypto');
-const { execFileSync } = require('node:child_process');
+const { execFileSync, execFile } = require('node:child_process');
 const permissions = require('./permissions');
 const attachments=require('./attachments');
 const agentProfile=require('./agentProfile');
@@ -134,6 +134,7 @@ const STARTUP_SLOW_MS=15*60000;
 // How long a message just handed to Claude may be missing from its transcript
 // before a turn ending without it counts it unanswered.
 const ARRIVING_MS=10000;
+const SESSION_RECHECK_MS=15000,sessionSeenAt=new WeakMap();
 function reconcile(c) {
  if(!c||c.archived||c.mode!=='claude')return c;
  const g=active(c);
@@ -146,7 +147,10 @@ function reconcile(c) {
   return c;
  }
  if(g.heartbeat>Date.now()-STALE_MS)return c;
- try{execFileSync('tmux',['-L',tmuxSocket,'has-session','-t',g.tmux],{stdio:'ignore',timeout:2000});return c;}catch{}
+ // Without heartbeats, checking tmux synchronously on every poll blocks the event loop.
+ // Trust a successful check briefly before asking again.
+ if(sessionSeenAt.get(g)>Date.now()-SESSION_RECHECK_MS)return c;
+ try{execFileSync('tmux',['-L',tmuxSocket,'has-session','-t',g.tmux],{stdio:'ignore',timeout:2000});sessionSeenAt.set(g,Date.now());return c;}catch{}
  permissions.cancel(g);g.compacting=false;g.manualCompact=false;g.phase='error';g.ready=false;g.heartbeat=0;
  g.lastError='Claude session 已中斷（例如重開機後），請重新連線。';save(c);
  return c;
@@ -216,12 +220,12 @@ function snippetAt(body,at){
 // started itself (a task notice, the terminal), which only its transcript tells.
 function busyElsewhere(c,g,work=transcript.currentWork(stateRoot,c)){return c.mode==='claude'&&g.phase==='ready'&&g.ready&&!g.compacting&&!g.manualCompact&&work.inTurn;}
 function publicView(c,full=false,window) {
- const g=active(c);
+ const g=active(c),{memory,...profile}=agentProfile.profile(c);
  const alive=g.heartbeat>Date.now()-15000;
  const work=c.mode==='claude'&&alive?transcript.currentWork(stateRoot,c):{inTurn:false,background:0};
  const lastMessage=c.messages.findLast(m=>m.role==='user'||m.role==='assistant'||m.role==='relay');
  const preview=String(lastMessage?.text||lastMessage?.attachments?.map(f=>f.name).join(', ')||'').replace(/\s+/g,' ').trim();
- return {preview:Array.from(preview).slice(0,500).join('')+(Array.from(preview).length>500?'…':''),activeAt:lastMessage?.at||c.createdAt||null,id:c.id,...agentProfile.profile(c),...modelView(c),profileVersion:c.profileVersion||0,sessionModel:g.model||null,sessionEffort:g.effort||null,mode:c.mode,createdAt:c.createdAt,updatedAt:c.updatedAt,generation:c.generation,compactCount:g.compacts,threshold:c.threshold,thresholdOwn:!!c.thresholdOwn,wrapUp:c.wrapUpOff!==true,peerLink:peerView(c),phase:alive&&busyElsewhere(c,g,work)?'busy':g.phase,background:work.background,compacting:!!(g.manualCompact||g.compacting),compactingSince:(g.manualCompact||g.compacting)&&g.compactSince?new Date(g.compactSince).toISOString():null,compactPercent:(g.manualCompact||g.compacting)&&Number.isFinite(g.compactPercent)?g.compactPercent:null,connected:alive&&g.ready,tmux:g.tmux,sessionId:g.sessionId,pendingRotation:c.pendingRotation,memory:c.memory,checklists:c.checklists||[],avatar:c.avatar?'/api/conversations/'+c.id+'/avatar?v='+c.avatar.version:null,listGroup:c.listGroup||null,lastError:g.lastError||'',unread:unreadCount(c),toolPolicy:g.toolPolicy||'legacy',terminalPrompt:alive&&prompts.get(c.id)?.session===g.sessionId?(({key,title,body,options,selected,hint,since})=>({key,title,body,options,selected,hint,since}))(prompts.get(c.id)):null,permissions:permissions.pending(g),...(full?{...messageWindow(c,window),runs:c.runs.map(({token,seen,permissions,...x})=>x),usage:transcript.usage(stateRoot,c),progress:transcript.progress(stateRoot,c)}:{})};
+ return {preview:Array.from(preview).slice(0,500).join('')+(Array.from(preview).length>500?'…':''),activeAt:lastMessage?.at||c.createdAt||null,id:c.id,...profile,...modelView(c),profileVersion:c.profileVersion||0,sessionModel:g.model||null,sessionEffort:g.effort||null,mode:c.mode,createdAt:c.createdAt,updatedAt:c.updatedAt,generation:c.generation,compactCount:g.compacts,threshold:c.threshold,thresholdOwn:!!c.thresholdOwn,wrapUp:c.wrapUpOff!==true,peerLink:peerView(c),phase:alive&&busyElsewhere(c,g,work)?'busy':g.phase,background:work.background,compacting:!!(g.manualCompact||g.compacting),compactingSince:(g.manualCompact||g.compacting)&&g.compactSince?new Date(g.compactSince).toISOString():null,compactPercent:(g.manualCompact||g.compacting)&&Number.isFinite(g.compactPercent)?g.compactPercent:null,connected:alive&&g.ready,tmux:g.tmux,sessionId:g.sessionId,pendingRotation:c.pendingRotation,checklists:c.checklists||[],avatar:c.avatar?'/api/conversations/'+c.id+'/avatar?v='+c.avatar.version:null,listGroup:c.listGroup||null,lastError:g.lastError||'',unread:unreadCount(c),toolPolicy:g.toolPolicy||'legacy',terminalPrompt:alive&&prompts.get(c.id)?.session===g.sessionId?(({key,title,body,options,selected,hint,since})=>({key,title,body,options,selected,hint,since}))(prompts.get(c.id)):null,permissions:permissions.pending(g),...(full?{memory:c.memory,...messageWindow(c,window),runs:c.runs.map(({token,seen,permissions,...x})=>x),usage:transcript.usage(stateRoot,c),progress:transcript.progress(stateRoot,c)}:{})};
 }
 // callerRole is a separate argument, never read from the request body: the body
 // is client-controlled, and the model and effort tiers in agentProfile depend on it.
@@ -1255,11 +1259,21 @@ function commandInGroup(owner,id,agentId,text){
  return groupView(x,true);
 }
 function searchGroup(owner,id,query){const x=groupFor(id,owner);return searchIn([{id:x.id,title:x.name,messages:x.messages}],query);}
-const prompts=new Map();
+const prompts=new Map(),promptGeneration=new Map(),capturing=new Set();
+const capturePane=target=>new Promise(resolve=>execFile('tmux',['-L',tmuxSocket,'capture-pane',...platform.CAPTURE,target],{encoding:'utf8',timeout:1000},(error,stdout)=>resolve(error?null:stdout)));
 function syncTerminalPrompt(c){
- const g=active(c);if(!g.tmux)return;
- let prompt=null;
- try{prompt=terminalPrompt.parse(execFileSync('tmux',['-L',tmuxSocket,'capture-pane',...platform.CAPTURE,g.tmux],{encoding:'utf8',timeout:1000}));}catch{}
+ const g=active(c);if(!g.tmux||capturing.has(c.id))return;
+ const token=g.token,session=g.sessionId,target=g.tmux,generation=promptGeneration.get(c.id)||0;
+ capturing.add(c.id);
+ capturePane(target).then(screen=>{
+  // A run that changed meanwhile has a screen of its own to read next time.
+  if(active(c)!==g||g.token!==token||g.sessionId!==session||g.tmux!==target||(g.phase==='stopped'||g.phase==='error')||(promptGeneration.get(c.id)||0)!==generation)return;
+  let prompt=null;
+  if(screen!==null){try{prompt=terminalPrompt.parse(screen);}catch{}}
+  takeTerminalPrompt(c,g,prompt);
+ }).catch(()=>{}).finally(()=>capturing.delete(c.id));
+}
+function takeTerminalPrompt(c,g,prompt){
  if(prompt&&prompt.options.length<2)prompt=null;
  const old=prompts.get(c.id);
  if(!prompt||old?.session!==g.sessionId&&old){prompts.delete(c.id);}
@@ -1277,6 +1291,7 @@ function chooseTerminalOption(c,data){
  if(!prompt||prompt.key!==data?.key)throw error('終端機上的選單已經換了，請重新看一次。',409);
  const keys=data.cancel===true?['Escape']:Number.isInteger(data.index)&&data.index>=0&&data.index<prompt.options.length?terminalPrompt.keysFor(prompt,data.index):null;
  if(!keys)throw error('選項不正確');
+ promptGeneration.set(c.id,(promptGeneration.get(c.id)||0)+1);
  for(const k of keys)execFileSync('tmux',['-L',tmuxSocket,'send-keys','-t',g.tmux,k],{timeout:2000});
  prompts.delete(c.id);
 }
@@ -1571,31 +1586,45 @@ function bridge(c,action,data={}) {
   // A heartbeat is only "still alive", and memory is what answers that while the
   // service runs; persisting it rewrote this owner's whole file every five seconds
   // per agent. Nothing here is worth a disk write unless the compact watchdog
-  // actually changed something, so this branch returns without saving.
-  let changed=false;
+  // actually changed something, and that is decided when the screen arrives.
   // While compacting, the screen also carries its progress (compactScreen.js),
-  // kept in memory only, like the heartbeat itself.
-  if(g.manualCompact||g.compacting){try{const screen=execFileSync('tmux',['-L',tmuxSocket,'capture-pane',...platform.CAPTURE,g.tmux],{encoding:'utf8',timeout:1000});
-   g.compactPercent=compactScreen.compactPercent(screen);
-   // Claude Code also fires PreCompact for a summary it precomputes in the
-   // background while the agent keeps working; that one never draws
-   // "Running PreCompact hooks" or "Compacting conversation" (2.1.286) and may never
-   // send PostCompact, which held the page on
-   // 整理對話記憶 until the whole task ended. A real
-   // compaction draws it at once, so one not seen on screen soon after is let go.
-   // One that was drawn and is gone from the screen is over, PostCompact or not: Claude
-   // Code compacts an idle session before its prompt cache expires ("Compacted while
-   // idle", 2.1.296) and sends no PostCompact for it, and since a compacting agent takes
-   // no message, no turn could end to clear it either: the page stayed on 整理對話記憶
-   // until the agent was restarted.
-   if(g.compacting&&!g.manualCompact){if(/Compacting conversation|Running PreCompact hooks/.test(screen)){g.compactSeen=true;g.compactDrawnAt=Date.now();}
-    else if(!g.compactSeen&&g.compactSince&&Date.now()-g.compactSince>COMPACT_SCREEN_GRACE_MS){g.compacting=false;g.compactPercent=null;changed=true;}
-    else if(g.compactSeen&&Date.now()-(g.compactDrawnAt||g.compactSince||0)>COMPACT_GONE_MS){g.compacting=false;g.compactPercent=null;changed=true;}}
-   if(g.manualCompact){const last=screen.slice(screen.lastIndexOf('❯ /compact'));if(last.includes('Not enough messages to compact.')){g.manualCompact=false;g.phase='ready';g.lastError='訊息量不足，Claude 未執行 compact；可以繼續聊天。';changed=true;}}}catch{}}
-  if(!changed)return {ok:true};
+  // kept in memory only, like the heartbeat itself. Only one screen read per
+  // agent is in flight, like syncTerminalPrompt.
+  // The screen answers for the compaction it was read during: one that ended or failed
+  // meanwhile, or another that began, is left to the next heartbeat.
+  const key=c.id+':compact',token=g.token,session=g.sessionId,target=g.tmux,since=g.compactSince;
+  const same=()=>active(c)===g&&g.token===token&&g.sessionId===session&&g.tmux===target&&g.compactSince===since&&(g.manualCompact||g.compacting)&&!['error','stopped'].includes(g.phase);
+  if((g.manualCompact||g.compacting)&&!capturing.has(key)){
+   capturing.add(key);
+   capturePane(target)
+    .then(screen=>{if(screen!==null&&same()&&takeCompactScreen(g,screen))save(c);})
+    .catch(()=>{}).finally(()=>capturing.delete(key));
+  }
+  return {ok:true};
  }
  else throw error('Unknown bridge action',404);
  save(c);return {ok:true};
+}
+// Whether the screen ended a compaction the page still shows.
+function takeCompactScreen(g,screen){
+ let changed=false;
+ g.compactPercent=compactScreen.compactPercent(screen);
+ // Claude Code also fires PreCompact for a summary it precomputes in the
+ // background while the agent keeps working; that one never draws
+ // "Running PreCompact hooks" or "Compacting conversation" (2.1.286) and may never
+ // send PostCompact, which held the page on
+ // 整理對話記憶 until the whole task ended. A real
+ // compaction draws it at once, so one not seen on screen soon after is let go.
+ // One that was drawn and is gone from the screen is over, PostCompact or not: Claude
+ // Code compacts an idle session before its prompt cache expires ("Compacted while
+ // idle", 2.1.296) and sends no PostCompact for it, and since a compacting agent takes
+ // no message, no turn could end to clear it either: the page stayed on 整理對話記憶
+ // until the agent was restarted.
+ if(g.compacting&&!g.manualCompact){if(/Compacting conversation|Running PreCompact hooks/.test(screen)){g.compactSeen=true;g.compactDrawnAt=Date.now();}
+  else if(!g.compactSeen&&g.compactSince&&Date.now()-g.compactSince>COMPACT_SCREEN_GRACE_MS){g.compacting=false;g.compactPercent=null;changed=true;}
+  else if(g.compactSeen&&Date.now()-(g.compactDrawnAt||g.compactSince||0)>COMPACT_GONE_MS){g.compacting=false;g.compactPercent=null;changed=true;}}
+ if(g.manualCompact){const last=screen.slice(screen.lastIndexOf('❯ /compact'));if(last.includes('Not enough messages to compact.')){g.manualCompact=false;g.phase='ready';g.lastError='訊息量不足，Claude 未執行 compact；可以繼續聊天。';changed=true;}}
+ return changed;
 }
 
 

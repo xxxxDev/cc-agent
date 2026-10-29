@@ -402,15 +402,15 @@ function read(file) {
 
 // A session imported from another directory keeps living in the project folder it
 // was created in, so fall back to a scan — but remember the answer, including the
-// absence of one, because this runs on every poll.
+// absence of one, because this runs on every poll (several times a second across
+// agents). Either answer is looked at again after a while; a file gone meanwhile
+// reads as nothing (read() finds no file).
 const located = new Map();
 const LOOKUP_TTL_MS = 30000;
 function locate(cwd, sessionId) {
   if (!sessionId) return null;
   const cached = located.get(sessionId);
-  if (cached && (cached.file || cached.at > Date.now() - LOOKUP_TTL_MS)) {
-    if (!cached.file || fs.existsSync(cached.file)) return cached.file;
-  }
+  if (cached && cached.at > Date.now() - LOOKUP_TTL_MS) return cached.file;
   let file = path.join(PROJECTS, cwd.replace(/[^a-zA-Z0-9]/g, '-'), sessionId + '.jsonl');
   if (!fs.existsSync(file)) {
     file = null;

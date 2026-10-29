@@ -43,7 +43,8 @@ export const autoSort = ref(false);
 export const listGroups = ref([]);
 export function absorbList(preferences) {
   autoSort.value = preferences?.autoSort === true;
-  listGroups.value = Array.isArray(preferences?.groups) ? preferences.groups : [];
+  const nextGroups = Array.isArray(preferences?.groups) ? preferences.groups : [];
+  if (JSON.stringify(listGroups.value) !== JSON.stringify(nextGroups)) listGroups.value = nextGroups;
   return preferences;
 }
 export async function loadListPreferences() {

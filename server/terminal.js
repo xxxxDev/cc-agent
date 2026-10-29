@@ -76,8 +76,18 @@ function installTerminal(server,{tmuxClient=serverTmux,ptyModule=require('node-p
     ws.conversationId=c.id;
     let terminal,timer,closed=false;
     const valid=()=>agents.active(c)===g&&g.token===generationToken&&g.phase!=='stopped';
-    const send=data=>{if(ws.readyState===1){if(ws.bufferedAmount>2*1024*1024)return close();ws.send(JSON.stringify(data));}};
-    const close=(dead=false)=>{if(closed)return;closed=true;clearInterval(timer);try{terminal?.kill();}catch{}if(dead)ws.terminate();else ws.close();};
+    // A tmux redraw burst is dozens of PTY chunks a second, each paying stringify
+    // + a ws frame + a client parse when sent alone. Concatenated here and flushed
+    // as one frame: on a 12 ms timer (xterm's write parser yields at the same
+    // pace, and it stays inside one 60 fps frame), past 64 KB, and ahead of any
+    // other frame so nothing overtakes the output.
+    let outBuf='',outTimer=null;
+    // A backlog this size means the client cannot keep up; closing lets it
+    // reattach clean instead of lagging further behind forever.
+    const sendRaw=data=>{if(ws.readyState===1){if(ws.bufferedAmount>2*1024*1024)return close();ws.send(JSON.stringify(data));}};
+    const flushData=()=>{if(outTimer!==null){clearTimeout(outTimer);outTimer=null;}if(!outBuf)return;const data=outBuf;outBuf='';sendRaw({type:'data',data});};
+    const send=data=>{flushData();sendRaw(data);};
+    const close=(dead=false)=>{if(closed)return;closed=true;flushData();clearInterval(timer);try{terminal?.kill();}catch{}if(dead)ws.terminate();else ws.close();};
     // A connection can die without a word: a phone puts the app away, a computer
     // sleeps, a network changes. The page kept the last screen as if still attached
     // (the terminal sometimes stops updating), and a
@@ -89,7 +99,7 @@ function installTerminal(server,{tmuxClient=serverTmux,ptyModule=require('node-p
     // From where, too: the same address the sign-in records keep.
     audit({source:'terminal',path:req.url,status:101,username:principal.username,role:principal.role,conversation:c.id,ip:resolveClientIp(req)});
     try{terminal=ptyModule.spawn(tmuxClient(),attachArgs(g.tmux),{name:'xterm-256color',cols:100,rows:30,cwd:agents.stateRoot,env:{...agentEnv(),TERM:'xterm-256color'}});}catch{send({type:'error',message:'無法附接終端，請確認此對話仍在執行。'});return close();}
-    terminal.onData(data=>{if(!valid())return close();send({type:'data',data});});
+    terminal.onData(data=>{if(!valid())return close();outBuf+=data;if(outBuf.length>=65536)flushData();else if(outTimer===null)outTimer=setTimeout(flushData,12);});
     terminal.onExit(()=>{send({type:'closed'});close();});
     let windowStart=Date.now(),bytes=0;
     ws.on('message',raw=>{

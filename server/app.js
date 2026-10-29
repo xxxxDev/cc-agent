@@ -6,6 +6,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
+const compression = require('compression');
 const authRoutes = require('./routes/authRoutes');
 const pushRoutes = require('./routes/pushRoutes');
 const { security } = require('./services/securityLog');
@@ -36,25 +37,32 @@ const DIST_DIR = process.env[PRODUCT.env.distDir] || path.join(__dirname, '..', 
 // hashes are taken from the files actually being served and re-taken whenever a
 // rebuild changes them, so a rebuild cannot quietly break a page or widen the
 // policy. Styles stay 'unsafe-inline': Framework7 writes style attributes.
-let inlineScripts = { stamp: '', sources: '' };
-function inlineScriptSources() {
+// Every response carries the policy, the agents' bridge polls included, so the folder
+// is looked at no more than once a second rather than on each of them; a response
+// that may be a page looks every time, so it never meets the previous build's hashes.
+const INLINE_CHECK_MS = 1000;
+let inlineScripts = { stamp: '', sources: '', checked: 0 };
+function inlineScriptSources(page) {
+  const now = Date.now();
+  if (!page && now - inlineScripts.checked < INLINE_CHECK_MS) return inlineScripts.sources;
+  inlineScripts.checked = now;
   try {
     const pages = fs.readdirSync(DIST_DIR).filter((name) => name.endsWith('.html')).sort().map((name) => path.join(DIST_DIR, name));
     const stamp = pages.map((file) => `${file}:${fs.statSync(file).mtimeMs}`).join('|');
     if (stamp !== inlineScripts.stamp) {
       const bodies = pages.flatMap((file) => [...fs.readFileSync(file, 'utf8').matchAll(/<script\b(?![^>]*\bsrc\s*=)[^>]*>([\s\S]*?)<\/script>/gi)].map((m) => m[1]));
       const hashes = new Set(bodies.map((body) => `'sha256-${crypto.createHash('sha256').update(body).digest('base64')}'`));
-      inlineScripts = { stamp, sources: [...hashes].join(' ') };
+      inlineScripts = { stamp, sources: [...hashes].join(' '), checked: now };
     }
   } catch {
-    inlineScripts = { stamp: '', sources: '' };
+    inlineScripts = { stamp: '', sources: '', checked: now };
   }
   return inlineScripts.sources;
 }
-function contentSecurityPolicy(host) {
+function contentSecurityPolicy(host, page) {
   return [
     "default-src 'self'",
-    `script-src 'self' ${inlineScriptSources()}`.trim(),
+    `script-src 'self' ${inlineScriptSources(page)}`.trim(),
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
@@ -79,11 +87,12 @@ function contentSecurityPolicy(host) {
 const app = express();
 app.disable('x-powered-by');
 app.use((req,res,next)=>{if(!isAllowedHost(req.headers.host))return res.status(403).json({message:'Invalid Host'});res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('X-Frame-Options','DENY');
- res.setHeader('Content-Security-Policy',contentSecurityPolicy(req.headers.host));
+ res.setHeader('Content-Security-Policy',contentSecurityPolicy(req.headers.host,false));
  // Only the public host is HTTPS (its proxy or tunnel serves it over TLS);
  // loopback, the only other Host admitted above, stays plain HTTP and must not be pinned to HTTPS.
  if(isHttpsHost(req.headers.host))res.setHeader('Strict-Transport-Security','max-age=31536000');
  next();});
+app.use(compression());
 
 const PORT = servicePort();
 
@@ -218,6 +227,7 @@ const NO_CACHE_BASENAMES = new Set([
   'version.json',
 ]);
 function staticCacheHeaders(res, filePath) {
+  if (path.extname(filePath).toLowerCase() === '.html') res.setHeader('Content-Security-Policy',contentSecurityPolicy(res.req.headers.host,true));
   if (NO_CACHE_BASENAMES.has(path.basename(filePath))) {
     res.setHeader('Cache-Control', 'no-cache');
   } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
@@ -226,6 +236,7 @@ function staticCacheHeaders(res, filePath) {
 }
 app.use(express.static(wwwDir, { setHeaders: staticCacheHeaders }));
 app.get('*', (req, res) => {
+  res.setHeader('Content-Security-Policy',contentSecurityPolicy(req.headers.host,true));
   res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(wwwDir, 'index.html'));
 });

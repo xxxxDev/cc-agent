@@ -1,21 +1,19 @@
 <template>
  <!-- One conversation's bubbles: its messages, attachments, markdown and the typing
       bubbles, wherever a conversation is shown (the conversation page, a split-view
-      cell). It holds no state of its own: what to show comes in, what the reader
-      asks for goes out. -->
- <f7-messages :init="false" class="message-list" @click="onMarkdownClick">
+      cell). Main chat typing state comes from the workspace so its ticks do not redraw the list. -->
+ <f7-messages :init="false" class="message-list" @click="onMarkdownClick" @animationend="onArrivalEnd">
   <f7-messages-title v-if="!messages.length&&emptyText">{{emptyText}}</f7-messages-title>
   <div v-if="hasOlder" class="older-turns"><f7-preloader v-if="olderBusy" :size="18"/><f7-link v-else @click="$emit('load-older')">{{ct('載入更早的對話')}}</f7-link></div>
-  <TransitionGroup name="message-arrival"><template v-for="m in messages" :key="m.id"><f7-messages-title v-if="m.role==='system'&&!cardOf(m)">{{m.text}}</f7-messages-title><div v-else-if="cardOf(m)" class="message schedule-card" :class="{'message-found':foundId===m.id,open:opened.has(m.id)}" :data-message-id="m.id" role="button" tabindex="0" :aria-expanded="String(opened.has(m.id))" @click="toggleOpen(m,$event)" @keydown.enter="toggleOpen(m,$event)"><div class="schedule-card-head"><f7-icon :f7="cardOf(m).icon" :size="15"/><span class="schedule-card-name">{{cardOf(m).name}}</span><span class="schedule-card-time">{{time(m.at)}}</span><f7-icon f7="chevron_down" :size="12" class="schedule-card-more"/></div><div v-if="scheduleResult(m)" class="schedule-card-result"><b v-if="scheduleResult(m).title">{{scheduleResult(m).title}}</b><span v-if="scheduleResult(m).summary">{{scheduleResult(m).summary}}</span></div><div v-if="m.outbound&&m.attachments?.length" class="message-files" @click.stop><div v-for="file in m.attachments" :key="file.id" class="attachment-chip"><a class="attachment-open" href="#" :title="file.name" @click.prevent="$emit('preview',{...file,group:m.attachments})"><f7-icon f7="doc" :size="20"/><span>{{file.name}}<small>{{file.size<1024?file.size+' B':(file.size/1024).toFixed(1)+' KB'}}</small></span></a></div></div><div v-if="opened.has(m.id)" class="schedule-card-body message-markdown message-copy" v-html="renderTypedMarkdown(m.text)"></div><div v-else class="schedule-card-preview">{{preview(scheduleInstruction(m.text))}}</div></div><f7-message v-else :data-message-id="m.id" :type="m.role==='user'&&!m.peer?'sent':'received'" :avatar="m.role==='assistant'?(m.speaker?.avatar||avatar):m.peer?peerIconOf(m):undefined" :name="m.speaker?.label" :first="true" :last="true" :tail="true" :class="{'avatar-icon':m.role==='assistant'&&avatarShape(m.speaker?.avatar||avatar)==='icon','attachment-only':m.attachments?.length&&!m.text,'inspectable':inspectable,'inspected':inspectable&&inspectId===m.id,'imported-turn':m.imported,'message-found':foundId===m.id,'relay-message':m.role==='relay'||!!m.speaker?.to,'relay-folded':folded(m)}" :aria-expanded="foldable(m)?String(!folded(m)):undefined" @click="onBubble(m,$event)"><template v-if="m.role==='relay'" #header><div class="relay-head"><f7-icon :f7="m.relay?.direction==='out'?'arrow_up_right':'arrow_down_left'" :size="14"/>{{m.relay?.direction==='out'?ct('已傳給 '):ct('來自 ')}}<a v-if="m.relay?.peerId" href="#" class="relay-peer" @click.prevent.stop="$emit('open-peer',m.relay.peerId)">{{m.relay.peerName}}</a><span v-else class="relay-peer">{{m.relay?.peerName}}<small> · {{ct('不在 CC Agent 內')}}</small></span></div></template><template v-else-if="m.attachments?.length" #header><div v-if="picturesOf(m).length" class="message-pictures" :class="{grid:picturesOf(m).length>1}"><a v-for="(file,i) in picturesOf(m).slice(0,4)" :key="file.id" class="message-picture" href="#" :aria-label="ct('預覽')+' '+file.name" @click.prevent="$emit('preview',{...file,group:m.attachments})"><img :src="attachmentUrl(file)" :alt="file.name" loading="lazy" draggable="false"/><span v-if="i===3&&picturesOf(m).length>4" class="message-picture-more">+{{picturesOf(m).length-4}}</span></a></div><div class="message-files"><div v-for="file in m.attachments" :key="file.id" class="attachment-chip"><a class="attachment-open" href="#" :title="file.name" @click.prevent="$emit('preview',{...file,group:m.attachments})"><f7-icon :f7="/\.(mp3|m4a|aac|wav|ogg|oga|opus|flac)$/i.test(file.name)?'music_note':/\.(mp4|m4v|mov|webm|ogv)$/i.test(file.name)?'film':'doc'" :size="20"/><span>{{file.name}}<small>{{file.size<1024?file.size+' B':(file.size/1024).toFixed(1)+' KB'}}</small></span></a><a class="attachment-download external" :href="attachmentUrl(file)" :download="file.name" target="_blank" rel="noopener" :aria-label="ct('下載')+' '+file.name" @click.stop="onDownload(file,$event)"><f7-icon f7="arrow_down_circle" :size="22"/></a></div></div></template><template #text><div v-if="m.text&&folded(m)" class="relay-preview"><span class="relay-preview-text">{{preview(m.text)}}</span><f7-icon f7="chevron_down" :size="12" class="relay-preview-more"/></div><div v-else-if="m.text" class="message-markdown message-copy" v-html="m.role==='assistant'?withOwner(renderMarkdown(m.text),m):withMentions(renderTypedMarkdown(m.text),m.mentions)"></div></template><template #footer>{{time(m.at)}}<span v-if="m.imported"> · {{ct('來自 session')}}</span><span v-if="m.schedule?.name" class="schedule-label"> · {{ct('排程：')}}{{m.schedule.name}}</span><span v-if="m.group?.name" class="schedule-label"> · {{ct('群組：')}}{{m.group.name}}</span><span v-if="m.peer?.machine" class="schedule-label"> · {{ct('來自 ')}}{{m.peer.machine}} · {{m.peer.title}}</span><span v-else-if="m.footnote" class="schedule-label"> · {{m.footnote}}</span><span v-if="m.peerOut" class="schedule-label peer-out-line"> · {{peerOutLine(m)}}</span><span v-if="m.peerOut?.status==='draft'&&isAdmin" class="peer-draft-actions" @click.stop><f7-button small fill round class="peer-draft-send" :class="{disabled:draftBusy.has(m.id)}" @click="decideDraft(m,true)">{{ct('送出')}}</f7-button><f7-button small round class="peer-draft-drop" :class="{disabled:draftBusy.has(m.id)}" @click="decideDraft(m,false)">{{ct('不送')}}</f7-button></span><button v-if="m.text" type="button" class="bubble-copy" :aria-label="ct('複製這則訊息')" :title="ct('複製這則訊息')" @click.stop="copyText(m.text)"><i class="icon f7-icons">doc_on_doc</i></button></template></f7-message></template></TransitionGroup>
-  <f7-message v-if="backgroundText" type="received" :typing="true" :first="true" :last="true" :tail="true" class="typing-progress background-progress"><template #text><span class="typing-progress-text" role="status" aria-live="polite">{{backgroundText}}</span></template></f7-message>
-  <f7-message v-if="typing" type="received" :typing="true" :first="true" :last="true" :tail="true" class="typing-progress"><template v-if="typingText||typingNote||interruptible" #text><span class="typing-lines"><span v-if="typingNote" class="typing-note">{{typingNote}}</span><span v-if="typingText" class="typing-progress-text" role="status" aria-live="polite">{{typingText}}</span></span><button v-if="interruptible" type="button" class="interrupt-turn" :disabled="interrupting" :aria-label="ct('中斷這一輪')" :title="ct('中斷這一輪')" @click.stop="$emit('interrupt')"><i class="icon f7-icons">stop_fill</i></button></template></f7-message>
+  <template v-for="m in messages" :key="m.id"><f7-messages-title v-if="m.role==='system'&&!cardOf(m)" :data-message-id="m.id" :class="{'message-arrival':arrivingIds.has(m.id)}">{{m.text}}</f7-messages-title><div v-else-if="cardOf(m)" class="message schedule-card" :class="{'message-arrival':arrivingIds.has(m.id),'message-found':foundId===m.id,open:opened.has(m.id)}" :data-message-id="m.id" role="button" tabindex="0" :aria-expanded="String(opened.has(m.id))" @click="toggleOpen(m,$event)" @keydown.enter="toggleOpen(m,$event)"><div class="schedule-card-head"><f7-icon :f7="cardOf(m).icon" :size="15"/><span class="schedule-card-name">{{cardOf(m).name}}</span><span class="schedule-card-time">{{time(m.at)}}</span><f7-icon f7="chevron_down" :size="12" class="schedule-card-more"/></div><div v-if="scheduleResult(m)" class="schedule-card-result"><b v-if="scheduleResult(m).title">{{scheduleResult(m).title}}</b><span v-if="scheduleResult(m).summary">{{scheduleResult(m).summary}}</span></div><div v-if="m.outbound&&m.attachments?.length" class="message-files" @click.stop><div v-for="file in m.attachments" :key="file.id" class="attachment-chip"><a class="attachment-open" href="#" :title="file.name" @click.prevent="$emit('preview',{...file,group:m.attachments})"><f7-icon f7="doc" :size="20"/><span>{{file.name}}<small>{{file.size<1024?file.size+' B':(file.size/1024).toFixed(1)+' KB'}}</small></span></a></div></div><div v-if="opened.has(m.id)" class="schedule-card-body message-markdown message-copy" v-html="renderTypedMarkdown(m.text)"></div><div v-else class="schedule-card-preview">{{preview(scheduleInstruction(m.text))}}</div></div><f7-message v-else :data-message-id="m.id" :type="m.role==='user'&&!m.peer?'sent':'received'" :avatar="m.role==='assistant'?(m.speaker?.avatar||avatar):m.peer?peerIconOf(m):undefined" :name="m.speaker?.label" :first="true" :last="true" :tail="true" :class="{'message-arrival':arrivingIds.has(m.id),'avatar-icon':m.role==='assistant'&&avatarShape(m.speaker?.avatar||avatar)==='icon','attachment-only':m.attachments?.length&&!m.text,'inspectable':inspectable,'inspected':inspectable&&inspectId===m.id,'imported-turn':m.imported,'message-found':foundId===m.id,'relay-message':m.role==='relay'||!!m.speaker?.to,'relay-folded':folded(m)}" :aria-expanded="foldable(m)?String(!folded(m)):undefined" @click="onBubble(m,$event)"><template v-if="m.role==='relay'" #header><div class="relay-head"><f7-icon :f7="m.relay?.direction==='out'?'arrow_up_right':'arrow_down_left'" :size="14"/>{{m.relay?.direction==='out'?ct('已傳給 '):ct('來自 ')}}<a v-if="m.relay?.peerId" href="#" class="relay-peer" @click.prevent.stop="$emit('open-peer',m.relay.peerId)">{{m.relay.peerName}}</a><span v-else class="relay-peer">{{m.relay?.peerName}}<small> · {{ct('不在 CC Agent 內')}}</small></span></div></template><template v-else-if="m.attachments?.length" #header><div v-if="picturesOf(m).length" class="message-pictures" :class="{grid:picturesOf(m).length>1}"><a v-for="(file,i) in picturesOf(m).slice(0,4)" :key="file.id" class="message-picture" href="#" :aria-label="ct('預覽')+' '+file.name" @click.prevent="$emit('preview',{...file,group:m.attachments})"><img :src="attachmentUrl(file)" :alt="file.name" loading="lazy" draggable="false"/><span v-if="i===3&&picturesOf(m).length>4" class="message-picture-more">+{{picturesOf(m).length-4}}</span></a></div><div class="message-files"><div v-for="file in m.attachments" :key="file.id" class="attachment-chip"><a class="attachment-open" href="#" :title="file.name" @click.prevent="$emit('preview',{...file,group:m.attachments})"><f7-icon :f7="/\.(mp3|m4a|aac|wav|ogg|oga|opus|flac)$/i.test(file.name)?'music_note':/\.(mp4|m4v|mov|webm|ogv)$/i.test(file.name)?'film':'doc'" :size="20"/><span>{{file.name}}<small>{{file.size<1024?file.size+' B':(file.size/1024).toFixed(1)+' KB'}}</small></span></a><a class="attachment-download external" :href="attachmentUrl(file)" :download="file.name" target="_blank" rel="noopener" :aria-label="ct('下載')+' '+file.name" @click.stop="onDownload(file,$event)"><f7-icon f7="arrow_down_circle" :size="22"/></a></div></div></template><template #text><div v-if="m.text&&folded(m)" class="relay-preview"><span class="relay-preview-text">{{preview(m.text)}}</span><f7-icon f7="chevron_down" :size="12" class="relay-preview-more"/></div><div v-else-if="m.text" class="message-markdown message-copy" v-html="m.role==='assistant'?withOwner(renderMarkdown(m.text),m):withMentions(renderTypedMarkdown(m.text),m.mentions)"></div></template><template #footer>{{time(m.at)}}<span v-if="m.imported"> · {{ct('來自 session')}}</span><span v-if="m.schedule?.name" class="schedule-label"> · {{ct('排程：')}}{{m.schedule.name}}</span><span v-if="m.group?.name" class="schedule-label"> · {{ct('群組：')}}{{m.group.name}}</span><span v-if="m.peer?.machine" class="schedule-label"> · {{ct('來自 ')}}{{m.peer.machine}} · {{m.peer.title}}</span><span v-else-if="m.footnote" class="schedule-label"> · {{m.footnote}}</span><span v-if="m.peerOut" class="schedule-label peer-out-line"> · {{peerOutLine(m)}}</span><span v-if="m.peerOut?.status==='draft'&&isAdmin" class="peer-draft-actions" @click.stop><f7-button small fill round class="peer-draft-send" :class="{disabled:draftBusy.has(m.id)}" @click="decideDraft(m,true)">{{ct('送出')}}</f7-button><f7-button small round class="peer-draft-drop" :class="{disabled:draftBusy.has(m.id)}" @click="decideDraft(m,false)">{{ct('不送')}}</f7-button></span><button v-if="m.text" type="button" class="bubble-copy" :aria-label="ct('複製這則訊息')" :title="ct('複製這則訊息')" @click.stop="copyText(m.text)"><i class="icon f7-icons">doc_on_doc</i></button></template></f7-message></template>
+  <TypingBubbles :background-text="backgroundText" :typing="typing" :typing-text="typingText" :typing-note="typingNote" :interruptible="interruptible" :interrupting="interrupting" @interrupt="$emit('interrupt')"/>
  </f7-messages>
 </template>
 <script setup>
-import {TransitionGroup,ref,computed} from 'vue';
+import {defineComponent,h,inject,ref,computed,watch} from 'vue';
 import {api} from '../js/api.js';
 import {currentUser} from '../js/auth.js';
-import {f7} from 'framework7-vue';
+import {f7,f7Message} from 'framework7-vue';
 import {ct} from '../js/agent-i18n.js';
 import {timeLocale} from '../js/i18n.js';
 import {avatarShape} from '../js/avatarShape.js';
@@ -23,8 +21,63 @@ import {bubbleTime} from '../js/bubbleTime.js';
 import {renderMarkdown,renderTypedMarkdown} from '../js/markdown.js';
 import {saveFile,sharesFiles} from '../js/saveFile.js';
 const props=defineProps({messages:{type:Array,default:()=>[]},conversationId:String,peerTargets:{type:Array,default:()=>[]},hasOlder:Boolean,olderBusy:Boolean,avatar:String,
- inspectable:Boolean,inspectId:String,foundId:String,backgroundText:String,typing:Boolean,typingText:String,typingNote:String,emptyText:String,interruptible:Boolean,interrupting:Boolean});
+ inspectable:Boolean,inspectId:String,foundId:String,backgroundText:String,typing:{type:Boolean,default:undefined},typingText:String,typingNote:String,emptyText:String,interruptible:{type:Boolean,default:undefined},interrupting:{type:Boolean,default:undefined}});
 const emit=defineEmits(['load-older','inspect','preview','interrupt','open-peer','open-group']);
+// Isolate per-second typing/progress updates into a child component so the messages v-for does not re-render on each status tick.
+const TypingBubbles=defineComponent({
+ name:'TypingBubbles',
+ props:{backgroundText:String,typing:{type:Boolean,default:undefined},typingText:String,typingNote:String,interruptible:{type:Boolean,default:undefined},interrupting:{type:Boolean,default:undefined}},
+ emits:['interrupt'],
+ setup(p,{emit:emitTyping}){
+  const ws=inject('workspace',null);
+  return ()=>{
+   const fromProps=p.typing!==undefined;
+   const bg=fromProps?p.backgroundText:ws?.backgroundProgress?.value;
+   const on=fromProps?p.typing:ws?.typingBubble?.value;
+   const text=fromProps?p.typingText:ws?.progressInBubble?.value;
+   const note=fromProps?p.typingNote:ws?.noteInBubble?.value;
+   const canStop=fromProps?p.interruptible:ws?.canInterrupt?.value;
+   const stopping=fromProps?p.interrupting:ws?.interrupting?.value;
+   const stop=()=>fromProps?emitTyping('interrupt'):ws?.interruptTurn?.();
+   const out=[];
+   if(bg)out.push(h(f7Message,{key:'bg',type:'received',typing:true,first:true,last:true,tail:true,class:'typing-progress background-progress'},{
+    text:()=>h('span',{class:'typing-progress-text',role:'status','aria-live':'polite'},bg),
+   }));
+   if(on){
+    const hasBody=!!(text||note||canStop);
+    out.push(h(f7Message,{key:'typing',type:'received',typing:true,first:true,last:true,tail:true,class:'typing-progress'},hasBody?{
+     text:()=>[
+      h('span',{class:'typing-lines'},[
+       note?h('span',{class:'typing-note'},note):null,
+       text?h('span',{class:'typing-progress-text',role:'status','aria-live':'polite'},text):null,
+      ]),
+      canStop?h('button',{type:'button',class:'interrupt-turn',disabled:stopping,'aria-label':ct('中斷這一輪'),title:ct('中斷這一輪'),onClick:e=>{e.stopPropagation();stop();}},[h('i',{class:'icon f7-icons'},'stop_fill')]):null,
+     ],
+    }:{}));
+   }
+   return out;
+  };
+ },
+});
+// Track seen message ids so only newly appended messages play the arrival animation, without TransitionGroup measuring every bubble's box.
+const seenIds=new Set((props.messages||[]).map(m=>m.id));
+const arrivingIds=new Set();
+let seenConv=props.conversationId;
+watch(()=>[props.conversationId,props.messages],([cid,list])=>{
+ const items=list||[];
+ if(cid!==seenConv||(seenIds.size&&!items.some(m=>seenIds.has(m.id)))){
+  seenConv=cid;seenIds.clear();arrivingIds.clear();
+  for(const m of items)seenIds.add(m.id);
+  return;
+ }
+ let pastKnown=!seenIds.size;
+ for(const m of items){
+  if(seenIds.has(m.id)){pastKnown=true;continue;}
+  seenIds.add(m.id);
+  if(pastKnown)arrivingIds.add(m.id);
+ }
+},{flush:'sync'});
+function onArrivalEnd(event){if(event.animationName!=='message-arrival')return;const id=event.target?.dataset?.messageId;if(id){arrivingIds.delete(id);event.target.classList.remove('message-arrival');}}
 // An agent named with @ from the menu, as a tag that opens it. The name is found in the text already rendered, escaped as it is there.
 const esc=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -170,17 +223,17 @@ function onMarkdownClick(event){
 /* The thinking bubble may be as wide as an answer, so its status reads on one line
    (it wrapped at 70% with room to spare). */
 .message-list :deep(.message-received.typing-progress) {max-width:calc((100% - 32px - var(--f7-safe-area-left,0px) - var(--f7-safe-area-right,0px)) * .9);}
-.typing-progress :deep(.message-text) {display:flex;align-items:center;gap:8px;min-width:0;}
-.typing-progress :deep(.message-typing-indicator) {order:-1;flex:0 0 auto;}
-.typing-progress-text {font-size:13px;line-height:1.3;color:var(--cc-color-text-secondary);overflow-wrap:anywhere;}
+:deep(.typing-progress .message-text) {display:flex;align-items:center;gap:8px;min-width:0;}
+:deep(.typing-progress .message-typing-indicator) {order:-1;flex:0 0 auto;}
+:deep(.typing-progress-text) {font-size:13px;line-height:1.3;color:var(--cc-color-text-secondary);overflow-wrap:anywhere;}
 /* What the agent last said in its terminal this turn, over the status line. */
-.typing-lines {display:flex;flex-direction:column;gap:4px;min-width:0;flex:1 1 auto;}
-.typing-note {font-size:14px;line-height:1.45;color:var(--cc-color-text);overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}
+:deep(.typing-lines) {display:flex;flex-direction:column;gap:4px;min-width:0;flex:1 1 auto;}
+:deep(.typing-note) {font-size:14px;line-height:1.45;color:var(--cc-color-text);overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}
 /* Stopping the turn is a small button in the bubble that says it is running, away
    from send, where it was pressed by mistake. */
-.interrupt-turn {flex:0 0 auto;display:flex;align-items:center;justify-content:center;width:24px;height:24px;margin:0;padding:0;border:0;border-radius:12px;background:color-mix(in srgb,currentColor 16%,transparent);color:var(--cc-color-text);cursor:pointer;}
-.interrupt-turn .icon {font-size:10px;}
-.interrupt-turn:disabled {opacity:.4;cursor:default;}
+:deep(.interrupt-turn) {flex:0 0 auto;display:flex;align-items:center;justify-content:center;width:24px;height:24px;margin:0;padding:0;border:0;border-radius:12px;background:color-mix(in srgb,currentColor 16%,transparent);color:var(--cc-color-text);cursor:pointer;}
+:deep(.interrupt-turn .icon) {font-size:10px;}
+:deep(.interrupt-turn:disabled) {opacity:.4;cursor:default;}
 
 /* Turns pulled from the session are history, not part of this conversation's own
    exchange: same shape, less contrast, so they read as background. */
@@ -189,9 +242,9 @@ function onMarkdownClick(event){
 .older-turns {display:flex;justify-content:center;padding:6px 0 10px;}
 
 /* Arrival timing and 12px rise; only newly inserted messages animate. */
-.message-arrival-enter-active {transition:opacity 2s cubic-bezier(0.22,1,0.36,1),transform 2s cubic-bezier(0.22,1,0.36,1);}
-.message-arrival-enter-from {opacity:0;transform:translateY(12px);}
-@media (prefers-reduced-motion:reduce) {.message-arrival-enter-active {transition:none;}}
+.message-arrival {animation:message-arrival 2s cubic-bezier(0.22,1,0.36,1);}
+@keyframes message-arrival {from {opacity:0;transform:translateY(12px);}}
+@media (prefers-reduced-motion:reduce) {.message-arrival {animation:none;}}
 
 /* Short replies fit their content; long replies wrap at 90% of available width. */
 :deep(.message-received:not(.message-typing)) {width:fit-content;max-width:calc((100% - 32px - var(--f7-safe-area-left,0px) - var(--f7-safe-area-right,0px)) * .9);align-self:flex-start;margin-right:calc(16px + var(--f7-safe-area-right,0px));}

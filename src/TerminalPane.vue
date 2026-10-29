@@ -2,7 +2,7 @@
  <!-- One slim line: the state, and right after it a small icon to attach again at any
       time, such as when the screen looks stuck. A full-width button took a band of
       the screen, and the note under the terminal is gone too. -->
- <div class="terminal-bar"><span class="terminal-status" :class="{on:status==='終端已連線'}" role="status">{{ct(status)}}</span><f7-link class="terminal-reattach" icon-only icon-f7="arrow_clockwise" :aria-label="ct('重新附接')" :title="ct('重新附接')" @click="connect"/></div>
+ <div class="terminal-bar"><span class="terminal-status" :class="{on:status==='終端已連線'}" role="status">{{ct(status)}}</span><f7-link class="terminal-reattach" icon-only icon-f7="arrow_clockwise" :aria-label="ct('重新附接')" :title="ct('重新附接')" @click="connect(true)"/></div>
  <!-- Keys a phone keyboard does not have, for Claude Code's menus: Esc to back out,
        arrows to choose, Shift+Tab for the mode (a
        slash command opened the terminal and nothing could close its menu). They
@@ -12,6 +12,7 @@
 <script setup>
 import {ct} from './js/agent-i18n.js';
 import {bindTerminalTouch} from './js/terminalTouch.js';
+import {retryDelay,strikesAfterLoss,WEBGL_RETRY_MS} from './js/terminalRetry.js';
 import {ref,onMounted,onUnmounted} from 'vue';
 import {Terminal} from '@xterm/xterm';import {FitAddon} from '@xterm/addon-fit';import '@xterm/xterm/css/xterm.css';
 const props=defineProps({conversationId:String});
@@ -32,21 +33,52 @@ function resize(){if(!term||!host.value?.clientWidth||!host.value?.clientHeight)
 const QUIET_MS=40000;
 let lastHeard=0,watchdog;
 const silent=()=>Date.now()-lastHeard>=QUIET_MS;
+// A socket that closed never came back on its own: the watchdog below only tests a
+// live one, so the pane waited for the reader to leave the page and return. Retry
+// while the page is visible, backing off, and start the budget over on return to the
+// page or when a line that held a while drops. Data is no sign of a good line: an attach
+// that prints an error (no such session) and exits sends some, and would retry every second for good.
+const STEADY_MS=5000;
+let retryTimer=0,retries=0,openedAt=0;
+function scheduleRetry(reason){
+ if(disposed||retryTimer||document.hidden)return;
+ const delay=retryDelay(retries);
+ if(delay===null){status.value=`${reason}，可重新附接`;return;}
+ retries++;
+ status.value=`${reason}，正在重新連線…`;
+ retryTimer=setTimeout(()=>{retryTimer=0;if(!disposed&&!document.hidden)connect();},delay);
+}
 function checkLine(){if(!disposed&&!document.hidden&&ws?.readyState===1&&silent())connect();}
-function onVisible(){if(disposed||document.hidden)return;if(!ws||ws.readyState>1||silent())connect();else term?.refresh(0,term.rows-1);}
-function connect(){if(disposed)return;const old=ws;ws=null;old?.close();term?.reset();status.value='正在附接終端…';lastHeard=Date.now();const socket=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/terminal/${props.conversationId}`);ws=socket;
- socket.onopen=()=>{if(ws!==socket)return;status.value='終端已連線';resize();term.focus();};
+// A phone put away lets go of its line: the screen kept streaming to a page nobody
+// sees. Back in front, the pane has no line and attaches again.
+function onVisible(){if(disposed)return;if(document.hidden){if(touch&&ws){const old=ws;ws=null;clearTimeout(retryTimer);retryTimer=0;old.close();}return;}retries=0;loadWebgl();if(!ws||ws.readyState>1||silent())connect();else term?.refresh(0,term.rows-1);}
+function connect(manual=false){if(disposed)return;if(manual)retries=0;const old=ws;ws=null;old?.close();clearTimeout(retryTimer);retryTimer=0;openedAt=0;term?.reset();status.value='正在附接終端…';lastHeard=Date.now();const socket=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/terminal/${props.conversationId}`);ws=socket;let failed=false;
+ socket.onopen=()=>{if(ws!==socket)return;openedAt=Date.now();status.value='終端已連線';resize();if(manual)term.focus();};
  socket.onmessage=e=>{if(ws!==socket)return;lastHeard=Date.now();const msg=JSON.parse(e.data);if(msg.type==='data')term.write(msg.data);else if(msg.type==='error')status.value=msg.message;};
- socket.onclose=()=>{if(ws===socket)status.value='終端已離線，可重新附接';};socket.onerror=()=>{if(ws===socket)status.value='附接失敗，請確認登入與 Claude 狀態';};
+ socket.onclose=()=>{if(ws!==socket)return;if(openedAt&&Date.now()-openedAt>STEADY_MS)retries=0;scheduleRetry(failed?'附接失敗，請確認登入與 Claude 狀態':'終端已離線');};socket.onerror=()=>{if(ws===socket)failed=true;};
+}
+// Backgrounding a phone can drop its GPU context and leave scrolling on the slow
+// DOM renderer. Retry on return, at most twice, then keep the DOM fallback stable.
+let webgl,webglLoading=false,webglAttempts=0,webglSince=0,webglRetry=0;
+// A context that lasted a while was a good device with a bad moment, not a device
+// without WebGL: give it a fresh budget. Waiting for the next visibility event left
+// the pane on the slow renderer until the reader left the page, so retry here.
+function scheduleWebgl(){if(disposed||webglRetry)return;webglRetry=setTimeout(()=>{webglRetry=0;if(!disposed&&!document.hidden)loadWebgl();},WEBGL_RETRY_MS);}
+// Drawn on the GPU where the device allows it: Claude's screen redraws in bursts,
+// which the DOM renderer draws slower, most of all on a phone. Anything wrong with
+// WebGL, at the start or later, leaves the DOM renderer drawing.
+async function loadWebgl(){
+ if(disposed||!term||webgl||webglLoading||webglAttempts>=3)return;
+ webglLoading=true;webglAttempts++;
+ try{const {WebglAddon}=await import('@xterm/addon-webgl');if(disposed||!term)return;
+  const addon=new WebglAddon();webgl=addon;addon.onContextLoss(()=>{if(webgl!==addon)return;webgl=null;webglAttempts=strikesAfterLoss(webglAttempts,Date.now()-webglSince);try{addon.dispose();}catch{}scheduleWebgl();});term.loadAddon(addon);webglSince=Date.now();
+ }catch{const addon=webgl;webgl=null;try{addon?.dispose();}catch{}if(webglAttempts<3)scheduleWebgl();}finally{webglLoading=false;}
 }
 onMounted(()=>{term=new Terminal({cursorBlink:true,fontSize:13,fontFamily:'Menlo, monospace',scrollback:5000,theme:{background:'#121212',foreground:'#ececec'},allowProposedApi:false});fit=new FitAddon();term.loadAddon(fit);term.open(host.value);
- // Drawn on the GPU where the device allows it: Claude's screen redraws in bursts,
- // which the DOM renderer draws slower, most of all on a phone. Anything wrong with
- // WebGL, at the start or later, leaves the DOM renderer drawing.
- import('@xterm/addon-webgl').then(({WebglAddon})=>{if(disposed||!term)return;try{const webgl=new WebglAddon();webgl.onContextLoss(()=>webgl.dispose());term.loadAddon(webgl);}catch{}}).catch(()=>{});
- cleanupTouch=bindTerminalTouch(host.value);term.onData(data=>{if(ws?.readyState===1)ws.send(JSON.stringify({type:'input',data}));});observer=new ResizeObserver(resize);observer.observe(host.value);connect();
+ loadWebgl();
+ cleanupTouch=bindTerminalTouch(host.value,term);term.onData(data=>{if(ws?.readyState===1)ws.send(JSON.stringify({type:'input',data}));});observer=new ResizeObserver(resize);observer.observe(host.value);connect(true);
  watchdog=setInterval(checkLine,5000);document.addEventListener('visibilitychange',onVisible);window.addEventListener('focus',onVisible);});
-onUnmounted(()=>{disposed=true;clearTimeout(resizeTimer);clearInterval(watchdog);document.removeEventListener('visibilitychange',onVisible);window.removeEventListener('focus',onVisible);cleanupTouch?.();observer?.disconnect();ws?.close();term?.dispose();});
+onUnmounted(()=>{disposed=true;clearTimeout(resizeTimer);clearTimeout(retryTimer);clearTimeout(webglRetry);clearInterval(watchdog);document.removeEventListener('visibilitychange',onVisible);window.removeEventListener('focus',onVisible);cleanupTouch?.();observer?.disconnect();ws?.close();try{webgl?.dispose();}catch{}webgl=null;term?.dispose();});
 </script>
 
 <style scoped>

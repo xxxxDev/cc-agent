@@ -553,6 +553,9 @@ const english = {
   "終端已連線": "Terminal connected",
   "已進行": "Running for",
   "終端已離線，可重新附接": "Terminal disconnected. You can reattach.",
+  "終端已離線，正在重新連線…": "Terminal disconnected. Reconnecting…",
+  "附接失敗，請確認登入與 Claude 狀態，正在重新連線…": "Attachment failed. Check your login and Claude status. Reconnecting…",
+  "附接失敗，請確認登入與 Claude 狀態，可重新附接": "Attachment failed. Check your login and Claude status. You can reattach.",
   "附接失敗，請確認登入與 Claude 狀態": "Attachment failed. Check your login and Claude status.",
   // The Schedules tab (SchedulesPage.vue) and a scheduled message's label.
   "排程：": "Schedule: ",

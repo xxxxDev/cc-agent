@@ -41,9 +41,27 @@ const markdown = configure();
 // Its fenced blocks get the same copy button, from configure().
 const typed = configure().disable(['emphasis', 'heading', 'lheading', 'code']);
 
+// Avoid reparsing unchanged bubbles.
+const CACHE_MAX = 300;
+const cache = new Map();
+function renderCached(engine, prefix, text) {
+  const src = String(text ?? '');
+  const key = `${prefix}:${src}`;
+  const hit = cache.get(key);
+  if (hit !== undefined) {
+    cache.delete(key);
+    cache.set(key, hit);
+    return hit;
+  }
+  const html = engine.render(src);
+  if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value);
+  cache.set(key, html);
+  return html;
+}
+
 export function renderMarkdown(text) {
-  return markdown.render(String(text ?? ''));
+  return renderCached(markdown, 'm', text);
 }
 export function renderTypedMarkdown(text) {
-  return typed.render(String(text ?? ''));
+  return renderCached(typed, 't', text);
 }

@@ -169,8 +169,7 @@
 .chat-page.conversation-keyboard :deep(.messages-content) {overscroll-behavior:contain;}
 
 /* Older pages are history, not arrivals: they appear in place. */
-.messages-content.paging-back :deep(.message-arrival-enter-active) {transition:none;}
-.messages-content.paging-back :deep(.message-arrival-enter-from) {opacity:1;transform:none;}
+.messages-content.paging-back :deep(.message-arrival) {animation:none;}
 
 /* The bubbles' own look (sizes, markdown, attachments, the typing bubbles) is in
    components/MessageList.vue, shared with the split view's cells. */

@@ -71,8 +71,9 @@ function mark(){
 // On a computer the box puts + and send on a row of their own once the text needs
 // more than one line. Measured against
 // the one-row text width whichever layout shows, so the two never take turns.
-const pill=ref(null),tall=ref(false);let ruler=null;
+const pill=ref(null),tall=ref(false),wideMedia=typeof matchMedia==='function'?matchMedia('(min-width: 768px)'):null;let ruler=null;
 function measureTall(){
+ if(wideMedia&&!wideMedia.matches){tall.value=false;return;}
  const e=editor.value,p=pill.value,t=text();
  if(!e||!p||!t.trim()){tall.value=false;return;}
  if(t.replace(/\n$/,'').includes('\n')){tall.value=true;return;}

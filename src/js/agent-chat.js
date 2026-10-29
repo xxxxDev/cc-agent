@@ -424,18 +424,24 @@ function mergeMessages(local,fresh){
  if(!local?.length)return fresh;
  const oldest=fresh[0]?.id;
  const seam=oldest?local.findIndex(m=>m.id===oldest):-1;
- if(seam<0)return fresh;
- return [...local.slice(0,seam),...fresh];
+ const combined=seam<0?fresh:[...local.slice(0,seam),...fresh];
+ const byId=new Map(local.map(m=>[m.id,m]));
+ const reused=combined.map(m=>{const prev=byId.get(m.id);return prev&&JSON.stringify(prev)===JSON.stringify(m)?prev:m;});
+ return reused.length===local.length&&reused.every((m,i)=>m===local[i])?local:reused;
 }
 // Edit mode holds the rows still, their order and their groups, so a drag is not
 // moved under the finger; each agent's state still comes in, so a pause or a start
 // shows on its light at once rather than after Done.
 function keepRows(local,fresh){const byId=new Map(fresh.map(c=>[c.id,c]));return local.filter(c=>byId.has(c.id)).map(c=>({...byId.get(c.id),listGroup:c.listGroup,listOrder:c.listOrder}));}
+// Avoid redrawing unchanged conversations on each poll.
+function reuseRows(prev,fresh){const byId=new Map(prev.map(c=>[c.id,c])),next=fresh.map(c=>{const old=byId.get(c.id);return old&&JSON.stringify(old)===JSON.stringify(c)?old:c;});return next.length===prev.length&&next.every((c,i)=>c===prev[i])?prev:next;}
 // The list's groups are fetched with it, so a group made on another device shows up here too.
-async function refresh(){if(!user.value)return;const owner=user.value.id;const [list,groups]=await Promise.all([api('/conversations'),api('/agent-list').catch(()=>null)]);if(user.value?.id!==owner)return;if(!orderBusy.value){if(groups)agentPreferences.absorbList(groups);conversations.value=editMode.value?keepRows(conversations.value,list.conversations):list.conversations;listLoaded.value=true;}if(selected.value){const id=selected.value;const d=await api('/conversations/'+id+'?limit='+windowSize()+(conversationOnScreen()?'&viewing=1':''));if(user.value?.id===owner&&selected.value===id){
+async function refresh(){if(!user.value)return;const owner=user.value.id;const [list,groups]=await Promise.all([api('/conversations'),api('/agent-list').catch(()=>null)]);if(user.value?.id!==owner)return;if(!orderBusy.value){if(groups)agentPreferences.absorbList(groups);const nextRows=reuseRows(conversations.value,editMode.value?keepRows(conversations.value,list.conversations):list.conversations);if(nextRows!==conversations.value)conversations.value=nextRows;listLoaded.value=true;}if(selected.value){const id=selected.value;const d=await api('/conversations/'+id+'?limit='+windowSize()+(conversationOnScreen()?'&viewing=1':''));if(user.value?.id===owner&&selected.value===id){
  const merged=mergeMessages(detail.value?.messages,d.messages||[]);
  const changed=merged.at(-1)?.id!==detail.value?.messages?.at(-1)?.id||merged.length!==detail.value?.messages?.length;
- detail.value={...d,messages:merged,hasOlder:merged.length>(d.messages||[]).length?(detail.value?.hasOlder??d.hasOlder):d.hasOlder};
+ const next={...d,messages:merged,hasOlder:merged.length>(d.messages||[]).length?(detail.value?.hasOlder??d.hasOlder):d.hasOlder};
+ // An answer equal to what is shown is not assigned: a new object renders every message's Markdown again, which drops frames on a phone at each poll.
+ if(JSON.stringify(next)!==JSON.stringify(detail.value))detail.value=next;
  if(changed&&atBottom.value)await bottom();}}}
 const HISTORY_GESTURE_BLOCKED='a,button,input,textarea,select,option,pre,code,[contenteditable]:not([contenteditable="false"]),.md-scroll,.terminal-pane,.terminal-content';
 const noVerticalOverflow=box=>box.scrollHeight<=box.clientHeight+1;

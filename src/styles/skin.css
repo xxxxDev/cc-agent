@@ -673,8 +673,12 @@ img[src$="/sources/anthropic-native.svg"] {
 
 .cc-app .navbar .navbar-bg {
   background-color: var(--f7-page-bg-color);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
-  backdrop-filter: saturate(180%) blur(20px);
+}
+
+/* The bar is opaque, so a blur under it only costs frames. */
+.cc-app .navbar .navbar-bg::before {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .cc-app .navbar .navbar-bg::after {
@@ -757,6 +761,34 @@ body.col-resizing, body.col-resizing * {-webkit-user-select:none;user-select:non
 /* A toast at the bottom stays on the visible screen when an installed app's page is
    taller than it (src/js/tabbarViewport.js sets the shortfall). */
 html .ios .toast.toast-bottom {bottom:var(--viewport-overflow,0px);}
+
+/* Android phones redraw each stacked blur on every scroll frame and drop frames;
+ * iOS composites them cheaply and keeps them. Here the floating surfaces lose the
+ * blur and get a more opaque fill instead. */
+@media (pointer: coarse) {
+  @supports not (-webkit-touch-callout: none) {
+    .cc-app .searchbar .searchbar-input-wrap {
+      background: color-mix(in srgb, var(--cc-glass-fill-subtle), var(--cc-color-panel) 85%);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+    .cc-app .toolbar-views__toolbar-sticky__bg {
+      background: color-mix(in srgb, var(--f7-page-bg-color) 85%, transparent);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+    .cc-app .toolbar-views-ui__segmented-toolbar {
+      background-color: color-mix(in srgb, var(--cc-glass-dark-fill), var(--cc-color-bars) 85%);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+    .cc-app .navbar a.link {
+      background-color: color-mix(in srgb, var(--f7-list-bg-color), var(--cc-color-panel) 85%);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
+}
 
 /* The ant glyph is tall and narrow, so at the size of its neighbours it reads larger
  * than they do: drawn a little smaller wherever it is used. */
