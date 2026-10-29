@@ -5,14 +5,15 @@ const {Worker}=require('node:worker_threads');
 const WORKER=`const {parentPort}=require('node:worker_threads');const {execFile}=require('node:child_process');
 parentPort.on('message',({id,file,args,timeout})=>execFile(file,args,{encoding:'utf8',timeout,windowsHide:true},(failed,out)=>parentPort.postMessage({id,out:failed?null:out})));`;
 let worker=null,next=0;
-const waiting=new Map();
+const waiting=new Map(),idlers=[];
+const settled=()=>{if(!waiting.size)for(const done of idlers.splice(0))done();};
 function started(){
  if(worker)return worker;
  worker=new Worker(WORKER,{eval:true});
  // Held only while a read is unanswered, like the child process it stands for.
- worker.on('message',({id,out})=>{waiting.get(id)?.(out);waiting.delete(id);if(!waiting.size)worker.unref();});
+ worker.on('message',({id,out})=>{waiting.get(id)?.(out);waiting.delete(id);if(!waiting.size)worker.unref();settled();});
  // A worker that died takes its unanswered reads with it; the next read starts another.
- worker.on('exit',()=>{worker=null;for(const done of waiting.values())done(null);waiting.clear();});
+ worker.on('exit',()=>{worker=null;for(const done of waiting.values())done(null);waiting.clear();settled();});
  worker.on('error',e=>console.error('off-thread worker failed:',e.message));
  return worker;
 }
@@ -20,4 +21,6 @@ function started(){
 function run(file,args,{timeout=1000}={}){
  return new Promise(resolve=>{const id=++next;waiting.set(id,resolve);const w=started();w.ref();w.postMessage({id,file,args,timeout});});
 }
-module.exports={run};
+// Settles once no read is unanswered (the tests wait on it after a heartbeat).
+function idle(){return waiting.size?new Promise(done=>idlers.push(done)):Promise.resolve();}
+module.exports={run,idle};
