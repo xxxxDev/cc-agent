@@ -241,7 +241,10 @@ function onMarkdownClick(event){
    exchange: same shape, less contrast, so they read as background. */
 .message.imported-turn {opacity:.82;}
 /* Older pages arrive above the reader; the control sits where they will appear. */
-.older-turns {display:flex;justify-content:center;padding:6px 0 10px;}
+/* One height whether it shows the spinner or the link: the link is taller, and swapping
+   it in as a page of history landed moved the content under a reader clamped at the
+   bottom, a scroll that took the jump-to-latest button away again (history-paging). */
+.older-turns {display:flex;justify-content:center;align-items:center;box-sizing:border-box;height:36px;padding:6px 0 10px;}
 
 /* Arrival timing and 12px rise; only newly inserted messages animate. */
 .message-arrival {animation:message-arrival 2s cubic-bezier(0.22,1,0.36,1);}
