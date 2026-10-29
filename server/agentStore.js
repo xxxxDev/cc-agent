@@ -136,7 +136,7 @@ const STARTUP_SLOW_MS=15*60000;
 // before a turn ending without it counts it unanswered.
 const ARRIVING_MS=10000;
 const SESSION_RECHECK_MS=15000,sessionSeenAt=new WeakMap();
-function reconcile(c) {
+function reconcile(c,{fresh=false}={}) {
  if(!c||c.archived||c.mode!=='claude')return c;
  const g=active(c);
  if(!['starting','ready','busy','handing-off'].includes(g.phase))return c;
@@ -149,10 +149,11 @@ function reconcile(c) {
  }
  if(g.heartbeat>Date.now()-STALE_MS)return c;
  // Without heartbeats, checking tmux synchronously on every poll blocks the event loop.
- // Trust a successful check briefly before asking again.
- if(sessionSeenAt.get(g)>Date.now()-SESSION_RECHECK_MS)return c;
+ // Trust a successful check briefly before asking again. Decisions that hand a message
+ // to the agent or start it ask afresh (fresh).
+ if(!fresh&&sessionSeenAt.get(g)>Date.now()-SESSION_RECHECK_MS)return c;
  try{execFileSync('tmux',['-L',tmuxSocket,'has-session','-t',g.tmux],{stdio:'ignore',timeout:2000});sessionSeenAt.set(g,Date.now());return c;}catch{}
- permissions.cancel(g);g.compacting=false;g.manualCompact=false;g.phase='error';g.ready=false;g.heartbeat=0;
+ sessionSeenAt.delete(g);permissions.cancel(g);g.compacting=false;g.manualCompact=false;g.phase='error';g.ready=false;g.heartbeat=0;
  g.lastError='Claude session 已中斷（例如重開機後），請重新連線。';save(c);
  return c;
 }
@@ -527,6 +528,8 @@ function launch(c) {
  const g=active(c);
  if(c.mode==='demo'){g.ready=true;g.phase='ready';g.heartbeat=Date.now();save(c);return;}
  if(['starting','ready','busy','handing-off'].includes(g.phase)&&g.heartbeat>Date.now()-15000)return;
+ // A session seen before this start says nothing about the one started now.
+ sessionSeenAt.delete(g);
  const dir=path.join(stateRoot,'workspaces',c.id,'g'+g.number);fs.mkdirSync(dir,{recursive:true,mode:0o700});fs.mkdirSync(referenceDir(c),{recursive:true,mode:0o700});
  const access=launchAccess(c);
  if(platform.isWin&&!access.full)throw error(platform.SCOPED_UNSUPPORTED);
@@ -913,6 +916,7 @@ function starterOps(c,action,data){
 function stop(c) {
  const g=active(c);
  if(c.mode==='claude') {try{execFileSync('tmux',['-L',tmuxSocket,'kill-session','-t',g.tmux],{timeout:5000,stdio:'ignore'});}catch{}}
+ sessionSeenAt.delete(g);
  permissions.cancel(g);g.compacting=false;g.manualCompact=false;g.phase='stopped';g.ready=false;g.heartbeat=0;g.token=randomBytes(32).toString('hex');
  // Paused, deleted or restarted: a wake waiting for a usage limit is dropped, so a
  // task the owner stopped is not taken up again.
@@ -924,6 +928,10 @@ function send(c,text,key,attachmentIds=[],extra={}) {
  if(typeof text!=='string'||(!text.trim()&&!attachmentIds?.length)||text.length>16000)throw error('請輸入 1–16000 字的訊息');
  if(typeof key!=='string'||!/^[a-zA-Z0-9-]{8,80}$/.test(key))throw error('Missing request ID');
  const existing=c.messages.find(m=>m.requestId===key);if(existing)return existing;
+ // Whether the session is still there is asked afresh here (once the heartbeat is
+ // stale; nothing otherwise), not taken from the list's cached check: a message is
+ // not handed to an agent that died within those fifteen seconds.
+ if(c.mode==='claude')reconcile(c,{fresh:true});
  const g=active(c);
  // A message may go in while Claude is answering, as in its own terminal: it is
  // queued and Claude takes it at the next point it can. Not while it is compacting or being started, reconnected or
@@ -1162,6 +1170,9 @@ function deliverGroups(now=Date.now()){
    const c=state.conversations.find(c=>c.id===id&&c.owner===x.owner&&!c.archived);
    const fail=reason=>{d.status='failed';d.reason=reason;groupStore.addMessage(x,{role:'system',text:(c?.title||'成員')+' 沒有收到這則訊息：'+reason});changed=true;};
    if(!c||!x.members.includes(id)){fail('已不在群組');continue;}
+   // A member whose heartbeat is stale is asked afresh whether its session lives, so
+   // one that died is started or waited for, not sent to.
+   if(c.mode==='claude')reconcile(c,{fresh:true});
    const g=active(c);
    if(takesMessages(c,g)){
     try{const sent=send(c,m.text,('group-'+m.id).slice(0,80),[],{group:{id:x.id,name:x.name,messageId:m.id}});d.status='sent';d.messageId=sent.id;d.at=new Date(now).toISOString();changed=true;}
@@ -2450,7 +2461,7 @@ function runSchedules({now=Date.now(),ownerActive,only}={}){
    const due=Date.parse(x.nextAt),next=require('./schedules').nextRun(x.frequency,new Date(now)).toISOString();
    if(!c||c.archived){scheduleEnd(x,at,'skipped','Agent 已刪除',{extra:{nextAt:next}});continue;}
    if(!ownerActive(c.owner)){scheduleEnd(x,at,'skipped','擁有者帳號已停用',{extra:{nextAt:next}});continue;}
-   const g=reconcile(c)&&active(c);
+   const g=reconcile(c,{fresh:true})&&active(c);
    if(!x.script&&!x.check&&!x.feed&&!takesMessages(c,g)&&['stopped','error'].includes(g.phase)&&x.whenPaused==='skip'){scheduleEnd(x,at,'skipped','Agent 沒有在執行',{extra:{nextAt:next}});continue;}
    scheduleRun(x,{nextAt:next,pendingRun:{since:at,due}});
   }
@@ -2459,7 +2470,8 @@ function runSchedules({now=Date.now(),ownerActive,only}={}){
   // A background script runs first, whatever the agent is doing; only a result it
   // is to handle goes on to the agent.
   if((x.script||x.check||x.feed)&&!x.pendingRun.text){runScriptStage(x,now);continue;}
-  const g=reconcile(c)&&active(c);
+  // Asked afresh, not from the cached check: a run is sent, or the agent started, on it.
+  const g=reconcile(c,{fresh:true})&&active(c);
   if(takesMessages(c,g)){deliverSchedule(x,c,at);continue;}
   const down=['stopped','error'].includes(g.phase);
   const starts=x.pendingRun.manual||(x.whenPaused==='start'&&!c.pausedByOwner);
