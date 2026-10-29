@@ -82,6 +82,7 @@
 </template>
 <script setup>
 import {ref,computed,watch,nextTick,onMounted,onUnmounted,inject,provide} from 'vue';
+import {secondClock} from '../js/secondClock.js';
 import MessageList from './MessageList.vue';
 import TerminalPromptCard from './TerminalPromptCard.vue';
 import TerminalPane from '../TerminalPane.vue';
@@ -151,12 +152,12 @@ watch(presence,p=>emit('presence',p),{immediate:true});
 
 // A cell has no bar under a navbar, so a turn it did not start (from the terminal,
 // say) shows in the typing bubble too, with the button that stops it.
-const typing=computed(()=>!locked.value&&(status.awaitingReply(detail.value)||!detail.value?.compacting&&!!status.progressText(detail.value)));
-const typingText=computed(()=>typing.value?status.progressText(detail.value):'');
-const typingNote=computed(()=>typing.value?status.progressNote(detail.value):'');
-const backgroundText=computed(()=>status.backgroundText(detail.value,{locked:locked.value}));
+const typing=computed(()=>(secondClock.value,!locked.value&&(status.awaitingReply(detail.value)||!detail.value?.compacting&&!!status.progressText(detail.value))));
+const typingText=computed(()=>typing.value?(secondClock.value,status.progressText(detail.value)):'');
+const typingNote=computed(()=>typing.value?(secondClock.value,status.progressNote(detail.value)):'');
+const backgroundText=computed(()=>(secondClock.value,status.backgroundText(detail.value,{locked:locked.value})));
 const canSend=computed(()=>!!(draft.value.trim()||files.value.length)&&!sending.value&&!locked.value&&(detail.value?.phase==='ready'||detail.value?.phase==='busy'&&!detail.value?.compacting));
-const canInterrupt=computed(()=>detail.value?.mode==='claude'&&detail.value?.phase==='busy'&&!detail.value?.compacting&&!status.settlingAfterReply(detail.value));
+const canInterrupt=computed(()=>detail.value?.mode==='claude'&&detail.value?.phase==='busy'&&!detail.value?.compacting&&(secondClock.value,!status.settlingAfterReply(detail.value)));
 
 function toBottom(){nextTick(()=>{const el=scroller.value;if(el)el.scrollTop=el.scrollHeight;});}
 function toLatest(){atBottom.value=true;const el=scroller.value;if(el)el.scrollTo({top:el.scrollHeight,behavior:'smooth'});}

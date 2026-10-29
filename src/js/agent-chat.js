@@ -16,6 +16,7 @@ import {useMentionMenu,caretToEnd} from './mentionMenu.js';
 import {inSections} from './agentSections.js';
 import {viewingGroup,groups as chatGroups,loadGroups} from './groups.js';
 import {ref,computed,onMounted,onUnmounted,nextTick,watch} from 'vue';
+import {secondClock} from './secondClock.js';
 import {SOURCES} from './agent-models.js';
 import {defaultAvatar} from './avatarShape.js';
 import {f7} from 'framework7-vue';
@@ -157,9 +158,9 @@ const agentLocked=computed(()=>!!activity(detail.value)&&!operationErrors.value[
 const agentOperationError=computed(()=>operationErrors.value[selected.value]||'');
 // The typing bubbles' lines come from js/conversationStatus.js, shared with the
 // split view's cells.
-const settlingAfterReply=computed(()=>status.settlingAfterReply(detail.value));
-const agentProgress=computed(()=>status.progressText(detail.value,{locked:agentLocked.value}));
-const backgroundProgress=computed(()=>status.backgroundText(detail.value,{locked:agentLocked.value}));
+const settlingAfterReply=computed(()=>(secondClock.value,status.settlingAfterReply(detail.value)));
+const agentProgress=computed(()=>(secondClock.value,status.progressText(detail.value,{locked:agentLocked.value})));
+const backgroundProgress=computed(()=>(secondClock.value,status.backgroundText(detail.value,{locked:agentLocked.value})));
 const showViewSwitch=computed(()=>user.value?.role==='admin'&&detail.value?.mode==='claude');
 // The chat/terminal switch is hidden until an admin turns it on on the Admin tab. The
 // transcript inspector keeps its own condition, so hiding one never hides the other.
@@ -221,7 +222,7 @@ watch(()=>[profilePanelOpen.value,searchPanelVisible.value,inspectorOpen.value],
 function toggleChecklist(){checklistOpen.value=!checklistOpen.value;}
 const usageRows=computed(()=>agentOperation.usageRows(detail.value?.usage));
 const agentOperationTitle=computed(()=>agentOperation.operationTitle(activity(detail.value)));
-const agentOperationSteps=computed(()=>{const d=detail.value;return d?agentOperation.operationSteps(d,activity(d),operations.value[selected.value]):[];});
+const agentOperationSteps=computed(()=>{secondClock.value;const d=detail.value;return d?agentOperation.operationSteps(d,activity(d),operations.value[selected.value]):[];});
 const agentOperationPercent=computed(()=>agentOperation.operationPercent(detail.value,activity(detail.value)));
 function updateAgent(d){conversations.value=conversations.value.map(c=>c.id===d.id?{...c,...d}:c);if(selected.value===d.id)detail.value=d;}
 async function runAgentOperation(id,kind,body={}){
@@ -314,7 +315,7 @@ function deleteGroup(group){
  f7.dialog.confirm(ct('裡面的 Agent 會回到最上面，不會被刪除。'),ct('刪除群組')+'「'+escapeHtml(group.name)+'」',()=>saveGroups(listGroups.value.filter(g=>g.id!==group.id)));
 }
 const statusLabel=computed(()=>agentOperation.statusLabel(detail.value));
-const awaitingReply=computed(()=>status.awaitingReply(detail.value));
+const awaitingReply=computed(()=>(secondClock.value,status.awaitingReply(detail.value)));
 // The progress belongs in the typing bubble: that is where the eye already is,
 // it says plainly that this reply is being written, and putting it there stops
 // the bar from growing and shrinking the page on every turn. The bar is only the
@@ -326,7 +327,7 @@ const awaitingReply=computed(()=>status.awaitingReply(detail.value));
 // did; the bar under the navbar is gone.
 const typingBubble=computed(()=>awaitingReply.value||!!agentProgress.value);
 const progressInBubble=computed(()=>typingBubble.value?agentProgress.value:'');
-const noteInBubble=computed(()=>typingBubble.value?status.progressNote(detail.value,{locked:agentLocked.value}):'');
+const noteInBubble=computed(()=>typingBubble.value?(secondClock.value,status.progressNote(detail.value,{locked:agentLocked.value})):'');
 const progressInBar=computed(()=>'');
 // The agent's picture wherever it speaks, and its light as on the Agents list:
 // working on an operation, online, or offline.
