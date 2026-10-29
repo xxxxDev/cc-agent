@@ -16,6 +16,8 @@ export const PRODUCT = Object.freeze({
     loginKey: 'cc-agent-login-key', // qrLogin.js
     passkeyOffer: 'cc-agent-passkey-offer', // passkeys.js
     updateDialog: 'cc-agent-update-dialog', // updatePrompt.js
+    sidebarFolded: 'cc-agent-sidebar-folded', // sidebarState.js
+    sidebarAuto: 'cc-agent-sidebar-auto', // sidebarState.js
     language: 'cc-agent-lang', // i18n.js
   }),
   // push.js: the kinds of notification a device has before it says otherwise.

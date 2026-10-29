@@ -373,6 +373,65 @@ body {
 .cc-app .panel-left .menu-list li:last-child {
   padding-bottom: var(--cc-space-sm);
 }
+/* ---- The computer's sidebar folded to a rail of icons ----
+ * <html>.sidebar-rail: the page keeps only the rail's room; <html>.sidebar-narrow: the sidebar
+ * shows icons only. Folded by the handle on its edge, or kept folded by 自動收合電腦版選單, where
+ * it opens over the page (rail without narrow) while the mouse is on it (src/js/sidebarState.js).
+ * F7 sets the page's margin inline from the panel's width at each resize, so the margin here
+ * wins with !important. Width, margin and labels move together over 0.22 s. */
+@media (min-width: 1024px) {
+  .cc-app { --cc-sidebar-rail: 72px; --cc-sidebar-motion: .22s cubic-bezier(.2, .8, .2, 1); }
+  .cc-app .panel-left.panel-in-breakpoint {
+    transition: width var(--cc-sidebar-motion), box-shadow var(--cc-sidebar-motion);
+  }
+  .cc-app .panel-left.panel-in-breakpoint ~ .views {
+    margin-left: var(--f7-panel-width) !important;
+    transition: margin-left var(--cc-sidebar-motion);
+  }
+  html.sidebar-rail .cc-app .panel-left.panel-in-breakpoint ~ .views { margin-left: var(--cc-sidebar-rail) !important; }
+  html.sidebar-narrow .cc-app .panel-left.panel-in-breakpoint { width: var(--cc-sidebar-rail); }
+  /* Opened over the page by the automatic fold: a shadow on its edge, the page stays put. */
+  html.sidebar-rail:not(.sidebar-narrow) .cc-app .panel-left.panel-in-breakpoint { box-shadow: 12px 0 32px rgba(0, 0, 0, .35); }
+  .cc-app .panel-left .page-content { overflow-x: hidden; }
+  .cc-app .panel-left .panel-logo-img { transition: width var(--cc-sidebar-motion), height var(--cc-sidebar-motion); }
+  html.sidebar-narrow .cc-app .panel-left .panel-logo-img { width: 34px !important; height: 34px !important; }
+  .cc-app .panel-left .menu-list .item-inner { white-space: nowrap; transition: opacity var(--cc-sidebar-motion); }
+  html.sidebar-narrow .cc-app .panel-left .menu-list .item-inner { opacity: 0; pointer-events: none; }
+  .cc-app .panel-left .menu-list .item-content { transition: padding-left var(--cc-sidebar-motion); }
+  html.sidebar-narrow .cc-app .panel-left .menu-list .item-content { padding-left: 14px; }
+  .cc-app .panel-left .menu-list .item-media { position: relative; }
+  .cc-app .menu-unread-dot { display: none; position: absolute; top: 0; right: -4px; width: 9px; height: 9px; border-radius: 50%; background: #ff3b30; box-shadow: 0 0 0 2px var(--cc-color-panel); }
+  html.sidebar-narrow .cc-app .menu-unread-dot { display: block; }
+  /* The handle: on the line between the sidebar and the page, at its middle, only while the
+   * mouse is near that line. */
+  /* Outside the panel (App.vue says why), following its edge. */
+  .cc-app .sidebar-edge { position: fixed; top: 0; bottom: 0; left: calc(var(--f7-panel-width) - 14px); width: 28px; z-index: 6000; transition: left var(--cc-sidebar-motion); }
+  html.sidebar-narrow .cc-app .sidebar-edge { left: calc(var(--cc-sidebar-rail) - 14px); }
+  .cc-app .sidebar-handle {
+    position: absolute; top: 50%; left: 50%; width: 22px; height: 48px; margin: -24px 0 0 -11px; padding: 0;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    border-radius: 11px; border: 1px solid var(--cc-color-border, rgba(127, 127, 127, .35));
+    background: var(--cc-color-panel); color: var(--cc-color-text); box-shadow: 0 4px 12px rgba(0, 0, 0, .3);
+    opacity: 0; transition: opacity .15s ease;
+  }
+  .cc-app .sidebar-edge:hover .sidebar-handle,
+  .cc-app .sidebar-handle:focus-visible { opacity: 1; }
+  .cc-app .sidebar-handle .icon { font-size: 13px; }
+}
+/* A folded item's name beside it while the mouse is on it (App.vue). */
+.sidebar-tip {
+  position: fixed; z-index: 6100; transform: translateY(-50%); pointer-events: none;
+  padding: 6px 11px; border-radius: 8px; font-size: 13px; white-space: nowrap;
+  background: var(--cc-color-panel, #252525); color: var(--cc-color-text, #fff);
+  border: 1px solid var(--usage-track, rgba(127, 127, 127, .3)); box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cc-app .panel-left.panel-in-breakpoint,
+  .cc-app .panel-left.panel-in-breakpoint ~ .views,
+  .cc-app .panel-left .panel-logo-img,
+  .cc-app .panel-left .menu-list .item-inner,
+  .cc-app .sidebar-edge { transition: none !important; }
+}
 /* ---- Source dropdown ----
  * Teleported to <body>, i.e. OUTSIDE .cc-app — these rules are intentionally unscoped.
  * Click-anchored absolute panel, 24px radius, dialog-dark 80% + saturate/blur(6px)

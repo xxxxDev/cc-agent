@@ -26,7 +26,7 @@
       <template v-else>
       <!-- Desktop left panel: logo + selected-pill menu -->
       <f7-panel v-if="!embedded" left cover :visible-breakpoint="1024">
-        <div class="view">
+        <div class="view" @mouseenter="peekSidebar(true)" @mouseleave="peekSidebar(false)">
           <div class="page page-current">
             <div class="page-content">
               <div class="panel-logo" style="padding-top: 8vh; text-align: center;">
@@ -41,10 +41,13 @@
                       href="#"
                       :data-tab="'#' + tb.id"
                       @click="selectTab(tb.id)"
+                      @mouseenter="showSideTip($event, t(tb.labelKey))"
+                      @mouseleave="sideTip = null"
                     >
                       <div class="item-content">
                         <div class="item-media">
                           <i class="icon left-panel__menu-icon" :class="tb.iconClass">{{ tb.icon }}</i>
+                          <span v-if="tb.id === 'view-chat' && unreadTotal" class="menu-unread-dot"></span>
                         </div>
                         <div class="item-inner">
                           <div class="item-title">{{ t(tb.labelKey) }}</div>
@@ -57,13 +60,13 @@
               </div>
               <div class="panel-foot">
               <!-- How much of the Claude subscription is used, for the admin; the Admin page shows the same at its top. -->
-              <UsageMeters v-if="desktop"/>
+              <UsageMeters v-if="desktop" :compact="sidebarNarrow"/>
               <!-- A new build waits here on a computer instead of interrupting with a
                    dialog; a tap offers it as before. -->
               <div v-if="newBuild" class="list menu-list no-hairlines panel-update">
                 <ul>
                   <li>
-                    <a class="item-link" href="#" @click.prevent="offerNewVersion">
+                    <a class="item-link" href="#" @click.prevent="offerNewVersion" @mouseenter="showSideTip($event, t('updateAvailableTitle'))" @mouseleave="sideTip = null">
                       <div class="item-content">
                         <div class="item-media"><i class="icon f7-icons left-panel__menu-icon">arrow_down_circle_fill</i></div>
                         <div class="item-inner"><div class="item-title">{{ t('updateAvailableTitle') }}</div></div>
@@ -77,6 +80,15 @@
           </div>
         </div>
       </f7-panel>
+      <!-- The handle that folds and unfolds it, on the line between it and the page,
+           shown only while the mouse is near that line.
+           Outside the panel: WebKit filled the part of the panel's layer that a child
+           reached past its edge with the panel's colour and stale pixels (a strip
+           beside it). -->
+      <div v-if="desktop && !embedded && !sidebarAuto" class="sidebar-edge">
+        <button type="button" class="sidebar-handle" :aria-label="sidebarFolded ? ct('展開選單') : ct('收合選單')" :title="sidebarFolded ? ct('展開選單') : ct('收合選單')" @click="setSidebarFolded(!sidebarFolded)"><i class="icon f7-icons">{{ sidebarFolded ? 'chevron_right' : 'chevron_left' }}</i></button>
+      </div>
+      <div v-if="sideTip && sidebarNarrow" class="sidebar-tip" :style="{ top: sideTip.top + 'px', left: sideTip.left + 'px' }">{{ sideTip.text }}</div>
 
       <!-- Main: 3 tab views + segmented bottom tabbar -->
       <f7-views tabs class="safe-areas">
@@ -154,6 +166,8 @@ import { embedded, splitView } from './js/embed.js';
 import { updateDialog } from './js/updatePrompt.js';
 import SplitView from './components/SplitView.vue';
 import UsageMeters from './components/UsageMeters.vue';
+import { ct } from './js/agent-i18n.js';
+import { sidebarFolded, sidebarAuto, sidebarRail, sidebarNarrow, setSidebarFolded, peekSidebar } from './js/sidebarState.js';
 import { forceAppUpdate } from './js/pwa-update.js';
 
 const ls = (k) => {
@@ -406,6 +420,19 @@ const desktopQuery = typeof window !== 'undefined' ? window.matchMedia?.(DESKTOP
 const desktop = ref(!!desktopQuery?.matches);
 function onDesktopChange() { desktop.value = !!desktopQuery?.matches; }
 desktopQuery?.addEventListener?.('change', onDesktopChange);
+// The folded sidebar: the page keeps the rail's room (sidebar-rail), the sidebar shows
+// icons only (sidebar-narrow); classes on <html>, read by styles/skin.css.
+watch([sidebarRail, sidebarNarrow], ([rail, narrow]) => {
+  document.documentElement.classList.toggle('sidebar-rail', rail);
+  document.documentElement.classList.toggle('sidebar-narrow', narrow);
+}, { immediate: true });
+// A folded item's name beside it while the mouse is on it.
+const sideTip = ref(null);
+function showSideTip(event, text) {
+  if (!sidebarNarrow.value) return;
+  const box = event.currentTarget.getBoundingClientRect();
+  sideTip.value = { text, top: box.top + box.height / 2, left: box.right + 10 };
+}
 function offerNewVersion() {
   f7.dialog.confirm(
     t('updateAvailableText', { current: __BUILD_ID__, latest: newBuild.value }),

@@ -37,6 +37,11 @@
       <f7-list-item :title="ct('深色模式')">
         <template #media><f7-icon f7="moon_fill"/></template><template #after><label class="toggle"><input type="checkbox" :aria-label="ct('深色模式')" :checked="theme==='dark'" @change="setTheme($event.target.checked?'dark':'light')"/><span class="toggle-icon"></span></label></template>
       </f7-list-item>
+      <!-- The computer's menu kept folded, opening while the mouse is on it;
+           a computer only, kept on each device. -->
+      <f7-list-item v-if="desktop" :title="ct('自動收合電腦版選單')" :footer="ct('選單平常收成一排圖示，滑鼠移上去才展開，移開就收回。只影響這台裝置。')" class="sidebar-auto">
+        <template #media><f7-icon f7="sidebar_left"/></template><template #after><label class="toggle"><input type="checkbox" :aria-label="ct('自動收合電腦版選單')" :checked="sidebarAuto" @change="setSidebarAuto($event.target.checked)"/><span class="toggle-icon"></span></label></template>
+      </f7-list-item>
       <f7-list-item :title="ct('版本更新提示')" class="update-dialog"><template #media><f7-icon f7="arrow_down_circle"/></template><template #after><label class="toggle"><input type="checkbox" :aria-label="ct('版本更新提示')" :checked="updateDialog" @change="setUpdateDialog($event.target.checked)"/><span class="toggle-icon"></span></label></template></f7-list-item>
       <f7-list-item link :title="t('checkForUpdate')" class="check-update" @click.prevent="checkForUpdate">
         <template #media><f7-icon f7="arrow_2_circlepath" /></template>
@@ -99,6 +104,13 @@ import {
 import { forceAppUpdate } from '../js/pwa-update.js';
 import { isHandheld } from '../js/qrLogin.js';
 import { updateDialog, setUpdateDialog } from '../js/updatePrompt.js';
+import { sidebarAuto, setSidebarAuto } from '../js/sidebarState.js';
+// The menu setting is for the computer's layout only (App.vue's breakpoint).
+const desktopQuery = typeof window !== 'undefined' ? window.matchMedia?.('(min-width: 1024px)') : null;
+const desktop = ref(!!desktopQuery?.matches);
+const onDesktopChange = () => { desktop.value = !!desktopQuery?.matches; };
+desktopQuery?.addEventListener?.('change', onDesktopChange);
+onBeforeUnmount(() => desktopQuery?.removeEventListener?.('change', onDesktopChange));
 import { fetchLatestBuildId, hasNewVersion } from '../versionCheck.js';
 import GlassDropdown from '../components/GlassDropdown.vue';
 

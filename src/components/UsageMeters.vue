@@ -20,6 +20,30 @@
       </div>
     </li>
   </ul></div>
+  <!-- The folded sidebar: each limit a ring around its logo, the full row beside it
+       while the mouse is on it. -->
+  <div v-else-if="compact && usageGroups.length" class="usage-rings">
+    <template v-for="row in rows" :key="row.key">
+      <div class="usage-ring" :data-usage="row.group.key" @mouseenter="showCard($event, row)" @mouseleave="card = null">
+        <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="17" class="ring-track"/><circle v-if="row.meter" cx="20" cy="20" r="17" class="ring-fill" :class="row.meter.level" :stroke-dasharray="(row.meter.percent / 100 * RING) + ' ' + RING"/></svg>
+        <img :src="row.group.logo" :alt="row.group.name"/>
+      </div>
+    </template>
+    <!-- In <body>, not in the panel: a fixed box inside the panel's transformed layer is
+         placed by the panel and, in WebKit, painted with its stale pixels. -->
+    <Teleport to="body"><div v-if="card" class="usage-card" :style="{ top: card.top + 'px', left: card.left + 'px' }">
+      <div class="usage-row">
+        <img class="usage-logo" :src="card.row.group.logo" :alt="card.row.group.name"/>
+        <div v-if="card.row.note" class="usage-main usage-note">{{ card.row.note }}</div>
+        <div v-else class="usage-main">
+          <div class="usage-label"><span>{{ t(card.row.meter.label) }}</span><span>{{ t('usageUsed', { percent: card.row.meter.percent }) }}</span></div>
+          <div class="usage-bar"><i :class="card.row.meter.level" :style="{ width: card.row.meter.percent + '%' }"></i></div>
+          <div v-if="card.row.meter.resets" class="usage-reset">{{ t('usageResets', { time: card.row.meter.resets }) }}</div>
+          <div v-if="card.row.meter.stale" class="usage-reset usage-stale">{{ card.row.meter.stale }}</div>
+        </div>
+      </div>
+    </div></Teleport>
+  </div>
   <div v-else-if="usageGroups.length" class="usage-meters">
     <div v-for="group in usageGroups" :key="group.key" class="usage-group" :data-usage="group.key">
       <div v-if="group.note" class="usage-row"><img class="usage-logo" :src="group.logo" :alt="group.name"/><div class="usage-main usage-note">{{ group.note }}</div></div>
@@ -37,11 +61,17 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { t } from '../js/i18n.js';
 import { usageGroups, watchUsage } from '../js/usage.js';
 
-defineProps({ list: Boolean });
+defineProps({ list: Boolean, compact: Boolean });
+const RING = 2 * Math.PI * 17;
+const card = ref(null);
+function showCard(event, row) {
+  const box = event.currentTarget.getBoundingClientRect();
+  card.value = { row, top: box.top + box.height / 2, left: box.right + 12 };
+}
 const rows = computed(() => usageGroups.value.flatMap(group => group.note ? [{ key: group.key + ':note', group, note: group.note }] : group.meters.map(meter => ({ key: group.key + ':' + meter.key, group, meter }))));
 let stop = null;
 onMounted(() => { stop = watchUsage(); });
@@ -66,4 +96,15 @@ onUnmounted(() => stop?.());
 .usage-note {font-size:12px;color:var(--cc-color-text-secondary, #8e8e93);}
 .usage-item .item-inner {padding-top:10px;padding-bottom:10px;}
 .usage-icon {display:block;width:28px;height:28px;border-radius:7px;}
+.usage-rings {display:flex;flex-direction:column;align-items:center;gap:12px;padding:0 0 12px;}
+.usage-ring {position:relative;width:40px;height:40px;}
+.usage-ring svg {position:absolute;inset:0;width:40px;height:40px;transform:rotate(-90deg);}
+.usage-ring circle {fill:none;stroke-width:3.5;}
+.ring-track {stroke:var(--usage-track, rgba(255,255,255,.12));}
+.ring-fill {stroke-linecap:round;transition:stroke-dasharray .4s ease;}
+.ring-fill.low {stroke:#34c759;}
+.ring-fill.mid {stroke:#ff9f0a;}
+.ring-fill.high {stroke:#ff453a;}
+.usage-ring img {position:absolute;inset:10px;width:20px;height:20px;border-radius:5px;}
+.usage-card {position:fixed;z-index:6100;transform:translateY(-50%);width:240px;padding:12px 14px;border-radius:12px;background:var(--cc-color-panel, #252525);border:1px solid var(--usage-track, rgba(255,255,255,.12));box-shadow:0 10px 28px rgba(0,0,0,.35);pointer-events:none;}
 </style>

@@ -291,6 +291,10 @@ const english = {
 "已移除不是對話的內容":"Start-up notes removed",
 "Agents 自動排序":"Sort Agents automatically",
   "版本更新提示":"Update dialog",
+  "展開選單":"Expand the menu",
+  "收合選單":"Collapse the menu",
+  "自動收合電腦版選單":"Auto-collapse the menu on a computer",
+  "選單平常收成一排圖示，滑鼠移上去才展開，移開就收回。只影響這台裝置。":"The menu stays a row of icons and opens while the mouse is on it. This device only.",
   
 "新增群組":"New group",
 "群組名稱":"Group name",
