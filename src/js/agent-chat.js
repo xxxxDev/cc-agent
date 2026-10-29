@@ -739,6 +739,10 @@ async function select(id,{direct=false}={}){
  if(id&&id===openingId.value)return;
  const run=++opening,owner=user.value?.id;if(!owner)return;
  openingId.value=id;
+ // Its unread count goes the moment it is tapped, not once the page is on screen a
+ // second or two later; the server marks it read with
+ // the same request (viewing=1), so a list refresh in between does not bring it back.
+ const row=conversations.value.find(c=>c.id===id);if(row?.unread)row.unread=0;
  cancelHistoryPaging();
  setActiveTab('view-chat');terminalOpen.value=false;clearInspection();detail.value=null;selected.value=null;selecting.value=true;
  if(direct){
@@ -748,7 +752,7 @@ async function select(id,{direct=false}={}){
   requestAnimationFrame(()=>requestAnimationFrame(()=>{if(run===opening)directOpening.value=false;}));
  }
  try{
-  const d=await attempt(()=>api('/conversations/'+encodeURIComponent(id)+'?open=1&limit='+MESSAGE_PAGE));
+  const d=await attempt(()=>api('/conversations/'+encodeURIComponent(id)+'?open=1&viewing=1&limit='+MESSAGE_PAGE));
   if(run!==opening||user.value?.id!==owner)return;
   if(!d){selected.value=null;writeUrl(null);exitConversationRoute();return;}
   // Auth/installation gate can mount the F7 view after the request completes.
