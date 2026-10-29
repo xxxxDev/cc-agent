@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID, randomBytes, timingSafeEqual, createHash } = require('node:crypto');
-const { execFileSync, execFile } = require('node:child_process');
+const { execFileSync } = require('node:child_process');
 const permissions = require('./permissions');
 const attachments=require('./attachments');
 const agentProfile=require('./agentProfile');
@@ -9,6 +9,7 @@ const checklists=require('./checklists');
 const terminalPrompt=require('./terminalPrompt');
 const transcript=require('./transcript');
 const compactScreen=require('./compactScreen');
+const offThread=require('./offThread');
 const slashCommands=require('./slashCommands');
 const agentEnv=require('../channel/agentEnv.cjs');
 const agentAccess=require('./agentAccess');
@@ -1260,7 +1261,9 @@ function commandInGroup(owner,id,agentId,text){
 }
 function searchGroup(owner,id,query){const x=groupFor(id,owner);return searchIn([{id:x.id,title:x.name,messages:x.messages}],query);}
 const prompts=new Map(),promptGeneration=new Map(),capturing=new Set();
-const capturePane=target=>new Promise(resolve=>execFile('tmux',['-L',tmuxSocket,'capture-pane',...platform.CAPTURE,target],{encoding:'utf8',timeout:1000},(error,stdout)=>resolve(error?null:stdout)));
+// Starting a process holds the thread that starts it; on Windows that stalls every
+// page, so screens are read from a worker thread.
+const capturePane=target=>offThread.run('tmux',['-L',tmuxSocket,'capture-pane',...platform.CAPTURE,target]);
 function syncTerminalPrompt(c){
  const g=active(c);if(!g.tmux||capturing.has(c.id))return;
  const token=g.token,session=g.sessionId,target=g.tmux,generation=promptGeneration.get(c.id)||0;
