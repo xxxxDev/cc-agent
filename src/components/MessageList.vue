@@ -77,7 +77,9 @@ watch(()=>[props.conversationId,props.messages],([cid,list])=>{
   if(pastKnown)arrivingIds.add(m.id);
  }
 },{flush:'sync'});
-function onArrivalEnd(event){if(event.animationName!=='message-arrival')return;const id=event.target?.dataset?.messageId;if(id){arrivingIds.delete(id);event.target.classList.remove('message-arrival');}}
+// Scoped styles rename the keyframes (message-arrival-<scope id>), so the name is
+// matched by its start.
+function onArrivalEnd(event){if(!String(event.animationName||'').startsWith('message-arrival'))return;const id=event.target?.dataset?.messageId;if(id){arrivingIds.delete(id);event.target.classList.remove('message-arrival');}}
 // An agent named with @ from the menu, as a tag that opens it. The name is found in the text already rendered, escaped as it is there.
 const esc=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
