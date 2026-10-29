@@ -39,7 +39,11 @@ const silent=()=>Date.now()-lastHeard>=QUIET_MS;
 // page or when a line that held a while drops. Data is no sign of a good line: an attach
 // that prints an error (no such session) and exits sends some, and would retry every second for good.
 const STEADY_MS=5000;
-let retryTimer=0,retries=0,openedAt=0;
+// A line refused before it opened (the agent stopped: the server answers 409, which a
+// page cannot read from a WebSocket, so any refusal counts) keeps its spent budget on a
+// return to the window: each return tries once, not eight times with an audit line
+// each. A reattach tapped by the reader starts it over.
+let retryTimer=0,retries=0,openedAt=0,refused=false;
 function scheduleRetry(reason){
  if(disposed||retryTimer||document.hidden)return;
  const delay=retryDelay(retries);
@@ -51,11 +55,11 @@ function scheduleRetry(reason){
 function checkLine(){if(!disposed&&!document.hidden&&ws?.readyState===1&&silent())connect();}
 // A phone put away lets go of its line: the screen kept streaming to a page nobody
 // sees. Back in front, the pane has no line and attaches again.
-function onVisible(){if(disposed)return;if(document.hidden){if(touch&&ws){const old=ws;ws=null;clearTimeout(retryTimer);retryTimer=0;old.close();}return;}retries=0;loadWebgl();if(!ws||ws.readyState>1||silent())connect();else term?.refresh(0,term.rows-1);}
+function onVisible(){if(disposed)return;if(document.hidden){if(touch&&ws){const old=ws;ws=null;clearTimeout(retryTimer);retryTimer=0;old.close();}return;}if(!refused)retries=0;loadWebgl();if(!ws||ws.readyState>1||silent())connect();else term?.refresh(0,term.rows-1);}
 function connect(manual=false){if(disposed)return;if(manual)retries=0;const old=ws;ws=null;old?.close();clearTimeout(retryTimer);retryTimer=0;openedAt=0;term?.reset();status.value='正在附接終端…';lastHeard=Date.now();const socket=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/terminal/${props.conversationId}`);ws=socket;let failed=false;
  socket.onopen=()=>{if(ws!==socket)return;openedAt=Date.now();status.value='終端已連線';resize();if(manual)term.focus();};
  socket.onmessage=e=>{if(ws!==socket)return;lastHeard=Date.now();const msg=JSON.parse(e.data);if(msg.type==='data')term.write(msg.data);else if(msg.type==='error')status.value=msg.message;};
- socket.onclose=()=>{if(ws!==socket)return;if(openedAt&&Date.now()-openedAt>STEADY_MS)retries=0;scheduleRetry(failed?'附接失敗，請確認登入與 Claude 狀態':'終端已離線');};socket.onerror=()=>{if(ws===socket)failed=true;};
+ socket.onclose=()=>{if(ws!==socket)return;refused=!openedAt;if(openedAt&&Date.now()-openedAt>STEADY_MS)retries=0;scheduleRetry(failed?'附接失敗，請確認登入與 Claude 狀態':'終端已離線');};socket.onerror=()=>{if(ws===socket)failed=true;};
 }
 // Backgrounding a phone can drop its GPU context and leave scrolling on the slow
 // DOM renderer. Retry on return, at most twice, then keep the DOM fallback stable.
