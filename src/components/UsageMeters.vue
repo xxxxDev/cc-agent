@@ -64,11 +64,14 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { t } from '../js/i18n.js';
 import { usageGroups, watchUsage } from '../js/usage.js';
+import { sidebarAuto } from '../js/sidebarState.js';
 
 defineProps({ list: Boolean, compact: Boolean });
 const RING = 2 * Math.PI * 17;
 const card = ref(null);
+// Only on a rail folded by hand: folding by itself, the sidebar opens with the full rows.
 function showCard(event, row) {
+  if (sidebarAuto.value) return;
   const box = event.currentTarget.getBoundingClientRect();
   card.value = { row, top: box.top + box.height / 2, left: box.right + 12 };
 }

@@ -88,7 +88,7 @@
       <div v-if="desktop && !embedded && !sidebarAuto" class="sidebar-edge">
         <button type="button" class="sidebar-handle" :aria-label="sidebarFolded ? ct('展開選單') : ct('收合選單')" :title="sidebarFolded ? ct('展開選單') : ct('收合選單')" @click="setSidebarFolded(!sidebarFolded)"><i class="icon f7-icons">{{ sidebarFolded ? 'chevron_right' : 'chevron_left' }}</i></button>
       </div>
-      <div v-if="sideTip && sidebarNarrow" class="sidebar-tip" :style="{ top: sideTip.top + 'px', left: sideTip.left + 'px' }">{{ sideTip.text }}</div>
+      <div v-if="sideTip && sidebarNarrow && !sidebarAuto" class="sidebar-tip" :style="{ top: sideTip.top + 'px', left: sideTip.left + 'px' }">{{ sideTip.text }}</div>
 
       <!-- Main: 3 tab views + segmented bottom tabbar -->
       <f7-views tabs class="safe-areas">
