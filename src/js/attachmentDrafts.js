@@ -15,11 +15,13 @@ export function useAttachmentDrafts(selected,user,busy,ct){
   // A copied picture arrives as "image.png" every time; name it by when it was pasted.
   addFiles(list.map((file,i)=>/^image\.\w+$/i.test(file.name)?new File([file],'pasted-'+stamp+(i?'-'+(i+1):'')+file.name.slice(file.name.lastIndexOf('.')),{type:file.type}):file));}
  function removeFile(key){if(busy.value)return;const id=selected.value,item=files.value.find(x=>x.key===key);drafts.value[id]=files.value.filter(x=>x.key!==key);pendingSend.delete(id);if(item?.uploadedId)api('/conversations/'+id+'/attachments/'+item.uploadedId,{method:'DELETE'}).catch(()=>{});resize();}
+ // A file not sent yet opens with the others beside it, to step through as in a sent bubble.
+ function previewDraft(item){const shown=f=>({id:f.key,name:f.name,size:f.size,local:f.file});return {...shown(item),group:files.value.map(shown)};}
  function chooseFiles(){if(!busy.value)fileInput.value?.click();}
  async function upload(id,items){for(const item of items){if(!item.uploadedId){const r=await api('/conversations/'+id+'/attachments?name='+encodeURIComponent(item.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:item.file});item.uploadedId=r.id;}}return items.map(x=>x.uploadedId);}
  function requestId(id,text,items){const signature=JSON.stringify([text,items.map(x=>x.key)]);const previous=pendingSend.get(id);if(previous?.signature===signature)return previous.id;const value={signature,id:crypto.randomUUID()};pendingSend.set(id,value);return value.id;}
  function sent(id,items){const keys=new Set(items.map(x=>x.key));drafts.value[id]=(drafts.value[id]||[]).filter(x=>!keys.has(x.key));pendingSend.delete(id);resize();}
  watch(files,resize);
  watch(()=>user.value?.id,()=>{drafts.value={};pendingSend.clear();});
- return {files,fileInput,pickFiles,dropFiles,pasteFiles,removeFile,chooseFiles,upload,requestId,sent};
+ return {files,fileInput,pickFiles,dropFiles,pasteFiles,removeFile,chooseFiles,previewDraft,upload,requestId,sent};
 }

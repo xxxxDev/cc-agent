@@ -33,7 +33,7 @@
     <template #before-inner><div v-if="files.length" class="split-drafts" :aria-label="ct('附件')">
      <f7-preloader v-if="sending" :size="18"/>
      <div v-for="file in files" :key="file.key" class="split-draft">
-      <a href="#" :title="file.name" @click.prevent="preview={name:file.name,size:file.size,local:file.file}"><span>{{file.name}}</span><small>{{file.size<1024?file.size+' B':(file.size/1024).toFixed(1)+' KB'}}</small></a>
+      <a href="#" :title="file.name" @click.prevent="preview=previewDraft(file)"><span>{{file.name}}</span><small>{{file.size<1024?file.size+' B':(file.size/1024).toFixed(1)+' KB'}}</small></a>
       <button type="button" :disabled="sending" :aria-label="ct('移除附件')+' '+file.name" @click="removeFile(file.key)"><i class="icon f7-icons">xmark_circle_fill</i></button>
      </div>
     </div></template>
@@ -140,7 +140,7 @@ const draft=ref((()=>{try{return sessionStorage.getItem(DRAFT_KEY+props.conversa
 watch(draft,text=>{try{if(text)sessionStorage.setItem(DRAFT_KEY+props.conversationId,text);else sessionStorage.removeItem(DRAFT_KEY+props.conversationId);}catch{}});
 // The conversation page's own drafts: kept per conversation, uploaded when sent.
 const attachmentDrafts=useAttachmentDrafts(computed(()=>props.conversationId),ref(null),sending,ct);
-const {files,fileInput,pickFiles,dropFiles,pasteFiles,removeFile,chooseFiles}=attachmentDrafts;
+const {files,fileInput,pickFiles,dropFiles,pasteFiles,removeFile,chooseFiles,previewDraft}=attachmentDrafts;
 
 // The side column, and the Agent Profile in it, the cell's own.
 const inspectorAllowed=computed(()=>isAdmin.value&&detail.value?.mode==='claude');
