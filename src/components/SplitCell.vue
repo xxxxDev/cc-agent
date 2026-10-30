@@ -7,7 +7,8 @@
       beside the conversation its checklists, search, Agent Profile and Transcript.
       What acts on the agent is js/cellAgent.js. -->
  <div ref="root" class="split-conversation" @keydown.esc="onEscape" :class="{'with-terminal':terminal&&wide,'terminal-only':terminal&&!wide,'side-cover':!!sidePanel&&narrow}" :style="terminal&&wide?{'--terminal-share':(share*100).toFixed(2)+'%'}:null">
-  <div class="split-chat" :style="{'--conversation-composer-height':composerHeight+'px'}" @dragover.prevent @drop.prevent="!locked&&dropFiles($event)" @paste="!locked&&pasteFiles($event)">
+  <div class="split-chat" :style="{'--conversation-composer-height':composerHeight+'px'}" @dragover.prevent="fileDrag.over($event,!locked&&!!detail)" @drop.prevent="fileDrag.end();!locked&&dropFiles($event)" @paste="!locked&&pasteFiles($event)">
+  <FileDropOverlay :show="fileDragging" :name="detail?.title" :count="fileDragCount"/>
   <div ref="scroller" class="split-scroll" :inert="locked" @scroll.passive="onScroll"><div ref="content">
    <p v-if="failed" class="split-failed" role="alert">{{failed}}</p>
    <template v-if="detail">
@@ -97,6 +98,8 @@ import TranscriptInspector from './TranscriptInspector.vue';
 import {api} from '../js/api.js';
 import {defaultAvatar} from '../js/avatarShape.js';
 import {ct} from '../js/agent-i18n.js';
+import FileDropOverlay from './FileDropOverlay.vue';
+import {useFileDrag} from '../js/fileDrag.js';
 import {shouldSendOnEnter} from '../js/chatKeyboard.js';
 import * as status from '../js/conversationStatus.js';
 import {useAttachmentDrafts} from '../js/attachmentDrafts.js';
@@ -127,6 +130,7 @@ function startResize(event){
  handle.addEventListener('pointermove',move);handle.addEventListener('pointerup',end);handle.addEventListener('pointercancel',end);
 }
 const PAGE=10,WINDOW_MAX=200;
+const fileDrag=useFileDrag(),{dragging:fileDragging,count:fileDragCount}=fileDrag;
 const detail=ref(null),sending=ref(false),interrupting=ref(false),olderBusy=ref(false),failed=ref(''),preview=ref(null);
 const scroller=ref(null),content=ref(null),composer=ref(null),composerHeight=ref(64),atBottom=ref(true),foundId=ref(null);
 // A draft not yet sent stays with its agent for the tab's life: the cell can be
