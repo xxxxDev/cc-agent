@@ -165,6 +165,8 @@ watch(()=>currentUser.value?.id,loadAgents);
 .split-cell {display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--f7-page-bg-color,#121212);}
 .split-cell-bar {display:flex;align-items:center;gap:8px;height:36px;padding:0 8px;flex:0 0 auto;}
 .split-cell-bar select {flex:1;min-width:0;height:28px;border-radius:8px;border:1px solid color-mix(in srgb,currentColor 20%,transparent);background:transparent;color:inherit;font:inherit;padding:0 6px;}
+/* Framework7 colours a dark option but not its group, which Windows drew as a pale band with the name unreadable. */
+.split-cell-bar option,.split-cell-bar optgroup {background:var(--f7-page-bg-color,#121212);}
 .split-cell-open {display:flex;color:inherit;opacity:.75;}
 .split-presence {flex:0 0 auto;width:9px;height:9px;border-radius:50%;background:#8e8e93;}
 .split-presence.online {background:#34c759;}
