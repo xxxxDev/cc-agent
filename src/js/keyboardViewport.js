@@ -1,3 +1,4 @@
+import {visibleHeight} from './visibleHeight.js';
 // Keep iOS's visual viewport and Framework7's layout in agreement. Only the
 // message list may scroll; Safari's focus scroll must not move the view/navbar.
 export function bindKeyboardViewport({
@@ -23,16 +24,16 @@ export function bindKeyboardViewport({
     cancelAnimationFrame(frame);
     frame = requestAnimationFrame(() => {
       root.classList.toggle('input-focused', Boolean(editable()));
-      const keyboard = viewport.scale === 1 && baseline - viewport.height > 100 && (editable() || active);
+      const keyboard = viewport.scale === 1 && baseline - visibleHeight(viewport) > 100 && (editable() || active);
       if (!keyboard && !editable()) baseline = window.innerHeight;
       if (viewport.scale !== 1) return;
-      const next = `${viewport.height}:${viewport.offsetTop}:${viewport.width}`;
+      const next = `${visibleHeight(viewport)}:${viewport.offsetTop}:${viewport.width}`;
       const changed = geometry !== next;
       active = keyboard; geometry = next;
       root.classList.toggle('keyboard-visible', keyboard);
       Object.assign(root.style, {
         position: 'fixed', top: `${viewport.offsetTop}px`, left: '0px',
-        height: `${viewport.height}px`, width: '100%', minHeight: '0px',
+        height: `${visibleHeight(viewport)}px`, width: '100%', minHeight: '0px',
       });
       resetShellScroll();
       if (changed) {
@@ -43,7 +44,7 @@ export function bindKeyboardViewport({
     });
   }
   function focus() {
-    if (!active) baseline = Math.max(window.innerHeight, viewport.height);
+    if (!active) baseline = Math.max(window.innerHeight, visibleHeight(viewport));
     // Lock before Safari starts its focus reveal, not after the keyboard has
     // already reduced the viewport by 100px.
     root.classList.toggle('input-focused', Boolean(editable()));

@@ -10,6 +10,7 @@
 // covers a third of the distance in its first tenth: over 300px of region that
 // reads as a snap followed by a settle, not as being carried.
 const ease=t=>t<=0?0:t>=1?1:t*t*t*(t*(t*6-15)+10);
+import {visibleHeight} from './visibleHeight.js';
 const REGION_MS=340;
 export function bindConversationViewport(page,{viewport=window.visualViewport}={}) {
   if(!page||!viewport)return ()=>{};
@@ -79,10 +80,10 @@ export function bindConversationViewport(page,{viewport=window.visualViewport}={
   }
   function sync(){
     if(viewport.scale!==1)return;
-    keyboard=(Boolean(input())||keyboard)&&baseline-viewport.height>100;
+    keyboard=(Boolean(input())||keyboard)&&baseline-visibleHeight(viewport,Boolean(input()))>100;
     if(!input()&&!keyboard)baseline=window.innerHeight;
 
-    const height=Math.min(viewport.height,page.clientHeight);
+    const height=Math.min(visibleHeight(viewport,Boolean(input())),page.clientHeight);
     // The composer must track the keyboard boundary immediately; only the history
     // gets the eased resize.
     page.classList.toggle('conversation-keyboard',keyboard);
@@ -113,7 +114,9 @@ export function bindConversationViewport(page,{viewport=window.visualViewport}={
     paint(fromHeight+(targetHeight-fromHeight)*ease(progress));
     if(progress<1)motionFrame=requestAnimationFrame(step);
   }
-  function focus(){rememberShell();const el=content();pin=Boolean(el&&el.scrollHeight-el.clientHeight-el.scrollTop<80);if(!keyboard)baseline=Math.max(window.innerHeight,viewport.height);sync();}
+  function focus(){rememberShell();const el=content();pin=Boolean(el&&el.scrollHeight-el.clientHeight-el.scrollTop<80);if(!keyboard)baseline=Math.max(window.innerHeight,visibleHeight(viewport,Boolean(input())));sync();}
+  // A stuck viewport sends no resize when the keyboard goes.
+  function stuckBlur(){if(viewport.height<=0)setTimeout(sync);}
   function touchFocus(event){
     const el=event.target.closest?.('[contenteditable]')||event.target;
     if(!el.matches?.('textarea,input,[contenteditable]')||document.activeElement===el)return;
@@ -172,6 +175,6 @@ export function bindConversationViewport(page,{viewport=window.visualViewport}={
   const touchOptions={passive:false};
   viewport.addEventListener('resize',sync);viewport.addEventListener('scroll',shellScrolled);window.addEventListener('resize',sync);
   page.ownerDocument?.addEventListener('scroll',shellScrolled,true);
-  page.addEventListener('touchstart',touchStart,{passive:true});page.addEventListener('touchmove',touchMove,{passive:true});page.addEventListener('touchend',touchEnd,touchOptions);page.addEventListener('touchcancel',touchCancel);page.addEventListener('focusin',focus);page.addEventListener('focusout',sync);page.addEventListener('conversation:unpin',unpin);page.addEventListener('scroll',historyScrolled,true);sync();
-  return ()=>{cancelAnimationFrame(motionFrame);cancelAnimationFrame(focusFrame);reveal();page.style.removeProperty('--conversation-visible-height');page.style.removeProperty('--conversation-composer-lift');page.classList.remove('conversation-keyboard');viewport.removeEventListener('resize',sync);viewport.removeEventListener('scroll',shellScrolled);page.ownerDocument?.removeEventListener('scroll',shellScrolled,true);releaseShell();window.removeEventListener('resize',sync);page.removeEventListener('touchstart',touchStart);page.removeEventListener('touchmove',touchMove);page.removeEventListener('touchend',touchEnd,touchOptions);page.removeEventListener('touchcancel',touchCancel);page.removeEventListener('focusin',focus);page.removeEventListener('focusout',sync);page.removeEventListener('conversation:unpin',unpin);page.removeEventListener('scroll',historyScrolled,true);};
+  page.addEventListener('touchstart',touchStart,{passive:true});page.addEventListener('touchmove',touchMove,{passive:true});page.addEventListener('touchend',touchEnd,touchOptions);page.addEventListener('touchcancel',touchCancel);page.addEventListener('focusin',focus);page.addEventListener('focusout',stuckBlur);page.addEventListener('focusout',sync);page.addEventListener('conversation:unpin',unpin);page.addEventListener('scroll',historyScrolled,true);sync();
+  return ()=>{cancelAnimationFrame(motionFrame);cancelAnimationFrame(focusFrame);reveal();page.style.removeProperty('--conversation-visible-height');page.style.removeProperty('--conversation-composer-lift');page.classList.remove('conversation-keyboard');page.removeEventListener('focusout',stuckBlur);viewport.removeEventListener('resize',sync);viewport.removeEventListener('scroll',shellScrolled);page.ownerDocument?.removeEventListener('scroll',shellScrolled,true);releaseShell();window.removeEventListener('resize',sync);page.removeEventListener('touchstart',touchStart);page.removeEventListener('touchmove',touchMove);page.removeEventListener('touchend',touchEnd,touchOptions);page.removeEventListener('touchcancel',touchCancel);page.removeEventListener('focusin',focus);page.removeEventListener('focusout',sync);page.removeEventListener('conversation:unpin',unpin);page.removeEventListener('scroll',historyScrolled,true);};
 }
