@@ -1,9 +1,12 @@
 const fs=require('node:fs'),path=require('node:path'),{randomUUID}=require('node:crypto');
-const MAX_BYTES=25*1024*1024,MAX_FILES=10;
+// A file from the page: under the 100 MB a request may carry through Cloudflare, so a screen
+// recording fits. A file an agent sends keeps its own limit, the
+// one its reply tool states.
+const MAX_BYTES=95*1024*1024,MAX_REPLY_BYTES=25*1024*1024,MAX_FILES=10;
 const fail=(message,status=400)=>Object.assign(new Error(message),{status});
-// Unsent uploads are capped per conversation. At 25 MB a file and 60 requests per
+// Unsent uploads are capped per conversation. At 95 MB a file and 60 requests per
 // five minutes, one login could otherwise fill the disk with files it never sends; a message carries at most MAX_FILES anyway.
-const MAX_STAGED_BYTES=100*1024*1024;
+const MAX_STAGED_BYTES=400*1024*1024;
 function staged(root,c){const dir=directory(root,c),sent=new Set(c.messages.flatMap(m=>(m.attachments||[]).map(a=>a.id)));let metas=[];try{metas=fs.readdirSync(dir).filter(f=>META.test(f)).map(f=>JSON.parse(fs.readFileSync(path.join(dir,f),'utf8')));}catch{}return metas.filter(m=>!sent.has(m.id));}
 // Under the owner, so deleting a person is deleting one directory — the old flat
 // attachments/<conversation> layout had no owner in the path and nothing ever
@@ -13,7 +16,7 @@ function staged(root,c){const dir=directory(root,c),sent=new Set(c.messages.flat
 const META=/^[-a-f0-9]{36}\.json$/;
 function directory(root,c){return path.join(root,'users',c.owner,'attachments',c.id);}
 function read(root,c,id){if(typeof id!=='string'||!/^[-a-f0-9]{36}$/.test(id))throw fail('Attachment not found',404);try{return JSON.parse(fs.readFileSync(path.join(directory(root,c),id+'.json'),'utf8'));}catch{throw fail('Attachment not found',404);}}
-function put(root,c,name,data){if(c.archived)throw fail('Conversation archived',409);if(!Buffer.isBuffer(data)||!data.length||data.length>MAX_BYTES)throw fail('File must be between 1 byte and 25 MB',413);if(typeof name!=='string'||!name.trim()||name.length>255)throw fail('Invalid filename');const pending=staged(root,c);if(pending.length>=MAX_FILES||pending.reduce((n,m)=>n+m.size,0)+data.length>MAX_STAGED_BYTES)throw fail('Too many unsent attachments; send or remove some first',413);name=path.basename(name.replaceAll('\\','/')).replace(/[\x00-\x1f\x7f]/g,'_');const id=randomUUID(),dir=directory(root,c);fs.mkdirSync(dir,{recursive:true,mode:0o700});const ext=path.extname(name).replace(/[^.a-zA-Z0-9]/g,'').slice(0,16);const meta={id,name,size:data.length,file:id+(ext.toLowerCase()==='.json'?'.data':'')+ext,createdAt:Date.now()};fs.writeFileSync(path.join(dir,meta.file),data,{mode:0o600,flag:'wx'});fs.writeFileSync(path.join(dir,id+'.json'),JSON.stringify(meta),{mode:0o600,flag:'wx'});return publicMeta(meta);}
+function put(root,c,name,data){if(c.archived)throw fail('Conversation archived',409);if(!Buffer.isBuffer(data)||!data.length||data.length>MAX_BYTES)throw fail('File must be between 1 byte and 95 MB',413);if(typeof name!=='string'||!name.trim()||name.length>255)throw fail('Invalid filename');const pending=staged(root,c);if(pending.length>=MAX_FILES||pending.reduce((n,m)=>n+m.size,0)+data.length>MAX_STAGED_BYTES)throw fail('Too many unsent attachments; send or remove some first',413);name=path.basename(name.replaceAll('\\','/')).replace(/[\x00-\x1f\x7f]/g,'_');const id=randomUUID(),dir=directory(root,c);fs.mkdirSync(dir,{recursive:true,mode:0o700});const ext=path.extname(name).replace(/[^.a-zA-Z0-9]/g,'').slice(0,16);const meta={id,name,size:data.length,file:id+(ext.toLowerCase()==='.json'?'.data':'')+ext,createdAt:Date.now()};fs.writeFileSync(path.join(dir,meta.file),data,{mode:0o600,flag:'wx'});fs.writeFileSync(path.join(dir,id+'.json'),JSON.stringify(meta),{mode:0o600,flag:'wx'});return publicMeta(meta);}
 function publicMeta({id,name,size}){return {id,name,size};}
 function resolve(root,c,ids=[]){if(!Array.isArray(ids)||ids.length>MAX_FILES||new Set(ids).size!==ids.length)throw fail('Maximum 10 unique attachments');return ids.map(id=>{const m=read(root,c,id);if(c.messages.some(x=>x.attachments?.some(a=>a.id===id)))throw fail('Attachment already sent',409);return publicMeta(m);});}
 function location(root,c,id){const m=read(root,c,id);return {meta:m,path:path.resolve(directory(root,c),m.file)};}
@@ -50,7 +53,7 @@ function fromPaths(root,c,paths,{workspace=null,allowed=[],denied=[]}={}){
    // null: no limit (full access). A list, even empty: only those (an empty list let a scoped agent attach any file of the owner).
    if(allowed&&!allowed.some(inside))throw fail('Outside this agent\'s folders: '+value,403);
   }
-  if(!stat.size||stat.size>MAX_BYTES)throw fail('File must be between 1 byte and 25 MB: '+value,413);
+  if(!stat.size||stat.size>MAX_REPLY_BYTES)throw fail('File must be between 1 byte and 25 MB: '+value,413);
   out.push(put(root,c,path.basename(real),fs.readFileSync(real)));
  }
  return out;

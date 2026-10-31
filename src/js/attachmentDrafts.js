@@ -6,7 +6,7 @@ export function useAttachmentDrafts(selected,user,busy,ct){
  const files=computed(()=>drafts.value[selected.value]||[]);
  const pendingSend=new Map();
  const resize=()=>nextTick(()=>document.querySelector('.chat-page .messagebar')?.f7Messagebar?.resizePage());
- function addFiles(list){if(!selected.value||busy.value)return;const next=[...files.value];for(const file of Array.from(list||[])){if(next.length>=10){f7.dialog.alert(ct('最多 10 個附件'));break;}if(!file.size||file.size>25*1024*1024){f7.dialog.alert(ct('附件大小須為 1 byte 至 25 MB')+': '+file.name);continue;}next.push({key:crypto.randomUUID(),file,name:file.name,size:file.size,uploadedId:null});}drafts.value[selected.value]=next;pendingSend.delete(selected.value);resize();}
+ function addFiles(list){if(!selected.value||busy.value)return;const next=[...files.value];for(const file of Array.from(list||[])){if(next.length>=10){f7.dialog.alert(ct('最多 10 個附件'));break;}if(!file.size||file.size>95*1024*1024){f7.dialog.alert(ct('附件大小須為 1 byte 至 95 MB')+': '+file.name);continue;}next.push({key:crypto.randomUUID(),file,name:file.name,size:file.size,uploadedId:null});}drafts.value[selected.value]=next;pendingSend.delete(selected.value);resize();}
  function pickFiles(e){addFiles(e.target.files);e.target.value='';}
  function dropFiles(e){if(e.dataTransfer?.files?.length)addFiles(e.dataTransfer.files);}
  // A picture or file copied on the computer is pasted in as an attachment. Text copied from an office document also carries a picture of
