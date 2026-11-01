@@ -274,9 +274,9 @@ async function send(){
  if(!items.length&&isAdmin.value&&detail.value?.mode==='claude'&&await slash.resolveTerminal(text)){
   sending.value=true;
   try{
-   await api(`/conversations/${id}/command`,{method:'POST',body:JSON.stringify({command:text.trim()})});
+   const ran=await api(`/conversations/${id}/command`,{method:'POST',body:JSON.stringify({command:text.trim()})});
    if(draft.value===text)draft.value='';
-   emit('open-terminal');
+   if(!ran?.command?.card)emit('open-terminal');
    await refresh();
   }catch(e){f7.dialog.alert(e.message);}
   finally{sending.value=false;}

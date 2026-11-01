@@ -942,7 +942,7 @@ function send(c,text,key,attachmentIds=[],extra={}) {
  // Anyone's message wakes it already: the automatic one is not sent after it.
  if(!extra.limitResume)delete g.limitResume;
  // Work goes on: the wrap-up check waits for the next finished answer.
- if(!extra.wrapUp)delete g.wrapUp;
+ if(!extra.wrapUp&&!extra.loginNotice)delete g.wrapUp;
  const m=add(c,'user',text.trim(),{requestId:key,delivery:'queued',...(files.length?{attachments:files}:{}),...extra});
  // The placeholder title becomes the first message, for an agent an admin made
  // untitled; one an earlier build made from a template (templateId) keeps its name.
@@ -1266,8 +1266,8 @@ function haltForGroup(c,x){
 function commandInGroup(owner,id,agentId,text){
  const x=groupFor(id,owner);
  const c=groupMembers(x).find(a=>a.id===agentId);if(!c)throw error('這位不是群聊成員',400);
- runCommand(c,text);
- groupStore.addMessage(x,{role:'system',text:'在 '+c.title+' 的終端機執行：'+String(text).trim().slice(0,200)});groupStore.save();
+ const command=runCommand(c,text);
+ groupStore.addMessage(x,{role:'system',text:command.card?'登入卡片在 '+c.title+' 的聊天裡。':'在 '+c.title+' 的終端機執行：'+String(text).trim().slice(0,200)});groupStore.save();
  return groupView(x,true);
 }
 function searchGroup(owner,id,query){const x=groupFor(id,owner);return searchIn([{id:x.id,title:x.name,messages:x.messages}],query);}
@@ -1462,7 +1462,7 @@ function bridge(c,action,data={}) {
   if(!previous){
    const files=attachments.fromPaths(stateRoot,c,data.files,attachableFolders(c));
    // A wrap-up check that found everything done is not worth a notification.
-   const r=add(c,'assistant',data.text,{replyKey:data.replyKey,inReplyTo:target.id,final,...(target.wrapUp&&final&&WRAP_UP_DONE.test(data.text)?{notifyPending:false,quiet:true}:{notifyPending:true}),...(files.length?{attachments:files}:{})});
+   const r=add(c,'assistant',data.text,{replyKey:data.replyKey,inReplyTo:target.id,final,...(target.loginNotice&&final||target.wrapUp&&final&&WRAP_UP_DONE.test(data.text)?{notifyPending:false,quiet:true}:{notifyPending:true}),...(files.length?{attachments:files}:{})});
    // An answer to a group's message is shown in the group, and pushed from there.
    const gx=m.group&&groupStore.get(m.group.id);
    if(gx&&gx.members.includes(c.id)){r.notifyPending=false;groupStore.addMessage(gx,{role:'assistant',agentId:c.id,text:data.text,final,inReplyTo:m.group.messageId,...(files.length?{attachments:files,attachmentsFrom:c.id}:{}),...groupPush(gx,c,data.text)});groupStore.save();}
@@ -1589,10 +1589,13 @@ function bridge(c,action,data={}) {
   permissions.cancel(g);
   delete g.stopReceipt;
   // A failure ends the batch already taken, without dropping questions still queued for the next turn.
-  pendingReplies(c).forEach(m=>{m.delivery='unanswered';});
+  const unanswered=pendingReplies(c);
+  unanswered.forEach(m=>{m.delivery='unanswered';});
   if(g.ready)g.phase=c.messages.some(m=>m.role==='user'&&m.delivery==='queued')?'busy':'ready';
   g.lastError=failureText(data);
   armLimitResume(c,g,data);
+  // The login is gone: a card at the foot of the chat, and a push.
+  if(data.error==='authentication_failed'&&usesClaudeLogin(c)){g.lastError='';addLoginCard(c,{failed:true,retry:unanswered});}
  }
  else if(action==='error'){permissions.cancel(g);g.phase='error';g.ready=false;g.lastError=String(data.message||'Claude 已離線').slice(0,1000);}
  else if(action==='starting'){g.phase='starting';g.startedAt=Date.now();}
@@ -1672,6 +1675,11 @@ function runCommand(c,text){
  if(c.mode!=='claude')throw error('只有 Claude Agent 可以執行指令',400);
  const command=slashCommands.resolve(text);
  if(!command)throw error('這個指令不能從聊天室執行。',400);
+ // Not typed into the terminal: the card does it, and an agent at work is not disturbed.
+ if(command.name==='login'){
+  addLoginCard(c);claudeLogin.start();
+  return {...command,card:true};
+ }
  // Discord stays off in agents: an installed Discord plugin would otherwise use its bot token (see pluginNames).
  if(command.name==='plugin'&&/discord/i.test(command.args)&&/^(enable|install|i)\b/.test(command.args))throw error('Discord 外掛在 Agent 裡刻意關閉，不能從聊天室開啟。',400);
  const g=active(c);
@@ -2208,6 +2216,88 @@ function attachableFolders(c){
 }
 // What to tell the reader when a turn ended on an API error. Claude Code names
 // the kind of failure and sometimes the detail (for a usage limit, when it resets).
+// Claude's login from the chat (claudeLogin.js). A card is a system message with notice
+// 'login': open until a sign-in works, or something shows the login works again.
+const LOGIN_PUSH_QUIET_MS=10*60_000;
+const lastLoginPush=new Map();
+const usesClaudeLogin=c=>c.mode==='claude';
+const openLoginCards=c=>c.messages.filter(m=>m.notice==='login'&&!m.login);
+function loginProgram(){
+ const inBin=path.join(require('node:os').homedir(),'.local','bin',platform.isWin?'claude.exe':'claude');
+ if(!fs.existsSync(inBin))return 'claude';
+ // It is given the code: the same check as a launcher's.
+ const problem=launcherProblem(inBin);
+ if(problem)throw error('無法啟動 Claude Code 的登入：'+problem,409);
+ return inBin;
+}
+const claudeLogin=require('./claudeLogin').create({program:loginProgram,onSuccess:()=>loginDone()});
+function addLoginCard(c,{failed=false,retry=[]}={}){
+ const old=openLoginCards(c);
+ if(failed)claudeLogin.forget();
+ // Only what the person typed comes back: a schedule or a check has its own next time,
+ // and another machine's message is not for this card to answer again.
+ const typed=retry.filter(m=>!m.schedule&&!m.wrapUp&&!m.limitResume&&!m.loginNotice&&!m.external&&!m.peer&&!m.group).map(m=>m.id);
+ const retryOf=[...new Set([...old.flatMap(m=>m.retryOf||[]),...typed])];
+ const wasFailed=failed||old.some(m=>m.failed);
+ // A card replaced before its push went still owes it; the quiet period is per person,
+ // since each push goes to that chat's owner.
+ const owed=old.some(m=>m.notifyPending);
+ for(const m of old)c.messages.splice(c.messages.indexOf(m),1);
+ const push=owed||failed&&Date.now()-(lastLoginPush.get(c.owner)??-Infinity)>=LOGIN_PUSH_QUIET_MS;
+ if(push)lastLoginPush.set(c.owner,Date.now());
+ const card=add(c,'system',wasFailed?'Claude 的登入已失效，這一輪沒有完成。':'登入 Claude。',{notice:'login',failed:wasFailed,retryOf,...(push?{notifyPending:true,notifyText:'Claude 需要重新登入'}:{})});
+ save(c);
+ return card;
+}
+// The agent is told as well. One that is stopped or being handed over is left alone.
+const LOGIN_NOTICE_TEXT='Claude 已重新登入。';
+function closeLoginCards(c,open){
+ for(const m of open){m.login='done';m.text='已重新登入 Claude。';delete m.notifyPending;}
+ save(c);
+ try{send(c,LOGIN_NOTICE_TEXT,'login-done-'+open.at(-1).id,[],{loginNotice:true,footnote:'CC Agent 自動通知（已重新登入）'});}catch{}
+}
+function loginDone(){
+ for(const c of state.conversations){
+  const open=openLoginCards(c);
+  if(open.length)closeLoginCards(c,open);
+ }
+}
+// Something other than the card shows the login works, as after signing in at a terminal:
+// Anthropic answering with the stored login, asked after the failure. Not a finished
+// turn, whose calls may all have come before it, nor a kept answer. A sign-in under way
+// is left to finish.
+const loginFailed=()=>state.conversations.some(c=>!c.archived&&openLoginCards(c).some(m=>m.failed));
+function loginProven(checkedAt){
+ const at=Date.parse(checkedAt);
+ if(!Number.isFinite(at)||claudeLogin.running())return;
+ for(const c of state.conversations){
+  const open=openLoginCards(c);
+  if(!open.length||!open.every(m=>m.failed&&Date.parse(m.at)<at))continue;
+  closeLoginCards(c,open);
+ }
+}
+function loginCancel(){
+ const view=claudeLogin.cancel();
+ // A card opened by /login goes with its sign-in; one saying the login failed stays.
+ for(const c of state.conversations){const gone=openLoginCards(c).filter(m=>!m.failed);if(!gone.length)continue;for(const m of gone)c.messages.splice(c.messages.indexOf(m),1);save(c);}
+ return view;
+}
+// What the failed turn left unanswered goes to the agent again, as it was sent.
+function loginResend(c,cardId){
+ const card=c.messages.find(m=>m.id===cardId&&m.notice==='login');
+ if(!card||card.login!=='done')throw error('這張卡片不能重送。',400);
+ const g=active(c);
+ // What send asks of a message, since this is one going again.
+ if(c.mode==='claude')reconcile(c,{fresh:true});
+ if(!g.ready||!['ready','busy'].includes(g.phase)||g.compacting||g.manualCompact)throw error('請等待目前回覆完成，或先連線 Claude。',409);
+ if(c.pendingRotation)throw error('正在準備交接，請稍候。',409);
+ const back=c.messages.filter(m=>(card.retryOf||[]).includes(m.id)&&m.role==='user'&&m.delivery==='unanswered'&&m.generation===c.generation);
+ if(!back.length&&(card.retryOf||[]).length)throw error('剛才的訊息不能重送了，請重新傳一次。',409);
+ for(const m of back)m.delivery='queued';
+ card.retryOf=[];
+ if(back.length)g.phase='busy';
+ save(c);
+}
 function failureText(data={}){
  const kind=String(data.error||'').toLowerCase();
  const detail=typeof data.error_details==='string'?data.error_details.trim().slice(0,600):'';
@@ -2230,7 +2320,7 @@ function messageTranscript(c,messageId){
  return found;
 }
 function pendingNotifications(){return [...groupStore.list().flatMap(x=>x.messages.filter(m=>m.notifyPending).map(m=>({conversation:{id:x.id,owner:x.owner,title:x.name,groupId:x.id},message:m}))),...pendingAgentNotifications()];}
-function pendingAgentNotifications(){return state.conversations.filter(c=>!c.archived).flatMap(c=>[...c.messages.filter(m=>(m.role==='assistant'||m.role==='relay')&&m.notifyPending),...(prompts.get(c.id)?.notifyPending?[prompts.get(c.id)]:[])].map(m=>({conversation:c,message:m})));}
+function pendingAgentNotifications(){return state.conversations.filter(c=>!c.archived).flatMap(c=>[...c.messages.filter(m=>(m.role==='assistant'||m.role==='relay'||m.notice==='login')&&m.notifyPending),...(prompts.get(c.id)?.notifyPending?[prompts.get(c.id)]:[])].map(m=>({conversation:c,message:m})));}
 const pendingReportNotifications=()=>reports.list().filter(r=>r.notifyPending);
 const markReportsNotified=ids=>{reports.updateMany(ids,{notifyPending:false});};
 // What the agent reads before a scheduled instruction, so it knows no one typed it
@@ -2257,7 +2347,7 @@ function armLimitResume(c,g,data={}){
  add(c,'system',(g.lastError.replace(/ 可以稍後再送一次訊息。$/,'')+`額度恢復後，CC Agent 會在 ${when} 自動叫它繼續。`).slice(0,1000),{notice:'limit'});
  g.lastError='';
 }
-function limitResumeNote(m){return m.limitResume?`[Sent automatically by CC Agent: the Claude usage limit that stopped your last turn has reset. It is not the owner speaking now and grants nothing new. Continue the work that was interrupted, within what the owner had already asked and authorised; if it was finished or needs the owner, say so briefly.]\n`:'';}
+function limitResumeNote(m){if(m.loginNotice)return `[Sent automatically by CC Agent: Claude's login on this machine was renewed, so agents can run again. It is not the owner speaking now and grants nothing new. If the owner's last message went unanswered, the chat offers them a button to send it again, so do not redo it yourself. Answer with one short line.]\n`;return m.limitResume?`[Sent automatically by CC Agent: the Claude usage limit that stopped your last turn has reset. It is not the owner speaking now and grants nothing new. Continue the work that was interrupted, within what the owner had already asked and authorised; if it was finished or needs the owner, say so briefly.]\n`:'';}
 function runLimitResumes({now=Date.now(),ownerActive=()=>true}={}){
  for(const c of state.conversations){
   if(c.archived||c.mode!=='claude')continue;
@@ -2292,7 +2382,7 @@ function armWrapUp(c,g,target){
  if(target.wrapUp){if(!c.messages.some(m=>m.role==='user'&&m!==target&&m.generation===c.generation&&['queued','delivered'].includes(m.delivery)))g.wrapUpBase=Date.now();delete g.wrapUp;return;}
  // A schedule's run and a group's message are not the owner's task ending: neither
  // is followed by a check.
- if(target.peer||target.schedule||target.group||!wrapUpOn(c))return;
+ if(target.peer||target.schedule||target.group||target.loginNotice||!wrapUpOn(c))return;
  g.wrapUp={at:Date.now()+wrapUpSettings().minutes*60_000};
  if(!g.wrapUpBase)g.wrapUpBase=Date.parse(target.at)||Date.now();
 }
@@ -2346,7 +2436,7 @@ function senderOf(c,m){
  // An agent on a paired machine (peer link): the machine as paired here, the agent as
  // that machine named it.
  if(m.peer)return {sender:'peer',senderMachine:m.peer.machine,senderAgent:m.peer.title};
- if(m.schedule||m.wrapUp||m.limitResume)return {sender:'automatic'};
+ if(m.schedule||m.wrapUp||m.limitResume||m.loginNotice)return {sender:'automatic'};
  return {sender:'owner',...name(activeOwner(c.owner)?.username)};
 }
 // Words in a message that pose as CC Agent's own: a note naming who typed it, or the
@@ -2614,7 +2704,7 @@ const heldUntil=(x,kind)=>kind==='result'?x.resultPending?.after:kind==='failure
 const pendingScheduleNotifications=(now=Date.now())=>scheduleStore.list().flatMap(x=>Object.entries(NOTIFY_FIELD).filter(([kind,f])=>x[f]&&!(Date.parse(heldUntil(x,kind)||0)>now)).map(([kind])=>({schedule:x,kind})));
 const markScheduleNotified=(id,kind='proposal')=>{scheduleStore.patch(id,{[NOTIFY_FIELD[kind]]:false});};
 const scheduleCheckList=()=>scheduleChecks.list().map(scheduleChecks.view);
-module.exports={reviveSilentChannels,peerLinkDigest,peerExchange,peerKey,peerLink,peerConfig,peerWidens,setPeerConfig,peerDraft,peerView,relaunchMarked,tmuxSocket,subagentList,runLimitResumes,runWrapUps,setWrapUp,mentionsFor,commandInGroup,groupList,reorderGroups,groupFor,groupView,createGroup,updateGroup,removeGroup,updateGroupChecklist,sendToGroup,searchGroup,deliverGroups,chooseTerminalOption,updateChecklist:(c,data,by)=>{const r=checklists.apply(c,data,by);save(c);return r;},syncAllRelays,syncRelays,scheduleCheckList,schedulesFor,addSchedule,approveSchedule,updateSchedule,removeSchedule,rejectSchedule,runSchedules,runScheduleNow,testSchedule,SCHEDULE_WAIT_MS,pendingScheduleNotifications,markScheduleNotified,searchMessages,runCommand,commandsFor,setThreshold,listPreferences,setListPreferences,setAvatar,clearAvatar,avatarLocation,AVATAR_MAX_BYTES,clearFullAccessFor,pendingReportNotifications,markReportsNotified,archiveFor,setAccessFor,accessReports:()=>reports.list().map(reportView),accessReport:id=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(r);},resolveAccessReport:(id,patch)=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(reports.update(id,patch));},grantAccess,reconcile,reconnect,purgeOwner,sweepRetention,stopAgentsOf,bridgeActions:()=>[...BRIDGE_ACTIONS],archivedList,restoreArchived,keepArchived,purgeArchived,archiveRetentionDays,RETENTION_MAX_DAYS,UNSENT_ATTACHMENT_HOURS,STALE_MS,STARTUP_SLOW_MS,STARTUP_LIMIT_MS,messageTranscript,importHistory,interrupt,markViewing,isViewing,attachableFolders,MESSAGE_PAGE,updateProfile,reorder,pendingNotifications,getPreferences,setPreferences,decidePermission,confirmWorkspace,confirmChannel,compact,stateRoot,create,get,list,publicView,launch,stop,send,rotate,bridge,byToken,active,save,error};
+module.exports={loginShutdown:signal=>claudeLogin.shutdown(signal),loginView:()=>claudeLogin.view(),loginStart:()=>claudeLogin.start(),loginCode:text=>claudeLogin.code(text),loginCancel,loginResend,loginFailed,loginProven,reviveSilentChannels,peerLinkDigest,peerExchange,peerKey,peerLink,peerConfig,peerWidens,setPeerConfig,peerDraft,peerView,relaunchMarked,tmuxSocket,subagentList,runLimitResumes,runWrapUps,setWrapUp,mentionsFor,commandInGroup,groupList,reorderGroups,groupFor,groupView,createGroup,updateGroup,removeGroup,updateGroupChecklist,sendToGroup,searchGroup,deliverGroups,chooseTerminalOption,updateChecklist:(c,data,by)=>{const r=checklists.apply(c,data,by);save(c);return r;},syncAllRelays,syncRelays,scheduleCheckList,schedulesFor,addSchedule,approveSchedule,updateSchedule,removeSchedule,rejectSchedule,runSchedules,runScheduleNow,testSchedule,SCHEDULE_WAIT_MS,pendingScheduleNotifications,markScheduleNotified,searchMessages,runCommand,commandsFor,setThreshold,listPreferences,setListPreferences,setAvatar,clearAvatar,avatarLocation,AVATAR_MAX_BYTES,clearFullAccessFor,pendingReportNotifications,markReportsNotified,archiveFor,setAccessFor,accessReports:()=>reports.list().map(reportView),accessReport:id=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(r);},resolveAccessReport:(id,patch)=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(reports.update(id,patch));},grantAccess,reconcile,reconnect,purgeOwner,sweepRetention,stopAgentsOf,bridgeActions:()=>[...BRIDGE_ACTIONS],archivedList,restoreArchived,keepArchived,purgeArchived,archiveRetentionDays,RETENTION_MAX_DAYS,UNSENT_ATTACHMENT_HOURS,STALE_MS,STARTUP_SLOW_MS,STARTUP_LIMIT_MS,messageTranscript,importHistory,interrupt,markViewing,isViewing,attachableFolders,MESSAGE_PAGE,updateProfile,reorder,pendingNotifications,getPreferences,setPreferences,decidePermission,confirmWorkspace,confirmChannel,compact,stateRoot,create,get,list,publicView,launch,stop,send,rotate,bridge,byToken,active,save,error};
 
 // Account deletion checks the agents an account actually has running.
 module.exports.lifecycleInventory=async()=>({sources:[{provider:"claude",providerLabel:"Claude Code",ok:true}],schedules:state.conversations.filter(c=>!c.archived&&!['stopped','error'].includes(active(c).phase)).map(c=>({id:c.id,ownerUserId:c.owner,provider:"claude",status:active(c).phase,running:active(c).phase==="busy"}))});

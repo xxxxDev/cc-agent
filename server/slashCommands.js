@@ -19,6 +19,8 @@ const TERMINAL = [
     {value: 'disable', description: '停用一個 MCP server', then: 'servers'},
   ]},
   {name: 'status', description: '版本、模型、帳號與連線狀態', interactive: true},
+  // Not typed into the terminal: it opens the login card (claudeLogin.js).
+  {name: 'login', description: '重新登入 Claude（整台電腦的 agent 共用）'},
   // Its settings and their values as the terminal lists them after /config and
   // /config key= (Claude Code 2.1.282, read off the terminal).
   {name: 'config', aliases: ['settings'], hint: '[key=value]', description: 'Claude Code 設定', interactive: true, options: [

@@ -815,9 +815,10 @@ function pickMention(item){mention.complete(item,mentionCaret);}
 async function runSlashCommand(id,text){
  busy.value=true;
  await attempt(async()=>{
-  await api('/conversations/'+id+'/command',{method:'POST',body:JSON.stringify({command:text.trim()})});
+  const ran=await api('/conversations/'+id+'/command',{method:'POST',body:JSON.stringify({command:text.trim()})});
   if(drafts.get(id)===text)drafts.delete(id);if(selected.value===id&&draft.value===text)draft.value='';
-  if(showTerminalSwitch.value&&selected.value===id)terminalOpen.value=true;
+  // /login opens its card in the chat, not the terminal.
+  if(showTerminalSwitch.value&&selected.value===id&&!ran?.command?.card)terminalOpen.value=true;
   await refresh();await bottom();
  });
  busy.value=false;

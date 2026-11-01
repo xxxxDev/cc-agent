@@ -57,10 +57,25 @@ app.get('/api/preferences',(req,res)=>res.json(agents.getPreferences(req.userId)
 // How one's own Agents list is ordered: everyone's own choice, not an admin setting.
 app.use('/api/agent-list',verifyToken);
 // The host's Claude subscription usage, for an admin (claudeUsage.js).
-const claudeUsage=require('./claudeUsage').create({ratioFile:require('node:path').join(agents.stateRoot,'claude-usage-ratio.json')});
+const claudeUsage=require('./claudeUsage').create({ratioFile:require('node:path').join(agents.stateRoot,'claude-usage-ratio.json'),loginFailed:()=>agents.loginFailed()});
 app.get('/api/claude-usage',verifyToken,adminOnly,async(req,res,next)=>{try{
- res.set('Cache-Control','private, no-store');res.json(await claudeUsage({fresh:req.query.fresh==='1'}));
+ res.set('Cache-Control','private, no-store');const answer=await claudeUsage({fresh:req.query.fresh==='1'});
+ if(!answer.error&&!answer.stale)agents.loginProven(answer.checkedAt);
+ res.json(answer);
 }catch(e){next(e);}});
+// Signing Claude in again from the chat (claudeLogin.js): the machine's login, so an
+// admin's. The code goes to Claude Code and is kept nowhere here.
+// A card on screen also asks whether the login works again by now.
+// Not waited for: the sign-in's state should not lag behind the Keychain or Anthropic.
+app.get('/api/claude-login',verifyToken,adminOnly,(req,res)=>{
+ res.set('Cache-Control','private, no-store');
+ const view=agents.loginView();
+ if(agents.loginFailed()&&!['starting','waiting','checking'].includes(view.status))claudeUsage().then(answer=>{if(!answer.error&&!answer.stale)agents.loginProven(answer.checkedAt);}).catch(()=>{});
+ res.json(view);
+});
+app.post('/api/claude-login/start',verifyToken,adminOnly,(req,res,next)=>{try{res.set('Cache-Control','private, no-store');res.json(agents.loginStart());}catch(e){next(e);}});
+app.post('/api/claude-login/code',verifyToken,adminOnly,(req,res,next)=>{try{res.set('Cache-Control','private, no-store');res.json(agents.loginCode(req.body?.code));}catch(e){next(e);}});
+app.post('/api/claude-login/cancel',verifyToken,adminOnly,(req,res,next)=>{try{res.set('Cache-Control','private, no-store');res.json(agents.loginCancel());}catch(e){next(e);}});
 app.get('/api/agent-list',(req,res)=>res.json(agents.listPreferences(req.userId)));
 // Schedules: everyone sees their own agents'
 // schedules, an admin every agent's; only an admin adds, approves or changes one.
@@ -245,6 +260,7 @@ app.post('/api/conversations/:id/:action',(req,res,next)=>{try{
  case 'terminal-choice':if(req.role!=='admin')throw agents.error('Admin only',403);agents.chooseTerminalOption(c,req.body);break;
  // The terminal is an admin's, and so are the commands typed into it.
  case 'command':if(req.role!=='admin')throw agents.error('Admin only',403);extra={command:agents.runCommand(c,req.body.command)};break;
+ case 'login-resend':agents.loginResend(c,req.body?.card);break;
  // The counts travel with the answer: the page holds only a window of bubbles, so
  // it cannot tell what changed by counting them.
  case 'import-history':{const imported=agents.importHistory(c);res.set('X-Imported',String(imported.added));extra={imported};break;}

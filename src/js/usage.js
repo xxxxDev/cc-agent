@@ -16,7 +16,7 @@ export const usageAllowed = () => !embedded && !splitView && currentUser.value?.
 export const usageGroups = computed(() => {
   const when = iso => { if (!iso) return ''; const d = new Date(iso), now = new Date(), hm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
     return d.toDateString() === now.toDateString() ? hm : `${d.getMonth() + 1}/${d.getDate()} ${hm}`; };
-  const errorText = (e) => t(e === 'login-expired' || e === 'no-login' ? 'usageLogin' : e === 'keychain' ? 'usageKeychain' : e === 'rate-limited' ? 'usageRateLimited' : 'usageUnavailable');
+  const errorText = (e) => t(e === 'login-expired' || e === 'no-login' ? 'usageLogin' : e === 'login-idle' ? 'usageLoginIdle' : e === 'keychain' ? 'usageKeychain' : e === 'rate-limited' ? 'usageRateLimited' : 'usageUnavailable');
   return [['claude', 'Claude', claudeUsage.value, '/sources/anthropic.svg']].filter(([, , u]) => u).map(([key, name, u, logo]) => ({
     key, name, logo, note: u.error ? errorText(u.error) : '',
     // Numbers kept while Anthropic asks us to wait (claudeUsage.js).

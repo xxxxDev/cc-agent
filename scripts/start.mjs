@@ -88,6 +88,7 @@ service.startService({app,port:site.servicePort(),
   try{agents.peerLink.start();}catch(e){console.error('peer link:',e.message);}
   const terminals=require('../server/terminal.js').installTerminal(server);
   return {
-   stop(){stopNotifications();try{agents.peerLink.stop();}catch{}terminals.close();return 0;},
+   stop(){stopNotifications();try{agents.peerLink.stop();}catch{}try{agents.loginShutdown();}catch{}terminals.close();return 0;},
+   finish(){try{agents.loginShutdown('SIGKILL');}catch{}},
   };
  }});
