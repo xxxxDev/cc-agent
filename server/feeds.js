@@ -56,7 +56,7 @@ function get(url) {
     const host = u.hostname.replace(/^\[|\]$/g, '');
     if (net.isIP(host) && privateAddress(host)) return reject(error('RSS 網址不能是本機或內部網路'));
     const req = (u.protocol === 'https:' ? https : http).get(u, { lookup: safeLookup, timeout: TIMEOUT_MS, headers: { 'user-agent': 'CC-Agent-RSS/1.0', accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.5', 'accept-encoding': 'identity' } }, (res) => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) { res.resume(); return resolve({ redirect: new URL(res.headers.location, url).href }); }
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) { res.resume(); let next; try { next = new URL(res.headers.location, url).href; } catch { return reject(error('RSS 轉址網址不正確')); } return resolve({ redirect: next }); }
       if (res.statusCode !== 200) { res.resume(); return reject(error('RSS 讀取失敗：HTTP ' + res.statusCode)); }
       const parts = []; let size = 0;
       res.on('data', (d) => { size += d.length; if (size > MAX_BYTES) { req.destroy(); reject(error('RSS 內容太大（超過 2 MB）')); } else parts.push(d); });
@@ -125,7 +125,7 @@ function tag(block, lower, name) {
   for (let m = re.exec(lower); m; m = re.exec(lower)) {
     const gt = lower.indexOf('>', m.index);
     if (gt < 0) return '';
-    if (lower[gt - 1] === '/') continue;
+    if (lower[gt - 1] === '/') { re.lastIndex = gt + 1; continue; }
     const close = lower.indexOf(`</${m[1] || ''}${name}>`, gt);
     return close < 0 ? '' : block.slice(gt + 1, close);
   }
@@ -155,10 +155,11 @@ function parse(xml) {
     if (!link) {
       // Atom: <link rel="alternate" href="..."/>, or the first link with an href.
       let fallback = '';
-      for (let at = low.indexOf('<link'); at >= 0 && !link; at = low.indexOf('<link', at + 5)) {
+      for (let at = low.indexOf('<link'); at >= 0 && !link;) {
         const gt = low.indexOf('>', at); if (gt < 0) break;
         const open = block.slice(at, gt + 1), href = attr(open, 'href'), rel = attr(open, 'rel');
         if (href && (!rel || rel === 'alternate')) link = href; else if (href && !fallback) fallback = href;
+        at = low.indexOf('<link', gt + 1); // past this tag, or overlapping tags cost quadratic time
       }
       link = link || fallback;
     }
