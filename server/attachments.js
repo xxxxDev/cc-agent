@@ -25,6 +25,14 @@ function remove(root,c,id){if(c.messages.some(x=>x.attachments?.some(a=>a.id===i
 // reads it, so the agent's own scope has to be enforced here or a scoped agent
 // could reach a file it may not open itself.
 const MAX_AGENT_FILES=5;
+// The check below is on a path and the agent can change what a path names, so the read
+// happens where the check still holds (readConfined.js; security audit, 2026-11-03). A
+// scoped agent's file must also have one name: a hard link to a file outside its folders
+// sits inside them. A full-access agent may read that file anyway.
+function readConfined(real,value,singleName){
+ try{return require('node:child_process').execFileSync(process.execPath,[path.join(__dirname,'readConfined.js'),path.dirname(real),path.basename(real),singleName?'1':'0',String(MAX_REPLY_BYTES)],{cwd:path.dirname(process.execPath),env:{},stdio:['ignore','pipe','ignore'],maxBuffer:MAX_REPLY_BYTES+1024,timeout:30000,windowsHide:true});}
+ catch(e){if(e.status===4)throw fail('File must be between 1 byte and 25 MB: '+value,413);if(e.status===3)throw fail('That file changed while reading it, or has a second name: '+value,403);throw fail('Could not read that file: '+value,500);}
+}
 function fromPaths(root,c,paths,{workspace=null,allowed=[],denied=[]}={}){
  if(paths===undefined||paths===null)return [];
  if(!Array.isArray(paths)||paths.length>MAX_AGENT_FILES)throw fail(`At most ${MAX_AGENT_FILES} files per reply`);
@@ -54,7 +62,7 @@ function fromPaths(root,c,paths,{workspace=null,allowed=[],denied=[]}={}){
    if(allowed&&!allowed.some(inside))throw fail('Outside this agent\'s folders: '+value,403);
   }
   if(!stat.size||stat.size>MAX_REPLY_BYTES)throw fail('File must be between 1 byte and 25 MB: '+value,413);
-  out.push(put(root,c,path.basename(real),fs.readFileSync(real)));
+  out.push(put(root,c,path.basename(real),readConfined(real,value,allowed!==null)));
  }
  return out;
 }
