@@ -4,6 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {randomBytes} from 'node:crypto';
 import {createRequire} from 'node:module';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+createRequire(import.meta.url)('../server/services/outputStreams.js').keepOutputErrorsQuiet();
 // server/.env first, so its data folder, port and public address apply to everything
 // below (a value already in the environment wins).
 const devGiven=process.env.CC_AGENT_DEV;
