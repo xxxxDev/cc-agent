@@ -1173,7 +1173,13 @@ function updateUserNow(req, res) {
       const stillAdmin = update.role === 'admin' && req.adminGrant?.how !== 'promote';
       if (stillAdmin && existingUser.role !== 'admin') return res.status(409).json({ message: 'This account is no longer an administrator; try again', code: 'ROLE_CHANGED' });
       // The sign-ins carry the role and the name: they end only when one of them changes.
+      // The name as it already is, which the re-prompt lets through, is no change.
+      if (update.username === existingUser.username) { delete update.username; delete update.normalizedUsername; }
       const signInsChange = Boolean(update.username) || (update.role !== undefined && update.role !== existingUser.role);
+      // Written with the change and cleared when the sign-ins are gone: "the same request
+      // again finishes it" holds though that request now changes nothing (review, 2026-11-03).
+      const endSignIns = signInsChange || existingUser.signInsCleanupDue === true;
+      if (signInsChange) update.signInsCleanupDue = true;
       usersDB.update({ ...nonTombstoneUserMutationQuery(id), ...(stillAdmin ? { role: 'admin' } : {}) }, { $set: update, ...(Object.keys(unset).length ? { $unset: unset } : {}) }, {}, (err, updated) => {
         if (err) { adminKept(req); return res.status(500).json({ message: 'Error updating user' }); }
         if (!updated) {
@@ -1189,13 +1195,13 @@ function updateUserNow(req, res) {
         // Waited for, and said when it did not all go: the same request again
         // finishes it.
         // What only waits on memory goes at once, before anything is awaited.
-        if (signInsChange) { qrRequests.revokeUser(id);twoStepTickets.revokeUser(id);endFreshSignIn(id); }
+        if (endSignIns) { qrRequests.revokeUser(id);twoStepTickets.revokeUser(id);endFreshSignIn(id); }
         // admin→user demotion: what a member may not keep goes (server/productAccountHooks.js).
         if (update.role === 'user') {
           try { require('../productAccountHooks').onDemoted(id); } catch (error) { console.error(`full-access cleanup failed: ${error.message}`); }
         }
-        const signInsGone = !signInsChange ? Promise.resolve()
-          : Promise.all([removeSessionsOrFail({ userId: id }), loginDevices.removeAll(id)]);
+        const signInsGone = !endSignIns ? Promise.resolve()
+          : Promise.all([removeSessionsOrFail({ userId: id }), loginDevices.removeAll(id)]).then(() => new Promise((done, failed) => usersDB.update({ _id: id }, { $unset: { signInsCleanupDue: true } }, {}, (e) => (e ? failed(e) : done()))));
         signInsGone.then(() => {
         usersDB.findOne({ _id: id }, (readErr, user) => {
           if (readErr || !user) return res.status(404).json({ message: 'User not found' });
