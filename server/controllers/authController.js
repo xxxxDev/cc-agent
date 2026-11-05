@@ -671,7 +671,10 @@ exports.addPasskey = async (req, res) => {
       recordLoginFailure(resolveClientIp(req), req, user.username, 'wrong-code', 'passkey');
       return res.status(400).json({ message: 'Invalid code', code: 'WRONG_CODE' });
     }
-    const passkey = await passkeyStore.add(user._id, typeof body.name !== 'string' || textProblem(body.name, 40, 'name') ? 'Passkey' : body.name, made);
+    // How it was added: only a key added with the password (and the code, when two-step
+    // was on) may later stand for them in an admin's confirmation: one added on a
+    // sign-in moment ago could be a stolen session's own.
+    const passkey = await passkeyStore.add(user._id, typeof body.name !== 'string' || textProblem(body.name, 40, 'name') ? 'Passkey' : body.name, { ...made, addedWith: byFresh ? 'fresh' : 'password', withCode: Boolean(user.twoStep && !byFresh) });
     audit({ source: 'passkey', action: 'add', userId: req.userId, passkeyId: passkey.id });
     security.passkey({ action: 'add', userId: req.userId, ip: resolveClientIp(req), place: placeOf(req) });
     res.status(201).json({ passkey });
@@ -929,7 +932,12 @@ exports.listUsers = (req, res) => {
 // take over an administrator that exists instead of making one.
 // how: create, promote, demote, reset-password, reset-two-step, enable, disable, delete, purge, rename.
 async function adminAgain(req, res, how, target) {
-  const { adminPassword, adminCode } = req.body || {};
+  const { adminPassword, adminCode, adminPasskey } = req.body || {};
+  // A passkey stands for the password and the code together: it needs the person at
+  // the device, verified, and is bound to this site.
+  // Its challenge was issued to this account (POST /api/auth/passkey/again) and answers
+  // one action.
+  if (adminPasskey && typeof adminPasskey === 'object' && !Array.isArray(adminPasskey)) return adminAgainByPasskey(req, res, how, target, adminPasskey);
   if (typeof adminPassword !== 'string' || !adminPassword) { res.status(400).json({ message: 'Enter your own password to do this', code: 'NEED_PASSWORD' }); return false; }
   const ip = resolveClientIp(req);
   if (loginBlocked(ip, req, req.username || '', 'admin-grant') || !held(ip, res)) { res.status(429).json(TOO_MANY); return false; }
@@ -955,13 +963,45 @@ async function adminAgain(req, res, how, target) {
   req.adminGrant = { how, target, me, claimed: me.twoStep && recoveryShaped(adminCode) ? twoStep.hashRecovery(adminCode) : null };
   return true;
 }
+async function adminAgainByPasskey(req, res, how, target, body) {
+  const ip = resolveClientIp(req);
+  if (loginBlocked(ip, req, req.username || '', 'admin-grant') || !held(ip, res)) { res.status(429).json(TOO_MANY); return false; }
+  const me = await activeAccount(req.userId);
+  if (!me || me.role !== 'admin') { res.status(403).json({ message: 'Account is not active' }); return false; }
+  try {
+    const answer = passkeys.answer(body, { challenges: passkeyChallenges, isAllowedOrigin: isPasskeyOrigin, userId: me._id });
+    const kept = await passkeyStore.byCredential(body.id);
+    if (!kept || String(kept.userId) !== String(me._id)) throw Object.assign(new Error('Passkey not accepted'), { status: 400, reason: 'not yours' });
+    if (!passkeys.confirmsAdmin(kept, me)) throw Object.assign(new Error('Passkey not accepted'), { status: 400, reason: 'not added with the password' });
+    const { signCount } = passkeys.assert(answer, body, kept);
+    if (!(await passkeyStore.used(kept, signCount))) throw Object.assign(new Error('Passkey not accepted'), { status: 400, reason: 'counter' });
+  } catch (e) {
+    if (e.status !== 400) throw e;
+    recordLoginFailure(ip, req, me.username, 'wrong-passkey', 'admin-grant');
+    res.status(400).json({ message: 'Passkey not accepted', code: 'PASSKEY_REFUSED' }); return false;
+  }
+  req.adminGrant = { how, target, me, claimed: null, by: 'passkey' };
+  return true;
+}
+// POST /api/auth/passkey/again: a challenge for the signed-in admin to confirm one
+// action with a passkey, and which of their keys may answer it. None: the page asks
+// for the password (and code) instead.
+exports.passkeyAgain = async (req, res) => {
+  try {
+    const me = await activeAccount(req.userId);
+    if (!me || me.role !== 'admin') return res.status(403).json({ message: 'Admin only' });
+    const ids = await passkeyStore.ids(me._id, (d) => passkeys.confirmsAdmin(d, me));
+    if (!ids.length) return res.json({ challenge: null, allow: [] });
+    res.json({ challenge: passkeyChallenges.issue('get', me._id), allow: ids });
+  } catch (e) { sendPasskeyError(res, e); }
+};
 // The administrator was made: the line is written now, not before, so the record
 // shows only grants that happened.
 function adminGranted(req, userId) {
   const grant = req.adminGrant;
   if (!grant) return;
   req.adminGrant = null;
-  audit({ source: 'users', action: grant.how === 'create' || grant.how === 'promote' ? 'admin-grant' : 'admin-again', how: grant.how, by: req.username, target: String(userId || grant.target) });
+  audit({ source: 'users', action: grant.how === 'create' || grant.how === 'promote' ? 'admin-grant' : 'admin-again', how: grant.how, by: req.username, target: String(userId || grant.target), ...(grant.by ? { with: grant.by } : {}) });
 }
 // It may have happened: a store write reported as failed can have been made all the
 // same (NeDB changes its rows in memory before it saves them), or the action stopped

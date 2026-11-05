@@ -28,7 +28,9 @@ function createChallenges({ now = Date.now } = {}) {
   const live = new Map();
   // note: kept with the challenge and handed back when it is taken.
   function issue(purpose, userId = '', group = '', note = '') {
-    const t = now(), owner = purpose === 'create' ? `u:${userId}` : `g:${group}`;
+    // A challenge for one account to confirm an action is that account's own: a login
+    // page asking from the same addresses does not push it out.
+    const t = now(), owner = purpose === 'create' ? `u:${userId}` : userId ? `a:${userId}` : `g:${group}`;
     for (const [k, v] of live) if (v.expiresAt <= t) live.delete(k);
     const mine = [...live].filter(([, v]) => v.owner === owner);
     while (mine.length >= (purpose === 'create' ? 1 : MAX_PER_GROUP)) live.delete(mine.shift()[0]);
@@ -104,9 +106,10 @@ function register({ id, clientDataJSON, authenticatorData, publicKey, alg }, { c
 }
 // A sign-in answer: its challenge is taken first, whichever key it names, so the
 // answer does not tell whether a key is known here.
-function answer({ clientDataJSON }, { challenges, isAllowedOrigin }) {
+// userId: a challenge issued for one account only (an admin confirming an action).
+function answer({ clientDataJSON }, { challenges, isAllowedOrigin, userId = '' }) {
   const client = readClient(clientDataJSON, 'webauthn.get', isAllowedOrigin);
-  if (!challenges.take(client.challenge, 'get')) refuse('challenge');
+  if (!challenges.take(client.challenge, 'get', userId)) refuse('challenge');
   return client;
 }
 // That answer's signature from a kept passkey: the counter to keep, or it throws.
@@ -139,10 +142,15 @@ function createStore(db) {
   // The counter moves only forwards: of two uses of one signature's count, one writes.
   const used = async (doc, signCount) => (await call('update', { _id: doc._id, signCount: doc.signCount }, { $set: { signCount, lastUsedAt: new Date().toISOString() } }, {})) > 0;
   const list = async (userId) => (await call('find', { userId: String(userId) })).map(shown).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  const ids = async (userId) => (await call('find', { userId: String(userId) })).map((d) => d.credentialId);
+  const ids = async (userId, keep = () => true) => (await call('find', { userId: String(userId) })).filter(keep).map((d) => d.credentialId);
   const remove = async (userId, id) => (await call('remove', { _id: String(id), userId: String(userId) }, {})) > 0;
   const removeAll = (userId) => call('remove', { userId: String(userId) }, { multi: true });
   return { add, byCredential, used, list, ids, remove, removeAll };
 }
 
-module.exports = { createChallenges, createStore, register, answer, assert, b64u, ALGS, CHALLENGE_MS, MAX_PASSKEYS };
+// Whether a kept key may stand for an admin's password and code: added with the
+// password, and with the code when the account has two-step now. Keys from before
+// this was recorded are not (the admin adds one again in Settings).
+const confirmsAdmin = (doc, user) => doc?.addedWith === 'password' && (!user?.twoStep || doc.withCode === true);
+
+module.exports = { confirmsAdmin, createChallenges, createStore, register, answer, assert, b64u, ALGS, CHALLENGE_MS, MAX_PASSKEYS };

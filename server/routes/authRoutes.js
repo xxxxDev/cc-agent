@@ -19,6 +19,7 @@ router.put('/me', verifyToken, authController.updateMe);
 router.post('/change-password', verifyToken, authController.changePassword);
 // Passkeys.
 router.post('/passkey/start', authController.passkeyStart);
+router.post('/passkey/again', verifyToken, authController.passkeyAgain);
 router.post('/passkey/finish', authController.passkeyFinish);
 router.get('/passkeys', verifyToken, authController.listPasskeys);
 router.post('/passkeys/options', verifyToken, authController.passkeyOptions);

@@ -56,3 +56,16 @@ export async function signInWithPasskey({ conditional = false, signal } = {}) {
   passkeyOfferDone('made');
   return data.user;
 }
+// Confirm one admin action with a passkey instead of the password and code. The
+// challenge is asked for first, so the device's sheet opens straight from the tap
+// that confirms (Safari wants it from a tap).
+// Resolves to null when the account has no passkey or passkeys do not work here.
+export async function passkeyAgainChallenge() {
+  if (!passkeysWork()) return null;
+  try { const o = await api('/auth/passkey/again', { method: 'POST', body: '{}' }); return o?.challenge && o.allow?.length ? o : null; } catch { return null; }
+}
+export async function answerPasskeyAgain(o) {
+  const got = await navigator.credentials.get({ publicKey: { challenge: unb64u(o.challenge), rpId: location.hostname, userVerification: 'required', allowCredentials: o.allow.map((id) => ({ type: 'public-key', id: unb64u(id) })) } });
+  const r = got.response;
+  return { id: got.id, clientDataJSON: b64u(r.clientDataJSON), authenticatorData: b64u(r.authenticatorData), signature: b64u(r.signature) };
+}
