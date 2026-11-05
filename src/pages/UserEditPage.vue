@@ -165,6 +165,7 @@ async function updateUser(patch, successText) {
   } catch (err) {
     f7.dialog.alert(err.message);
     await loadUsers().catch(() => {});
+    agentsLeft(err.data);
   }
 }
 
@@ -230,6 +231,7 @@ async function grantAdmin(patch) {
   } catch (err) {
     f7.dialog.alert(adminProblem(err) || err.message);
     await loadUsers().catch(() => {});
+    agentsLeft(err.data);
   }
 }
 

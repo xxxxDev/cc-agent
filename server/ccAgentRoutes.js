@@ -244,7 +244,9 @@ app.post('/api/conversations/:id/:action',(req,res,next)=>{try{
  switch(req.params.action){
  // A change of model, effort or scope relaunches a live Claude: waiting on its
  // workspace or channel prompt too, or it would keep the old scope and mcp.json, as a scope set from the admin pages does.
- case 'profile':{const changed=agents.updateProfile(c,req.body,req.role);if(changed&&['ready','awaiting-workspace','awaiting-confirmation'].includes(agents.active(c).phase)){agents.stop(c);agents.launch(c);}break;}
+ // Not running is not stopped: a run in the error phase may still have Claude alive under
+ // the old scope, so it is stopped too and started again only if it was live.
+ case 'profile':{const changed=agents.updateProfile(c,req.body,req.role),phase=agents.active(c).phase;if(changed&&c.mode==='claude'&&phase!=='stopped'){agents.stop(c);if(['ready','awaiting-workspace','awaiting-confirmation'].includes(phase))agents.launch(c);}break;}
  case 'permission':agents.decidePermission(c,req.body);break;
  case 'confirm-workspace':agents.confirmWorkspace(c);break;
  case 'confirm-channel':agents.confirmChannel(c);break;

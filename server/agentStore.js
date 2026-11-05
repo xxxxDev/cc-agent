@@ -822,7 +822,13 @@ function peerWrap(c,m,text){
 // This machine's own picture, sent to the other one: the app's small agent symbol.
 let peerIconCache;
 const peerIcon=()=>{if(peerIconCache===undefined){try{const b=fs.readFileSync(path.join(__dirname,'..','public','agent-symbol-64.png'));peerIconCache=b.length<=10*1024?'data:image/png;base64,'+b.toString('base64'):null;}catch{peerIconCache=null;}}return peerIconCache;};
-const peerLink=require('./peerLink').create({stateRoot,audit:(...a)=>{try{require('./services/audit').audit(...a);}catch{}},store:{icon:peerIcon,directory:()=>peerDirectory(),collect:peerCollect,settle:peerSettle,release:peerRelease,close:peerClose,deliver:peerDeliver}});
+const peerLink=require('./peerLink').create({stateRoot,audit:(...a)=>{try{require('./services/audit').audit(...a);}catch{}},store:{icon:peerIcon,directory:()=>peerDirectory(),collect:peerCollect,settle:peerSettle,release:peerRelease,close:peerClose,deliver:peerDeliver,forget:peerForget}});
+// A pairing removed takes its per-agent ticks with it: a later pairing never inherits
+// them, even under the same id.
+// Once at start: ticks of a pairing removed before this, or lost with an unreadable
+// peer-link.json, go too.
+setImmediate(()=>{try{const keep=new Set(peerLink.liveIds());for(const c of state.conversations){const a=c.peerLink?.allow;if(a?.some(x=>!keep.has(x.pairId))){c.peerLink.allow=a.filter(x=>keep.has(x.pairId));try{save(c);}catch(e){console.error('peer ticks not saved: '+e.message);}}}}catch(e){console.error('peer ticks not checked: '+e.message);}});
+function peerForget(pairId){for(const c of state.conversations){const a=c.peerLink?.allow;if(a?.some(x=>x.pairId===pairId)){c.peerLink.allow=a.filter(x=>x.pairId!==pairId);try{save(c);}catch(e){console.error('peer ticks not saved: '+e.message);}}}}
 // An admin opens an agent, ticks agents of paired machines, and lets replies go back
 // by themselves. What widens it asks for the admin's password (the routes).
 function peerConfig(c,{on,allow,autoReply}={}){
@@ -1945,7 +1951,10 @@ function updateProfile(c,input,callerRole){
  assertFullAccessGrant(c.owner,p.access,callerRole);
  if(!agentAccess.same(p.access,agentAccess.of(c)))assertProgramsSafe(c,p.access);
  if(changedModel&&['busy','starting','handing-off'].includes(active(c).phase))throw error('請等待目前回覆完成，再變更模型、effort 或存取範圍。',409);
- Object.assign(c,p);c.profileVersion=(c.profileVersion||0)+1;c.updatedAt=new Date().toISOString();save(c);return changedModel;
+ Object.assign(c,p);c.profileVersion=(c.profileVersion||0)+1;c.updatedAt=new Date().toISOString();
+ // A file that cannot be written does not leave the old run going under the new settings.
+ try{save(c);}catch(e){if(changedModel&&c.mode==='claude'&&active(c).phase!=='stopped'){try{stop(c);}catch{}}throw e;}
+ return changedModel;
 }
 function profileMessage(c,g,text){
  const p=agentProfile.profile(c),context=JSON.stringify({name:p.title,description:p.description,memory:p.memory});
@@ -2136,8 +2145,14 @@ function applyAccess(c,next,current=agentAccess.of(c)){
  const g=active(c);
  if(['busy','starting','handing-off'].includes(g.phase))throw error('這個 Agent 正在回覆或啟動中，請稍後再調整範圍。',409);
  assertProgramsSafe(c,next);
- c.access=next;c.profileVersion=(c.profileVersion||0)+1;c.updatedAt=new Date().toISOString();save(c);
- if(c.mode==='claude'&&['ready','awaiting-workspace','awaiting-confirmation'].includes(g.phase)){try{stop(c);launch(c);}catch(e){console.error(`relaunch after a scope change failed for ${c.id}: ${e.message}`);}}
+ c.access=next;c.profileVersion=(c.profileVersion||0)+1;c.updatedAt=new Date().toISOString();
+ // A file that cannot be written does not leave the old run going under the new scope.
+ try{save(c);}catch(e){if(c.mode==='claude'&&g.phase!=='stopped'){try{stop(c);}catch{}}throw e;}
+ // A run in the error phase may still have Claude alive under the old scope (bypass
+ // mode when it was full): stopped whatever its phase, token rotated; started again only
+ // if it was live.
+ const live=['ready','awaiting-workspace','awaiting-confirmation'].includes(g.phase);
+ if(c.mode==='claude'&&g.phase!=='stopped'){try{stop(c);}catch(e){console.error(`stop after a scope change failed for ${c.id}: ${e.message}`);}if(live){try{launch(c);}catch(e){console.error(`relaunch after a scope change failed for ${c.id}: ${e.message}`);}}}
  return {changed:true,access:next};
 }
 // An admin setting any agent's scope outright — how a grant is narrowed or undone.
@@ -2157,8 +2172,11 @@ function setAccessFor(owner,id,access,callerRole){
 // Every other Claude agent of that account that is running reconnects too, so it runs
 // under a member's rules at once: only the MCP connectors ticked (mcpTickedOnly), not
 // an admin's.
+// Every agent is stopped first, whatever fails: one file write failing does not leave
+// the later full-access agents running; what could not be stopped or written is
+// returned for the admin.
 function clearFullAccessFor(owner){
- let cleared=0;
+ let cleared=0;const failed=[],relaunch=[];
  for(const c of state.conversations.filter(x=>x.owner===owner)){
   const wasFull=!!agentAccess.of(c).full,g=active(c);
   const running=c.mode==='claude'&&!c.archived&&!['stopped','error'].includes(g.phase);
@@ -2166,11 +2184,12 @@ function clearFullAccessFor(owner){
   if(wasFull){const {full,...scope}=agentAccess.of(c);c.access=scope;c.profileVersion=(c.profileVersion||0)+1;c.updatedAt=new Date().toISOString();cleared+=1;}
   // A full-access one is stopped whatever its phase: a run in the error state can still
   // have Claude alive in bypass mode.
-  if(c.mode==='claude'){try{stop(c);}catch{}}
-  save(c);
-  if(running){try{launch(c);}catch(e){console.error(`relaunch after a demotion failed for ${c.id}: ${e.message}`);}}
+  if(c.mode==='claude'){try{stop(c);}catch(e){failed.push({id:c.id,title:c.title||''});console.error(`agent ${c.id} of a demoted account not stopped: ${e.message}`);}}
+  if(running)relaunch.push(c);
  }
- return cleared;
+ try{save(owner);}catch(e){console.error('demotion: conversations not written: '+e.message);if(!failed.some(f=>f.id==='*'))failed.push({id:'*',title:'conversations file not written'});}
+ for(const c of relaunch){try{launch(c);}catch(e){console.error(`relaunch after a demotion failed for ${c.id}: ${e.message}`);}}
+ return {cleared,failed};
 }
 function reportView(r){const c=state.conversations.find(x=>x.id===r.conversationId);return {...r,agentTitle:c?.title||r.title,agentArchived:!c||!!c.archived,agentPhase:c?active(c).phase:null,access:c?agentAccess.of(c):null,suggestion:require('./accessReports').suggest(r)};}
 // Pull the turns that happened outside this conversation (the owner's own

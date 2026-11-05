@@ -103,6 +103,9 @@ function create({stateRoot,audit=()=>{},store,env=process.env,spawnSsh}){
   catch(e){throw error('連不到另一台：'+e.message,502);}
   if(!r?.pair?.ok){audit({source:'peer-link',action:'join-refused',reason:r?.pair?.reason||'no answer',by});throw error(r?.pair?.reason==='wrong-code'?'配對碼不對，或已經過期':r?.pair?.reason==='no-open-code'?'另一台目前沒有可用的配對碼，請在那台重新產生':'對方拒絕配對',400);}
   if(typeof r.pair.pairId!=='string'||!ID.test(r.pair.pairId)||typeof r.pair.machineId!=='string'||!ID.test(r.pair.machineId))throw error('另一台的回應格式不對',502);
+  // A pairing id this machine has seen before is not taken again: it would bring back
+  // the ticks of the one removed.
+  if(state.peers.some(x=>x.pairId===r.pair.pairId)){audit({source:'peer-link',action:'join-refused',reason:'known pairId',by});throw error('另一台的回應格式不對',502);}
   for(const p of live().filter(p=>p.remoteMachineId===r.pair.machineId))drop(p,'paired again');
   const p={pairId:r.pair.pairId,name:label,role:'caller',state:'linked',remoteMachineId:r.pair.machineId,remote:{enabled:false,paused:false},linkedAt:iso(now()),directory:[]};
   state.peers.push(p);save();
@@ -121,7 +124,7 @@ function create({stateRoot,audit=()=>{},store,env=process.env,spawnSsh}){
   return view(p);
  }
  function rename(pairId,name,by){const p=peer(pairId);if(!p)throw error('Not found',404);p.name=cleanName(name);save();audit({source:'peer-link',action:'renamed',pairId,by});return view(p);}
- function drop(p,why){p.state='removed';p.removedAt=iso(now());p.directory=[];store.close(p.pairId,why);}
+ function drop(p,why){p.state='removed';p.removedAt=iso(now());p.directory=[];store.close(p.pairId,why);try{store.forget?.(p.pairId);}catch(e){console.error('peer ticks not cleared: '+e.message);}}
  function remove(pairId,by){const p=peer(pairId);if(!p)throw error('Not found',404);drop(p,'the pairing was removed');save();audit({source:'peer-link',action:'removed',pairId,by});return {ok:true};}
 
  // ── Exchange ──
@@ -238,6 +241,7 @@ function create({stateRoot,audit=()=>{},store,env=process.env,spawnSsh}){
   list:()=>({machineId:state.machineId,role:caller()?'caller':'answerer',invite:state.invites.find(x=>x.expires>now()&&x.tries<INVITE_TRIES)?{expiresAt:iso(state.invites[0].expires)}:null,peers:live().map(view)}),
   peer:pairId=>{const p=peer(pairId);return p?view(p):null;},
   flowing:pairId=>flowing(peer(pairId)),
+  liveIds:()=>live().map(p=>p.pairId),
   pairs:()=>live().filter(flowing).map(p=>({pairId:p.pairId,name:p.name,directory:p.directory||[],icon:p.icon||null})),
   linked:()=>live().map(p=>({pairId:p.pairId,name:p.name,directory:p.directory||[]})),
   invite,join,setState,rename,remove,answer,kick,start,stop:stopTimer,exchangeOnce,

@@ -1197,12 +1197,17 @@ function updateUserNow(req, res) {
         // What only waits on memory goes at once, before anything is awaited.
         if (endSignIns) { qrRequests.revokeUser(id);twoStepTickets.revokeUser(id);endFreshSignIn(id); }
         // admin→user demotion: what a member may not keep goes (server/productAccountHooks.js).
+        // One that could not be stopped or written is said, as for a disable, not answered
+        // as done.
+        let agentsLeft = null;
         if (update.role === 'user') {
-          try { require('../productAccountHooks').onDemoted(id); } catch (error) { console.error(`full-access cleanup failed: ${error.message}`); }
+          try { const r = require('../productAccountHooks').onDemoted(id); if (r?.failed?.length) agentsLeft = r.failed; }
+          catch (error) { console.error(`full-access cleanup failed: ${error.message}`); agentsLeft = [{ id: '*', title: 'full-access cleanup failed' }]; }
         }
         const signInsGone = !endSignIns ? Promise.resolve()
           : Promise.all([removeSessionsOrFail({ userId: id }), loginDevices.removeAll(id)]).then(() => new Promise((done, failed) => usersDB.update({ _id: id }, { $unset: { signInsCleanupDue: true } }, {}, (e) => (e ? failed(e) : done()))));
         signInsGone.then(() => {
+        if (agentsLeft) return res.status(500).json({ message: 'Demoted and signed out, but some of its agents were not stopped or saved: stop them by hand', code: 'FULL_ACCESS_CLEANUP_INCOMPLETE', agentsNotStopped: agentsLeft });
         usersDB.findOne({ _id: id }, (readErr, user) => {
           if (readErr || !user) return res.status(404).json({ message: 'User not found' });
           res.json({ user: publicUser(user) });
