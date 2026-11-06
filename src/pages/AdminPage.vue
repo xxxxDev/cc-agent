@@ -12,19 +12,29 @@
     </template>
 
     <!-- Grouped as Usage, Agent, System and Account. -->
+    <!-- Agent, handoff and wrap-up each a group of their own, the handoff settings one row each. -->
     <f7-block-title>{{ t('sectionAgent') }}</f7-block-title>
-    <f7-list inset class="cc-settings-list">
-      <!-- One row for how a handoff goes: the compactions before an automatic one, the
-           recent messages it carries, and whether one by hand asks. -->
-      <f7-list-item link no-chevron class="handoff-row" :title="ct('接續對話設定')" :after="handoffSummary(compactThreshold,handoff)" @click.prevent="editHandoff"><template #media><f7-icon f7="arrow_2_circlepath"/></template></f7-list-item>
-      <!-- The subagents' model and effort for every full-access Claude agent (issue #10). -->
+    <f7-list inset class="fs-settings-list">
+      <!-- The subagents' model and effort for every full-access Claude agent. -->
       <f7-list-item link no-chevron class="subagent-row" :title="ct('子代理模型與 Effort')" :after="subagentLabel(subagents)" @click.prevent="editSubagentDefault"><template #media><f7-icon f7="person_2"/></template></f7-list-item>
-      <!-- The wrap-up check: wrap-up questions for after each finished task,
-           sent by CC Agent once the agent has sat idle. -->
+      <f7-list-item link no-chevron class="archive-retention" :title="ct('Agent 刪除')" :after="retentionLabel(archiveRetentionDays)" @click.prevent="openDropdown('retention',$event)"><template #media><f7-icon f7="trash"/></template></f7-list-item>
+    </f7-list>
+
+    <f7-block-title>{{ t('sectionHandoff') }}</f7-block-title>
+    <f7-list inset class="fs-settings-list handoff-list">
+      <f7-list-item link no-chevron class="handoff-threshold-row" :title="ct('Compact 自動接續')" :after="compactPolicy(compactThreshold)" @click.prevent="openDropdown('compact',$event)"><template #media><f7-icon f7="arrow_2_circlepath"/></template></f7-list-item>
+      <!-- How many recent messages a handoff carries, by hand or automatic (issue #9). -->
+      <f7-list-item link no-chevron class="handoff-recent-row" :title="ct('接續時帶入訊息')" :after="handoffCount(handoff.recent)" @click.prevent="editHandoffRecent"><template #media><f7-icon f7="text_bubble"/></template></f7-list-item>
+      <f7-list-item class="handoff-ask-row" :title="ct('手動接續時詢問則數')" :footer="ct('按「接續」時先問要帶幾則，預先填好上面的數字。')"><template #media><f7-icon f7="question_circle"/></template><template #after><label class="toggle"><input type="checkbox" :aria-label="ct('手動接續時詢問則數')" :checked="handoff.ask" @change="saveHandoff({ask:$event.target.checked},$event)"/><span class="toggle-icon"></span></label></template></f7-list-item>
+      <!-- Start at the first message after a handoff (issue #11). -->
+      <f7-list-item link no-chevron class="handoff-lazy-row" :title="ct('接續後')" :after="handoff.lazy?ct('等第一則訊息'):ct('立即啟動')" :footer="handoff.lazy?ct('新 session 在下一則訊息進來時才啟動；其他 agent 直接在本機傳來的訊息叫不醒它。'):undefined" @click.prevent="openDropdown('lazy',$event)"><template #media><f7-icon f7="play_circle"/></template></f7-list-item>
+    </f7-list>
+
+    <f7-block-title>{{ t('sectionWrapUp') }}</f7-block-title>
+    <f7-list inset class="fs-settings-list">
       <f7-list-item class="wrap-up-toggle" :title="ct('自動收尾檢查')" :footer="ct('預設關閉。開啟後，Agent 完成任務並閒置一段時間，會自動請它確認工作已保存、筆記是最新的；只讀資料或回答問題不會送。')"><template #media><f7-icon f7="checkmark_seal"/></template><template #after><label class="toggle"><input type="checkbox" :aria-label="ct('自動收尾檢查')" :checked="wrapUp.enabled" @change="saveWrapUp({enabled:$event.target.checked})"/><span class="toggle-icon"></span></label></template></f7-list-item>
       <f7-list-item v-if="wrapUp.enabled" link no-chevron class="wrap-up-minutes" :title="ct('收尾檢查等待時間')" :after="wrapUp.minutes+' '+ct('分鐘')" @click.prevent="openDropdown('wrapUp',$event)"><template #media><f7-icon f7="timer"/></template></f7-list-item>
       <f7-list-item v-if="wrapUp.enabled" link no-chevron class="wrap-up-text" :title="ct('收尾檢查內容')" :after="wrapUp.custom?ct('自訂'):ct('內建')" @click.prevent="editWrapUpText"><template #media><f7-icon f7="text_alignleft"/></template></f7-list-item>
-      <f7-list-item link no-chevron class="archive-retention" :title="ct('Agent 刪除')" :after="retentionLabel(archiveRetentionDays)" @click.prevent="openDropdown('retention',$event)"><template #media><f7-icon f7="trash"/></template></f7-list-item>
     </f7-list>
 
     <f7-block-title>{{ t('sectionSystem') }}</f7-block-title>
@@ -57,7 +67,7 @@
 </template>
 
 <script setup>
-import {ct,compactCount,compactPolicy,handoffSummary} from '../js/agent-i18n.js';
+import {ct,compactCount,compactPolicy,handoffCount} from '../js/agent-i18n.js';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { f7 } from 'framework7-vue';
 import { t } from '../js/i18n.js';
@@ -118,35 +128,19 @@ function editSubagentDefault(){
         buttons:[{text:ct('稍後')},{text:ct('現在套用'),strong:true,onClick:async()=>{try{const n=await api('/preferences/subagents-apply',{method:'POST',body:JSON.stringify({ids:pending.map(a=>a.id)})});toast(ct('已套用')+'：'+ct('已重新啟動')+' '+(n.now||0)+'，'+ct('回覆結束後')+' '+(n['after-reply']||0));}catch(e){f7.dialog.alert(e.message);}}}],destroyOnClose:true}).open(),350);
     }});
 }
-// The three are saved together: the server checks all of them before keeping any.
-function editHandoff(){
+// The handoff settings, one row each.
+async function saveHandoff(patch,event){
+  try{await saveAgentPreferences({handoff:patch});toast(t('settingsSaved'));}
+  catch(e){if(event?.target)event.target.checked=handoff.value.ask;f7.dialog.alert(e.message||t('settingsFailed'));}
+}
+function editHandoffRecent(){
   if(!isAdmin.value)return;
-  const h=handoff.value,options=[...Array.from({length:10},(_,i)=>i+1),0].map(n=>`<option value="${n}">${compactPolicy(n)}</option>`).join('');
-  const dialog=f7.dialog.create({title:ct('接續對話設定'),text:ct('自動接續也帶「帶入訊息」的數量；個別 Agent 在 Agent Profile 設的壓縮門檻不受影響。'),cssClass:'handoff-dialog',
-    content:`<div class="handoff-fields">
-      <label>${ct('自動接續')}<select class="handoff-threshold">${options}</select></label>
-      <label>${ct('帶入訊息')}（0～${h.max}）<input class="handoff-recent" type="number" min="0" max="${h.max}" step="1" inputmode="numeric"></label>
-      <label class="handoff-ask-row">${ct('手動接續時詢問')}<span class="toggle"><input class="handoff-ask" type="checkbox"><span class="toggle-icon"></span></span></label>
-      <label>${ct('接續後')}<select class="handoff-lazy"><option value="now">${ct('立即啟動')}</option><option value="lazy">${ct('等第一則訊息')}</option></select></label>
-      <div class="sub-note">${ct('選「等第一則訊息」時，新 session 會在下一則訊息進來時才啟動，省下沒用到的開機額度；第一則回覆會慢一點。其他 agent 直接在本機傳來的訊息叫不醒它。')}</div>
-      <div class="handoff-error" role="alert"></div>
-    </div>`,
-    buttons:[{text:ct('取消')},{text:ct('保存'),strong:true,close:false,onClick:async d=>{
-      const text=String(d.$el.find('.handoff-recent').val()??'').trim(),recent=Number(text);
-      // Said inside this dialog: Framework7 holds another one back until this closes.
-      const say=text=>d.$el.find('.handoff-error').text(text);
-      if(!/^\d+$/.test(text)||recent>h.max){say(ct('請輸入 0 到 ')+h.max);return;}
-      try{await saveAgentPreferences({compactThreshold:Number(d.$el.find('.handoff-threshold').val()),handoff:{recent,ask:d.$el.find('.handoff-ask').prop('checked'),lazy:d.$el.find('.handoff-lazy').val()==='lazy'}});d.close();toast(t('settingsSaved'));}
-      catch(e){say(e.message||t('settingsFailed'));}
-    }}],
-    destroyOnClose:true});
-  dialog.open();
-  dialog.$el.find('.handoff-threshold').val(String(compactThreshold.value));
-  dialog.$el.find('.handoff-recent').val(String(h.recent));
-  dialog.$el.find('.handoff-ask').prop('checked',h.ask);
-  dialog.$el.find('.handoff-lazy').val(h.lazy?'lazy':'now');
-  // The toggle's own markup takes the tap on the label.
-  dialog.$el.find('.handoff-ask-row .toggle').on('click',e=>{if(e.target.tagName!=='INPUT'){e.preventDefault();const box=dialog.$el.find('.handoff-ask')[0];box.checked=!box.checked;}});
+  const max=handoff.value.max||50;
+  f7.dialog.prompt(ct('接續時帶入最近幾則訊息？')+'（0～'+max+'）',ct('接續時帶入訊息'),value=>{
+    const text=String(value??'').trim(),recent=Number(text);
+    if(!/^\d+$/.test(text)||recent>max){f7.dialog.alert(ct('請輸入 0 到 ')+max,ct('接續時帶入訊息'));return;}
+    saveHandoff({recent});
+  },()=>{},String(handoff.value.recent));
 }
 function editWrapUpText(){
   if(!isAdmin.value)return;
@@ -166,11 +160,13 @@ const dropdownPoint = ref({ clientX: 0, clientY: 0 });
 const dropdownKind = ref('compact');
 const dropdownItems = computed(() => {
   if(dropdownKind.value==='wrapUp')return [...new Set([...WRAP_UP_MINUTES,wrapUp.value.minutes])].sort((a,b)=>a-b).map(n=>({value:String(n),label:n+' '+ct('分鐘')}));
+  if(dropdownKind.value==='lazy')return [{value:'now',label:ct('立即啟動')},{value:'lazy',label:ct('等第一則訊息')}];
   if(dropdownKind.value==='retention')return [{value:'never',label:retentionLabel(null)},...RETENTION_CHOICES.map(d=>({value:String(d),label:retentionLabel(d)}))];
   return [...Array.from({length:10},(_,i)=>({value:String(i+1),label:compactCount(i+1)})),{value:'0',label:compactPolicy(0)}];
 });
 const dropdownSelected = computed(() => {
   if(dropdownKind.value==='wrapUp')return String(wrapUp.value.minutes);
+  if(dropdownKind.value==='lazy')return handoff.value.lazy?'lazy':'now';
   if(dropdownKind.value==='retention')return archiveRetentionDays.value===null?'never':String(archiveRetentionDays.value);
   return String(compactThreshold.value);
 });
@@ -203,6 +199,7 @@ async function onDropdownSelect(value) {
   if(!isAdmin.value)return;
   if(dropdownKind.value==='wrapUp'){await saveWrapUp({minutes:Number(value)});return;}
   if(dropdownKind.value==='retention'){await saveRetention(value);return;}
+  if(dropdownKind.value==='lazy'){await saveHandoff({lazy:value==='lazy'});return;}
   try{await saveAgentPreferences({compactThreshold:Number(value)});toast(t('settingsSaved'));}catch(e){f7.dialog.alert(e.message);}
 }
 
