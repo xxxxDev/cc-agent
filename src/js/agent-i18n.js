@@ -443,7 +443,8 @@ const english = {
   
   "暫停會中斷執行中的回覆。聊天紀錄仍會保留。": "Pausing interrupts the current reply. Chat history will be kept.",
   "暫停執行": "Pause",
-  "保存記憶與近期討論，接續到新的 Claude session？": "Save memory and recent discussion, then continue in a new Claude session?",
+  "保存記憶並接續到新的 Claude session。要帶上最近幾則訊息？（0～12）": "Save memory and continue in a new Claude session. How many recent messages to carry? (0-12)",
+  "請輸入 0 到 12": "Enter a number from 0 to 12",
   "接續對話": "Continue conversation",
   "記憶已保存": "Memory saved",
   "關閉對話資訊": "Close conversation information",

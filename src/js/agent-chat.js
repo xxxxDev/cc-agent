@@ -885,7 +885,7 @@ function restart(){f7.dialog.confirm(ct("重啟會中斷執行中的回覆，並
 async function listAgentAction(c,kind){await attempt(async()=>{await api('/conversations/'+c.id+'/'+kind,{method:'POST',body:'{}'});await refresh();});}
 function pauseAgent(c){const go=()=>listAgentAction(c,'stop');if(c.phase==='busy')f7.dialog.confirm(ct("暫停會中斷執行中的回覆。聊天紀錄仍會保留。"),ct("暫停執行")+'「'+c.title+'」',go);else go();}
 function startAgent(c){return listAgentAction(c,'start');}
-function handoff(){f7.dialog.confirm(ct("保存記憶與近期討論，接續到新的 Claude session？"),ct("接續對話"),()=>action('rotate'));}
+function handoff(){f7.dialog.prompt(ct("保存記憶並接續到新的 Claude session。要帶上最近幾則訊息？（0～12）"),ct("接續對話"),value=>{const text=String(value).trim(),recent=Number(text);if(!/^\d+$/.test(text)||recent>12){f7.dialog.alert(ct("請輸入 0 到 12"),ct("接續對話"));return;}action('rotate',{recent});},undefined,'12');}
 // Bring the turns that happened outside this page (the owner's terminal, a
 // session driven by a channel plugin) into the conversation. Pressing it twice adds nothing, and it
 // takes back an imported bubble later recognised as start-up rather than a turn.
