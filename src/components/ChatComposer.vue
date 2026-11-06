@@ -117,7 +117,7 @@ onBeforeUnmount(()=>{paintMentions(own,[]);resized?.disconnect();widened?.discon
  font-size:var(--f7-messagebar-textarea-font-size);line-height:var(--f7-messagebar-textarea-line-height);
  white-space:pre-wrap;overflow-wrap:anywhere;outline:none;user-select:text;-webkit-user-select:text;
 }
-.chat-editor[data-empty="true"]::before {content:attr(data-placeholder);color:var(--f7-messagebar-textarea-placeholder-color);pointer-events:none;position:absolute;}
+.chat-editor[data-empty="true"]:not(:focus)::before {content:attr(data-placeholder);color:var(--f7-messagebar-textarea-placeholder-color);pointer-events:none;position:absolute;}
 </style>
 <style>
 /* Painted by the browser over the plain text, so it has no box of its own: a tint
