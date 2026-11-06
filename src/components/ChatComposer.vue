@@ -12,7 +12,7 @@
      role="textbox" aria-multiline="true" :aria-label="placeholder" :data-placeholder="placeholder"
      :data-empty="empty" dir="auto" autocomplete="off" inputmode="text" enterkeyhint="enter"
      autocorrect="on" autocapitalize="sentences" spellcheck="true"
-     @input="input" @compositionstart="composing=true" @compositionend="compositionEnd"
+     @input="input" @compositionstart="compositionStart" @compositionend="compositionEnd"
      @keydown="keydown"/>
    </div>
    <div class="toolbar-pane composer-end" @click.capture="guardComposition"><slot name="inner-end"/></div>
@@ -28,8 +28,14 @@ const props=defineProps({value:{type:String,default:''},placeholder:String,highl
 const emit=defineEmits(['update:value','keydown']);
 const editor=ref(null),area=ref(null),empty=ref(!props.value);
 let composing=false;
-function text(){return editor.value?.innerText.replace(/\r\n?/g,'\n')||'';}
+// Deleting the last character leaves the browser's placeholder BR, which innerText
+// reads as "\n": an editor with no text of its own is empty, so the placeholder returns.
+function text(){const e=editor.value;return e?.textContent?e.innerText.replace(/\r\n?/g,'\n'):'';}
 function input(){if(composing)return;const value=text();empty.value=!value;emit('update:value',value);mark();}
+// Text an input method is still composing is not counted by input() until it commits,
+// so the placeholder would sit over it: it goes as composition starts, and input()
+// decides again when it ends (issue #7).
+function compositionStart(){composing=true;empty.value=false;}
 function compositionEnd(){composing=false;input();}
 function keydown(event){if(composing||event.isComposing||event.keyCode===229)return;emit('keydown',event);}
 function guardComposition(event){if(composing){event.preventDefault();event.stopPropagation();}}
