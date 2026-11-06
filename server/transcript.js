@@ -181,13 +181,16 @@ const NOTE_MAX = 300;
 // another agent showed no working bubble); older builds wrote <agent-message>.
 const AGENT_WAKE = /^Another Claude session sent a message:\s*<(agent-message|cross-session-message)\b[^>]*>[\s\S]*?<\/\1>(?:\s|$)/;
 function trackTurn(state, record) {
-  if (record.type === 'system' && TURN_END.has(record.subtype)) { state.turnOpen = false; return; }
+  if (record.type === 'system' && TURN_END.has(record.subtype)) { state.turnOpen = false; if (record.timestamp) state.turnEndedAt = record.timestamp; return; }
   if (record.type !== 'user' || record.isCompactSummary || record.isVisibleInTranscriptOnly) return;
   const content = record.message?.content;
   if (typeof content === 'string') {
     const text = content.trimStart();
     if (NOT_A_PROMPT.test(text) || COMPACT_COMMAND.test(text)) return;
     // Claude Code's own notes are meta; so are channel messages, which are prompts.
+    // A Stop hook that blocks the end sends its feedback as a meta note and the model goes
+    // on with the same turn: open again.
+    if (record.isMeta && text.startsWith('Stop hook feedback')) { state.turnOpen = true; return; }
     if (record.isMeta && !text.startsWith('<channel ') && !AGENT_WAKE.test(text)) return;
     state.turnOpen = true;
     // How long the turn has run, as Claude Code's own timer counts it, and what it
@@ -508,6 +511,17 @@ function currentWork(stateRoot, conversation) {
   const jobs = liveBackground(state);
   return {inTurn: inTurn(state), background: jobs.length, subagents: jobs.filter(j => j.kind === 'subagent').length,
     commands: jobs.filter(j => j.kind === 'command').map(({description, since}) => ({description, since}))};
+}
+
+// Whether the session has finished a turn since `since` (ms) and is not in one now: a
+// start-up turn that ended without the ready handshake (an agent told to translate
+// everything translated the start-up prompt).
+function turnEndedSince(stateRoot, conversation, since) {
+  const run = (conversation?.runs || []).at(-1);
+  if (conversation?.mode !== 'claude' || !run) return false;
+  const file = locate(path.join(stateRoot, 'workspaces', conversation.id, 'g' + run.number), run.sessionId);
+  const state = file ? read(file) : null;
+  return !!state && !inTurn(state) && Date.parse(state.turnEndedAt || 0) > since;
 }
 
 // When the usage limit that last stopped the current run resets: {at, seen} in ms.
@@ -945,4 +959,4 @@ function subagents(stateRoot, conversation) {
   return out.sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt))).slice(0, SUBAGENT_MAX);
 }
 
-module.exports = {workedSince, subagents, lastCompaction, usage, progress, currentWork, quotaReset, waiting, skills, connectors, relays, segment, history, messageCost, priceOf, PRICES, WEB_SEARCH_USD};
+module.exports = {turnEndedSince, workedSince, subagents, lastCompaction, usage, progress, currentWork, quotaReset, waiting, skills, connectors, relays, segment, history, messageCost, priceOf, PRICES, WEB_SEARCH_USD};

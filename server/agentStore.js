@@ -562,7 +562,7 @@ function launch(c) {
   execFileSync('tmux',['-L',tmuxSocket,'new-session','-d','-s',g.tmux,'-c',dir,quote(process.execPath)+' '+quote(path.join(ROOT,'channel/runner.mjs'))+' '+quote(configPath)],{timeout:5000,env:agentEnv()});
   delete c.pausedByOwner;
   // Started: no longer waiting for a first message (a failed start keeps it waiting).
-  delete g.dormant;
+  delete g.dormant;delete g.bootstrapped;delete g.startupSkipped;
   g.model=config.model;g.effort=config.effort;g.subagentEnv=config.subagentEnv||{};g.profileHash=null;g.toolPolicy='native-bypass';g.phase='starting';g.ready=false;g.lastError='';g.heartbeat=Date.now();g.startedAt=Date.now();g.launchedAt=Date.now();save(c);
  }catch(e){g.phase='error';g.lastError='tmux 啟動失敗：'+e.message;save(c);throw error(g.lastError,500);}
 }
@@ -1372,6 +1372,9 @@ const LIVE_AGAIN=new Set(['Claude session 已中斷（例如重開機後），�
 // A start a message caused that did not come up: what was queued for it is not handed
 // over hours later by a reconnect, and says so.
 function wakeFailed(c,g){if(!g.wokenBySend)return;delete g.wokenBySend;for(const m of c.messages)if(m.role==='user'&&m.delivery==='queued')m.delivery='interrupted';}
+// How long a start-up turn may take before one that ended without the handshake counts as ready.
+const STARTUP_TURN_GRACE_MS=20_000;
+const STARTUP_REMINDER='[CC Agent: your start-up did not finish. Before answering, call mcp__executive__bootstrap to load your agent profile, memory and handoff; this note is from CC Agent, not the owner.]\n\n';
 function markReady(c,g){delete g.wokenBySend;g.ready=true;g.phase='ready';g.lastError='';g.startedAt=0;const marker=path.join(controlDir(c,g),'started.marker');if(c.mode==='claude')fs.writeFileSync(marker,g.sessionId,{mode:0o600});}
 const COMPACT_SCREEN_GRACE_MS=15000;
 // How long a compaction that was on screen may be gone from it before it is taken as ended.
@@ -1401,7 +1404,7 @@ function bridge(c,action,data={}) {
  // The channel polls from the moment it starts, so the address is known before the
  // model has called any tool; it saves only when the address is new.
  if(platform.isWin&&(action==='bootstrap'||action==='ready'||action==='poll'))registerAddress(c,g,data.address);
- if(action==='bootstrap'){if(['starting','error'].includes(g.phase)&&!g.compacting){markReady(c,g);save(c);}return {profile:agentProfile.profile(c),memory:c.memory,handoff:c.handoff||null,reference:referenceInfo(c),checklists:checklists.summary(c)};}
+ if(action==='bootstrap'){g.bootstrapped=true;if(['starting','error'].includes(g.phase)&&!g.compacting){markReady(c,g);save(c);}return {profile:agentProfile.profile(c),memory:c.memory,handoff:c.handoff||null,reference:referenceInfo(c),checklists:checklists.summary(c)};}
  if(action==='poll') {
   // The channel of this generation is asking for messages, so its session is alive: an
   // agent marked as cut off or as never having finished its handshake comes back by
@@ -1409,6 +1412,12 @@ function bridge(c,action,data={}) {
   // reconnect). Only those two marks, which CC Agent sets from a
   // check; an error the agent reported itself stays.
   if(g.phase==='error'&&LIVE_AGAIN.has(g.lastError)&&!g.compacting&&!g.manualCompact){try{markReady(c,g);save(c);}catch(e){console.error(`live again for ${c.id}: ${e.message}`);}}
+  // A start-up turn that ended without the handshake (the agent read the start-up
+  // prompt as work of its own, such as text to translate) is not left waking for good:
+  // its channel is polling and its session has finished a turn, so it is ready, and
+  // the first message it is handed asks it to load what bootstrap gives (an agent told to translate everything sat on the waking screen with nothing running).
+  // Not after an error or a usage limit at start-up, which stays shown.
+  if(g.phase==='starting'&&!g.compacting&&!g.manualCompact&&!g.bootstrapped&&!g.lastError&&!g.limitResume&&g.launchedAt&&Date.now()-g.launchedAt>STARTUP_TURN_GRACE_MS&&transcript.turnEndedSince(stateRoot,c,g.launchedAt)){try{markReady(c,g);g.startupSkipped=true;save(c);}catch(e){console.error(`ready without handshake for ${c.id}: ${e.message}`);}}
   const verdicts=permissions.deliveries(g);if(verdicts.length)return {permissions:verdicts};
   const pending=c.messages.find(m=>m.delivery==='queued');
   if(pending&&g.ready){// Working for a group from the moment its message is handed over, and for nothing
@@ -1416,7 +1425,8 @@ function bridge(c,action,data={}) {
   // A group chat named with @ in its own chat counts the same: what the
   // agent then sends that group's members shows there.
   const named=pending.mentions?.find(m=>m.group&&groupStore.get(m.id)?.owner===c.owner);
-  if(!pending.wrapUp)c.groupContext=pending.group?{id:pending.group.id,at:Date.now()}:named?{id:named.id,at:Date.now()}:null;const text=profileMessage(c,g,pending.peer?peerWrap(c,pending,neutralSender(attachments.channelText(stateRoot,c,pending))):scheduleNote(pending)+limitResumeNote(pending)+wrapUpNote(pending)+groupNote(c,pending)+mentionNote(pending)+neutralSender(attachments.channelText(stateRoot,c,pending)));pending.delivery='delivered';pending.deliveredAt=new Date().toISOString();g.deliveryEpoch=(g.deliveryEpoch||0)+1;g.phase='busy';save(c);return {message:{id:pending.id,text,...senderOf(c,pending)},rotate:c.pendingRotation};}
+  if(!pending.wrapUp)c.groupContext=pending.group?{id:pending.group.id,at:Date.now()}:named?{id:named.id,at:Date.now()}:null;const skipped=g.startupSkipped&&!g.bootstrapped;if(skipped)g.bootstrapped=true;
+  const text=(skipped?STARTUP_REMINDER:'')+profileMessage(c,g,pending.peer?peerWrap(c,pending,neutralSender(attachments.channelText(stateRoot,c,pending))):scheduleNote(pending)+limitResumeNote(pending)+wrapUpNote(pending)+groupNote(c,pending)+mentionNote(pending)+neutralSender(attachments.channelText(stateRoot,c,pending)));pending.delivery='delivered';pending.deliveredAt=new Date().toISOString();g.deliveryEpoch=(g.deliveryEpoch||0)+1;g.phase='busy';save(c);return {message:{id:pending.id,text,...senderOf(c,pending)},rotate:c.pendingRotation};}
   return {rotate:c.pendingRotation};
  }
  // An agent sets up a long-running schedule the owner agreed to in its conversation;
@@ -1506,7 +1516,9 @@ function bridge(c,action,data={}) {
   }
   return {ok:true,group:x.name};
  }
- if(action==='ready')markReady(c,g);
+ // A ready from a session already working (an agent calling it late, after the first
+ // message reached it) leaves it busy.
+ if(action==='ready'){if(!g.ready||['starting','error'].includes(g.phase))markReady(c,g);}
  else if(action==='reply'&&data.answeredBy!==undefined){
   // One answer can close several messages: agents closed the second one with a bubble
   // saying the result was in the "next" one, while it was above. This closes a message
