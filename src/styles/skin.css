@@ -61,7 +61,8 @@ body {
   --f7-page-bg-color: var(--cc-color-page);
   --f7-bars-bg-color: var(--cc-color-bars);
   /* Navbar geometry. */
-  --f7-navbar-large-title-height: 30px;
+  --f7-navbar-height: 58px; /* F7 v9 default 76px: 7px above and below the 44px buttons */
+  --f7-navbar-large-title-height: 48px; /* 30px under the former 76px bar: the 18px it gave up keeps the large title clear of the buttons */
   --f7-tabbar-labels-height: var(--cc-size-tabbar);
   --f7-tabbar-label-font-size: var(--cc-font-label-sm);
   /* Search radius: the search field rounds at 24px; F7 v9 defaults the inline searchbar to 44px.
@@ -683,11 +684,6 @@ img[src$="/sources/anthropic-native.svg"] {
 
 .cc-app .navbar .navbar-bg::after {
   display: none;
-}
-
-.cc-app .navbar-inner > .left,
-.cc-app .navbar-inner > .right {
-  transform: translateY(-9px);
 }
 
 .cc-app .navbar-inner > .left,
