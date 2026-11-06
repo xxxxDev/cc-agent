@@ -1334,6 +1334,8 @@ const COMPACT_GONE_MS=30000;
 // How long a PreCompact may wait for its compaction to show on screen.
 const COMPACT_PENDING_MS=15*60*1000;
 const COMPACT_DRAWN=/Compacting conversation|Running PreCompact hooks/;
+// How long after PostCompact the main transcript may take to record the compaction.
+const POSTCOMPACT_WAIT_MS=Number(process.env.CC_AGENT_POSTCOMPACT_WAIT_MS)||4000;
 // Every action bridge() handles, and exactly those the channel sends: channel/server.mjs
 // (the MCP tools, poll, permission-request and permission-ack), channel/runner.mjs (error,
 // starting, heartbeat) and channel/hook.mjs (precompact, postcompact, result, failure).
@@ -1524,17 +1526,34 @@ function bridge(c,action,data={}) {
   // A start that compacted gets its whole ceiling again from here.
   if(g.phase==='starting'&&g.startedAt)g.startedAt=Date.now();
   const key=createHash('sha256').update(g.sessionId+String(data.eventKey||data.compact_summary||'')).digest('hex');
-  if(!g.seen.includes(key)){
+  const since=g.compactSince||0;
+  if(g.manualCompact&&data.trigger==='manual'){g.manualCompact=false;g.phase='ready';}
+  // A subagent's compaction sends PostCompact too, in the same session and with nothing
+  // to tell it apart: a subagent's compactions put cards with its own summaries in the
+  // chat and counted them toward the hand-over. Only the main conversation's transcript
+  // then records a compaction, a moment after the hook: so an automatic one is looked for
+  // there first, and one that left no mark is not the agent's. Its numbers come from that
+  // same record.
+  const record=measured=>{
+   if(g.seen.includes(key))return;
    g.seen.push(key);g.compacts++;if(c.threshold>0&&g.compacts>=c.threshold)c.pendingRotation=true;
    // The point is marked in the chat: what the
    // conversation weighed before and after, and the summary the agent now works from.
-   let measured=null;try{measured=transcript.lastCompaction(stateRoot,c);}catch{}
    const fresh=measured&&measured.at&&Date.now()-Date.parse(measured.at)<10*60*1000?measured:null;
    const summary=typeof data.compact_summary==='string'?data.compact_summary.trim().slice(0,20000):'';
    add(c,'system',summary||'（沒有取得整理後的摘要）',{notice:'compact',compact:{trigger:data.trigger==='manual'?'manual':fresh?.trigger||'auto',preTokens:fresh?.preTokens??null,postTokens:fresh?.postTokens??null,durationMs:fresh?.durationMs??null,count:g.compacts}});
+   if(c.pendingRotation&&g.phase==='ready')setTimeout(()=>{if(active(c)===g&&c.pendingRotation&&g.phase==='ready'){try{rotate(c);}catch{}}},1500);
+  };
+  const mainCompaction=()=>{let m=null;try{m=transcript.lastCompaction(stateRoot,c);}catch{}return m&&m.at&&Date.parse(m.at)>=since-5000?m:null;};
+  if(!g.seen.includes(key)){
+   // Only a real Claude has a transcript, or subagents.
+   if(data.trigger==='manual'||c.mode!=='claude')record(mainCompaction());
+   else{
+    const now=mainCompaction();
+    if(now)record(now);
+    else setTimeout(()=>{if(active(c)!==g)return;const later=mainCompaction();if(later){record(later);save(c);}else console.error(`compaction with no mark in ${c.id}'s transcript taken as a subagent's`);},POSTCOMPACT_WAIT_MS).unref?.();
+   }
   }
-  if(g.manualCompact&&data.trigger==='manual'){g.manualCompact=false;g.phase='ready';}
-  if(c.pendingRotation&&g.phase==='ready')setTimeout(()=>{if(active(c)===g&&c.pendingRotation&&g.phase==='ready'){try{rotate(c);}catch{}}},1500);
  }
  else if(action==='result'){
   // A turn that ended is not compacting: a compaction whose end never reached us
