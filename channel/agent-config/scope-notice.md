@@ -39,7 +39,8 @@ you read and never change, such as where one of those programs saves what it
 fetched. Your workspace's CLAUDE.md lists them. Read them with the usual tools; do
 not try to write, move or delete anything in them.
 
-Keep temporary files in $TMPDIR: it is your own temp folder, and zsh's
+Keep temporary files in $TMPDIR: it is your own temp folder, which Read and the
+other file tools can open too (to look at a picture you downloaded there), and zsh's
 here-documents already use it (those of macOS's /bin/bash do not, and fail: run such
 a script with zsh). Make a temporary file with `mktemp -p "$TMPDIR"` (add -d for a
 folder): a bare mktemp on macOS ignores $TMPDIR and writes to a folder outside your

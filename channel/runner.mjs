@@ -200,6 +200,20 @@ const toolResultsDirs=(()=>{
   return [d];
  }catch(e){console.error(`saved tool results folder left out (${e.message})`);return [];}
 })();
+// Its own temp folder for the file tools too: a scoped agent could not read a file it
+// downloaded to its temp folder with Bash, as the scope notice tells it to. Only
+// claude-<uid>, the part its commands may write; never its folder above (the git config)
+// nor anyone else's. Claude Code under --restricted loads no settings from a --add-dir
+// folder's .claude/, but a later release or another runtime might: so one there is
+// removed first (it can only be the agent's own; the disk may be case-insensitive, so any
+// spelling), and the sandbox and Edit (which also governs Write) keep it from making another.
+const tmpConfig=path.join(sandboxTmp,'.claude');
+const tmpFileDirs=(()=>{
+ if(full)return [];
+ try{const st=fs.lstatSync(tmpConfig);st.isSymbolicLink()||!st.isDirectory()?fs.unlinkSync(tmpConfig):fs.rmSync(tmpConfig,{recursive:true,force:true});}catch(e){if(e.code!=='ENOENT'){console.error(`own temp folder left out of the file tools (${e.code||e.message})`);return [];}}
+ return [sandboxTmp];
+})();
+const tmpConfigDirs=tmpFileDirs.length?[tmpConfig,'/private'+tmpConfig]:[];
 const programDirs=programs.length?[...new Set([...programs.flatMap(x=>x.dirs),wrapperDir,wrapperTmp])]:[];
 // This computer's Claude setup (~/.claude.json): its MCP servers and the names of the
 // claude.ai connectors the account has used here.
@@ -235,7 +249,7 @@ const ownerConfig=full;
 const scope=full?{permissions:{...(own.permissions||{})}}:{
  sandbox:{enabled:true,failIfUnavailable:true,allowUnsandboxedCommands:false,autoAllowBashIfSandboxed:true,
   // ~/.nvm is readable: a node installed with nvm lives there, and without it node aborts at start.
-  filesystem:{denyRead:['~',...OUTSIDE_HOME_DENY,...excludeDirs],allowRead:[config.cwd,...tmpDirs,'~/.nvm',...runtimeTools.toolReadRoots(),...allowDirs,...referenceDirs,...readOnlyDirs,...toolResultsDirs],allowWrite:[config.cwd,...writableTmp,...allowDirs],denyWrite:[...sharedTmp,...excludeDirs,...referenceDirs,...readOnlyDirs,...toolResultsDirs,...configDirs,...toolDirs,...offLimits,...programDirs]},
+  filesystem:{denyRead:['~',...OUTSIDE_HOME_DENY,...excludeDirs],allowRead:[config.cwd,...tmpDirs,'~/.nvm',...runtimeTools.toolReadRoots(),...allowDirs,...referenceDirs,...readOnlyDirs,...toolResultsDirs],allowWrite:[config.cwd,...writableTmp,...allowDirs],denyWrite:[...sharedTmp,...excludeDirs,...referenceDirs,...readOnlyDirs,...toolResultsDirs,...configDirs,...tmpConfigDirs,...toolDirs,...offLimits,...programDirs]},
   network:{allowedDomains:access.domains||[]},
   ...(programs.length?{excludedCommands:programs.map(x=>x.command)}:{})},
  // "//path" is absolute in a permission rule; "/path" would be relative to this file.
@@ -246,7 +260,7 @@ const scope=full?{permissions:{...(own.permissions||{})}}:{
  // keeps from it. Refused, not held for a human.
  crossSessionInbound:'refuse',
  ...(noConnectors?{disableClaudeAiConnectors:true}:{}),
- permissions:{allow:[...(own.permissions?.allow||[]).filter(r=>!/^mcp__/.test(r)),...(access.mcp||[]).map(n=>`mcp__${n}`),'Read','Edit','Write','Glob','Grep','Bash','WebSearch',...access.domains.map(d=>`WebFetch(domain:${d})`),...programs.map(x=>`Bash(${x.command})`)],deny:[...(own.permissions?.deny||[]),...connectorDeny,...excludeDirs.flatMap(p=>[`Read(/${p}/**)`,`Edit(/${p}/**)`]),...[...referenceDirs,...readOnlyDirs,...toolResultsDirs,...configDirs,...toolDirs,...offLimits,...programDirs].map(p=>`Edit(/${p}/**)`)]},
+ permissions:{allow:[...(own.permissions?.allow||[]).filter(r=>!/^mcp__/.test(r)),...(access.mcp||[]).map(n=>`mcp__${n}`),'Read','Edit','Write','Glob','Grep','Bash','WebSearch',...access.domains.map(d=>`WebFetch(domain:${d})`),...programs.map(x=>`Bash(${x.command})`)],deny:[...(own.permissions?.deny||[]),...connectorDeny,...excludeDirs.flatMap(p=>[`Read(/${p}/**)`,`Edit(/${p}/**)`]),...[...referenceDirs,...readOnlyDirs,...toolResultsDirs,...configDirs,...tmpConfigDirs,...toolDirs,...offLimits,...programDirs].map(p=>`Edit(/${p}/**)`)]},
 };
 // The workspace's own CLAUDE.md says what the folder is and whose rules apply. Claude Code
 // loads a project's AGENTS.md only where it finds no CLAUDE.md on the way up, so it also
@@ -321,7 +335,7 @@ const ownerArgs=[...nameArgs,'--model',config.model||'claude-sonnet-5-5','--effo
 // Scoped agents run in auto mode: the scope that
 // matters is files outside it, held by the sandbox, --restricted and deny rules, which
 // auto mode does not lift (measured); sites and MCP servers it may approve itself.
-const args=ownerConfig?ownerArgs:[...nameArgs,'--model',config.model||'claude-sonnet-5-5','--effort',config.effort||'high',...(resumed?['--resume',config.sessionId]:['--session-id',config.sessionId]),'--setting-sources','project','--settings',settings,'--mcp-config',mcpFile,'--dangerously-load-development-channels','server:executive','--tools','Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,ToolSearch,TodoWrite,Skill',...(full?['--dangerously-skip-permissions']:['--restricted','--permission-mode','auto',...(allowDirs.length+referenceDirs.length+readOnlyDirs.length+toolResultsDirs.length?['--add-dir',...allowDirs,...referenceDirs,...readOnlyDirs,...toolResultsDirs]:[]),'--append-system-prompt-file',path.join(agentConfig,'scope-notice.md')]),'--plugin-dir',path.join(agentConfig,'plugin'),'--allowedTools','ToolSearch','mcp__executive__bootstrap','mcp__executive__ready','mcp__executive__reply','mcp__executive__post','mcp__executive__group_post','mcp__executive__checklists','mcp__executive__checklist','mcp__executive__remember','mcp__executive__describe','mcp__executive__history',...versionedToolNames(config),'--',prompt];
+const args=ownerConfig?ownerArgs:[...nameArgs,'--model',config.model||'claude-sonnet-5-5','--effort',config.effort||'high',...(resumed?['--resume',config.sessionId]:['--session-id',config.sessionId]),'--setting-sources','project','--settings',settings,'--mcp-config',mcpFile,'--dangerously-load-development-channels','server:executive','--tools','Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,ToolSearch,TodoWrite,Skill',...(full?['--dangerously-skip-permissions']:['--restricted','--permission-mode','auto',...(allowDirs.length+referenceDirs.length+readOnlyDirs.length+toolResultsDirs.length+tmpFileDirs.length?['--add-dir',...allowDirs,...referenceDirs,...readOnlyDirs,...toolResultsDirs,...tmpFileDirs]:[]),'--append-system-prompt-file',path.join(agentConfig,'scope-notice.md')]),'--plugin-dir',path.join(agentConfig,'plugin'),'--allowedTools','ToolSearch','mcp__executive__bootstrap','mcp__executive__ready','mcp__executive__reply','mcp__executive__post','mcp__executive__group_post','mcp__executive__checklists','mcp__executive__checklist','mcp__executive__remember','mcp__executive__describe','mcp__executive__history',...versionedToolNames(config),'--',prompt];
 // Claude also loads a .mcp.json from its working directory, and MCP servers run
 // outside the sandbox. --strict-mcp-config would stop that but also drops the
 // claude.ai connectors agents use (measured), and the server removes the
