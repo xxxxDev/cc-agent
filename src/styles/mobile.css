@@ -1,19 +1,2 @@
 /* The app shell (skin.css) owns top/bottom geometry. */
 .chat-page .messages {min-height:0;}
-
-/* skin.css lifts every navbar's round side buttons by 9px
-   (`.cc-app .navbar-inner > .left, > .right {transform:translateY(-9px)}`),
-   putting them at centre 29 in a 76px bar. On a large-title page that is all you
-   see of the bar: the compact title there is `opacity:0` until you scroll, so the
-   buttons at 29 and the large title at 91 are the whole visible design, and the
-   Agents list and Manage Users both look exactly like that.
-
-   The conversation page and the other ordinary bars are the only places a compact
-   title is actually visible, and there the buttons at 29 sat 9px above it.
-   Dropping the buttons to the title (38) would make those the only screens whose
-   round buttons sit lower than everywhere else.
-
-   So the lift stays and the *title* comes up to meet it,
-   only on bars with no large title. Buttons land at 29 on every page, and the
-   visible title lands at 29 with them. */
-.cc-app .navbar-inner:not(:has(.title-large)) > .title {transform:translateY(-9px);}
