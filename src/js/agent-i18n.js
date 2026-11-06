@@ -325,6 +325,8 @@ const english = {
 "Claude session ID（選填）":"Claude session ID (optional)",
 "只有管理員能用。填入本機 Claude session 的 ID，這個 Agent 會接著那段對話繼續；那個 session 不要同時在別的地方執行。":"Admins only. Enter a local Claude session ID and this agent carries on that conversation; do not run that session anywhere else at the same time.",
 "不自動換代":"Never automatically",
+"每次詢問":"asks each time",
+"不詢問":"does not ask",
 "範圍報告單":"Scope reports",
 "Agent 碰到範圍外的動作時會被擋下，並在這裡開一張報告單。可以略過，或替那個 Agent 開通。":"When an agent tries something outside its access it is refused, and a report lands here. Dismiss it, or widen that agent's access.",
 "狀態":"Status",
@@ -443,7 +445,14 @@ const english = {
   
   "暫停會中斷執行中的回覆。聊天紀錄仍會保留。": "Pausing interrupts the current reply. Chat history will be kept.",
   "暫停執行": "Pause",
-  "保存記憶與近期討論，接續到新的 Claude session？": "Save memory and recent discussion, then continue in a new Claude session?",
+  "保存記憶並帶上最近的訊息，接續到新的 Claude session？": "Save memory and carry the recent messages, then continue in a new Claude session?",
+  "保存記憶並接續到新的 Claude session。要帶上最近幾則訊息？": "Save memory and continue in a new Claude session. How many recent messages to carry?",
+  "請輸入 0 到 ": "Enter a number from 0 to ",
+  "接續對話設定": "Handoff",
+  "自動接續": "Automatic handoff",
+  "帶入訊息": "Messages carried",
+  "手動接續時詢問": "Ask each time by hand",
+  "自動接續也帶「帶入訊息」的數量；個別 Agent 在 Agent Profile 設的壓縮門檻不受影響。": "An automatic handoff carries the same number of messages. A compaction threshold set in an agent's own Agent Profile is kept.",
   "接續對話": "Continue conversation",
   "記憶已保存": "Memory saved",
   "關閉對話資訊": "Close conversation information",
@@ -810,4 +819,10 @@ export function searchTotal(total, shown) {return lang.value==='zh-TW'?`共 ${to
 export function generation(n) {return lang.value==='zh-TW'?`第 ${n} 代`:`Generation ${n}`;}
 export function compactCount(n) {return lang.value==='zh-TW'?`${n} 次`:`${n} ${Number(n)===1?'compaction':'compactions'}`;}
 // The handoff policy as Settings shows it: 0 is never handing off automatically.
+export function handoffCount(n) {return lang.value==='zh-TW'?`${n} 則`:`${n} ${Number(n)===1?'message':'messages'}`;}
+// The admin page's handoff row: when it happens by itself, what it carries, whether it asks.
+export function handoffSummary(threshold,{recent=12,ask=true}={}) {
+ const auto=Number(threshold)===0?ct('不自動換代'):lang.value==='zh-TW'?`壓縮 ${threshold} 次後自動`:`auto after ${compactCount(threshold)}`;
+ return [auto,(lang.value==='zh-TW'?'帶 ':'carry ')+handoffCount(recent),ask?ct('每次詢問'):ct('不詢問')].join(lang.value==='zh-TW'?'・':' · ');
+}
 export function compactPolicy(n) {return Number(n)===0?ct('不自動換代'):compactCount(n);}

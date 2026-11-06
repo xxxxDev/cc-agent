@@ -11,6 +11,7 @@ import {api} from './api.js';
 import {ct} from './agent-i18n.js';
 import {agentActivity} from './agentActivity.js';
 import * as agentOperation from './agentOperation.js';
+import {askHandoff} from './handoffAsk.js';
 
 export function useCellAgent({workspace, conversationId, detail, refresh, profileOpen}) {
  const error=ref(''),operation=ref(null),operationError=ref('');
@@ -41,7 +42,7 @@ export function useCellAgent({workspace, conversationId, detail, refresh, profil
  }
  const pause=()=>f7.dialog.confirm(ct("暫停會中斷執行中的回覆。聊天紀錄仍會保留。"),ct("暫停執行"),()=>action('stop'));
  const restart=()=>f7.dialog.confirm(ct("重啟會中斷執行中的回覆，並接回同一個 session。聊天紀錄仍會保留。"),ct("重啟"),async()=>{if(await action('stop'))await action('start');});
- const handoff=()=>f7.dialog.confirm(ct("保存記憶與近期討論，接續到新的 Claude session？"),ct("接續對話"),()=>action('rotate'));
+ const handoff=()=>askHandoff(detail.value?.handoffSetting,body=>action('rotate',body));
  async function importHistory(){
   const d=await action('import-history');
   if(!d)return;

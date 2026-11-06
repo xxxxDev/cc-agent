@@ -14,7 +14,9 @@
     <!-- Grouped as Usage, Agent, System and Account. -->
     <f7-block-title>{{ t('sectionAgent') }}</f7-block-title>
     <f7-list inset class="cc-settings-list">
-      <f7-list-item link no-chevron :title="ct('Compact 自動接續')" :after="compactPolicy(compactThreshold)" @click.prevent="openDropdown('compact',$event)"><template #media><f7-icon f7="arrow_2_circlepath"/></template></f7-list-item>
+      <!-- One row for how a handoff goes: the compactions before an automatic one, the
+           recent messages it carries, and whether one by hand asks. -->
+      <f7-list-item link no-chevron class="handoff-row" :title="ct('接續對話設定')" :after="handoffSummary(compactThreshold,handoff)" @click.prevent="editHandoff"><template #media><f7-icon f7="arrow_2_circlepath"/></template></f7-list-item>
       <!-- The wrap-up check: wrap-up questions for after each finished task,
            sent by CC Agent once the agent has sat idle. -->
       <f7-list-item class="wrap-up-toggle" :title="ct('自動收尾檢查')" :footer="ct('預設關閉。開啟後，Agent 完成任務並閒置一段時間，會自動請它確認工作已保存、筆記是最新的；只讀資料或回答問題不會送。')"><template #media><f7-icon f7="checkmark_seal"/></template><template #after><label class="toggle"><input type="checkbox" :aria-label="ct('自動收尾檢查')" :checked="wrapUp.enabled" @change="saveWrapUp({enabled:$event.target.checked})"/><span class="toggle-icon"></span></label></template></f7-list-item>
@@ -53,7 +55,7 @@
 </template>
 
 <script setup>
-import {ct,compactCount,compactPolicy} from '../js/agent-i18n.js';
+import {ct,compactCount,compactPolicy,handoffSummary} from '../js/agent-i18n.js';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { f7 } from 'framework7-vue';
 import { t } from '../js/i18n.js';
@@ -63,7 +65,7 @@ import GlassDropdown from '../components/GlassDropdown.vue';
 import UsageMeters from '../components/UsageMeters.vue';
 async function pullRefresh(done) { try { await Promise.all([loadUsage({fresh: true}), loadOpenReports(), loadAgentPreferences().catch(() => {})]); } finally { done(); } }
 import { usageGroups, watchUsage, loadUsage } from '../js/usage.js';
-import {wrapUp,archiveRetentionDays,compactThreshold,terminalSwitch,transcriptSwitch,loadAgentPreferences,saveAgentPreferences} from '../js/agentPreferences.js';
+import {handoff,wrapUp,archiveRetentionDays,compactThreshold,terminalSwitch,transcriptSwitch,loadAgentPreferences,saveAgentPreferences} from '../js/agentPreferences.js';
 
 const isAdmin = computed(() => currentUser.value?.role === 'admin');
 const toast = (text) => f7.toast.create({ text, closeTimeout: 1800 }).open();
@@ -99,6 +101,33 @@ async function saveWrapUp(patch){
   wrapUp.value={...previous,...patch};
   try{await saveAgentPreferences({wrapUp:patch});toast(t('settingsSaved'));}
   catch(e){wrapUp.value=previous;f7.dialog.alert(e.message||t('settingsFailed'));}
+}
+// The three are saved together: the server checks all of them before keeping any.
+function editHandoff(){
+  if(!isAdmin.value)return;
+  const h=handoff.value,options=[...Array.from({length:10},(_,i)=>i+1),0].map(n=>`<option value="${n}">${compactPolicy(n)}</option>`).join('');
+  const dialog=f7.dialog.create({title:ct('接續對話設定'),text:ct('自動接續也帶「帶入訊息」的數量；個別 Agent 在 Agent Profile 設的壓縮門檻不受影響。'),cssClass:'handoff-dialog',
+    content:`<div class="handoff-fields">
+      <label>${ct('自動接續')}<select class="handoff-threshold">${options}</select></label>
+      <label>${ct('帶入訊息')}（0～${h.max}）<input class="handoff-recent" type="number" min="0" max="${h.max}" step="1" inputmode="numeric"></label>
+      <label class="handoff-ask-row">${ct('手動接續時詢問')}<span class="toggle"><input class="handoff-ask" type="checkbox"><span class="toggle-icon"></span></span></label>
+      <div class="handoff-error" role="alert"></div>
+    </div>`,
+    buttons:[{text:ct('取消')},{text:ct('保存'),strong:true,close:false,onClick:async d=>{
+      const text=String(d.$el.find('.handoff-recent').val()??'').trim(),recent=Number(text);
+      // Said inside this dialog: Framework7 holds another one back until this closes.
+      const say=text=>d.$el.find('.handoff-error').text(text);
+      if(!/^\d+$/.test(text)||recent>h.max){say(ct('請輸入 0 到 ')+h.max);return;}
+      try{await saveAgentPreferences({compactThreshold:Number(d.$el.find('.handoff-threshold').val()),handoff:{recent,ask:d.$el.find('.handoff-ask').prop('checked')}});d.close();toast(t('settingsSaved'));}
+      catch(e){say(e.message||t('settingsFailed'));}
+    }}],
+    destroyOnClose:true});
+  dialog.open();
+  dialog.$el.find('.handoff-threshold').val(String(compactThreshold.value));
+  dialog.$el.find('.handoff-recent').val(String(h.recent));
+  dialog.$el.find('.handoff-ask').prop('checked',h.ask);
+  // The toggle's own markup takes the tap on the label.
+  dialog.$el.find('.handoff-ask-row .toggle').on('click',e=>{if(e.target.tagName!=='INPUT'){e.preventDefault();const box=dialog.$el.find('.handoff-ask')[0];box.checked=!box.checked;}});
 }
 function editWrapUpText(){
   if(!isAdmin.value)return;

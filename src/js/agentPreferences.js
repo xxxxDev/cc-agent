@@ -5,6 +5,8 @@ import {ref} from 'vue';
 import {api} from './api.js';
 
 export const compactThreshold = ref(5);
+// What a handoff carries and whether one by hand asks first.
+export const handoff = ref({recent: 12, ask: true, max: 50});
 export const terminalSwitch = ref(false);
 // The Transcript column's button; off until an admin switches it on.
 export const transcriptSwitch = ref(false);
@@ -19,6 +21,7 @@ export const scopedAgents = ref(null);
 function absorb(preferences) {
   if (!preferences || typeof preferences !== 'object') return preferences;
   if (Number.isInteger(preferences.compactThreshold)) compactThreshold.value = preferences.compactThreshold;
+  if (preferences.handoff && typeof preferences.handoff === 'object') handoff.value = preferences.handoff;
   terminalSwitch.value = preferences.terminalSwitch === true;
   transcriptSwitch.value = preferences.transcriptSwitch === true;
   if (preferences.wrapUp && typeof preferences.wrapUp === 'object') wrapUp.value = preferences.wrapUp;

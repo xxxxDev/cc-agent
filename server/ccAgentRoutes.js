@@ -269,7 +269,7 @@ app.post('/api/conversations/:id/:action',(req,res,next)=>{try{
  case 'start':agents.reconnect(c);break;
  // Paused by hand: schedules wait for it rather than starting it again.
  case 'stop':agents.stop(c);c.pausedByOwner=true;agents.save(c);break;
- case 'rotate':agents.rotate(c);break;
+ case 'rotate':agents.rotate(c,req.body?.recent);break;
  case 'memory':if(typeof req.body.text!=='string'||req.body.text.length>20000)throw agents.error('記憶最多 20000 字');c.memory=req.body.text;c.profileVersion=(c.profileVersion||0)+1;agents.save();break;
  case 'simulate-compact':if(c.mode!=='demo')throw agents.error('只有模擬模式可測試 compact',403);agents.bridge(c,'postcompact',{eventKey:require('node:crypto').randomUUID()});if(c.pendingRotation)agents.rotate(c);break;
  default:throw agents.error('Unknown action',404);

@@ -738,6 +738,12 @@ img[src$="/sources/anthropic-native.svg"] {
    field tall enough to read them in. */
 .dialog.wrap-up-dialog {--f7-dialog-width:min(560px,calc(100vw - 32px));}
 .dialog.wrap-up-dialog textarea.dialog-input {width:100%;box-sizing:border-box;height:min(300px,40vh);padding:8px 10px;line-height:1.5;resize:none;text-align:left;}
+.dialog.handoff-dialog {--f7-dialog-width:min(400px,calc(100vw - 32px));}
+.dialog.handoff-dialog .handoff-fields {display:flex;flex-direction:column;gap:12px;margin-top:12px;text-align:left;}
+.dialog.handoff-dialog .handoff-error {color:var(--f7-theme-color-error,#ff3b30);font-size:14px;min-height:0;}
+.dialog.handoff-dialog .handoff-error:empty {display:none;}
+.dialog.handoff-dialog .handoff-fields label {display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:15px;}
+.dialog.handoff-dialog .handoff-fields select,.dialog.handoff-dialog .handoff-fields input[type=number] {width:110px;flex:none;box-sizing:border-box;padding:6px 8px;border-radius:8px;background:var(--f7-list-bg-color,rgba(127,127,127,.12));color:inherit;font-size:15px;text-align:right;}
 
 /* While the divider between the conversation and its terminal is dragged, nothing
    is selected and the pointer stays a column-resize one. */
