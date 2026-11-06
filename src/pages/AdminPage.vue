@@ -37,14 +37,14 @@
       <f7-list-item v-if="wrapUp.enabled" link no-chevron class="wrap-up-text" :title="ct('收尾檢查內容')" :after="wrapUp.custom?ct('自訂'):ct('內建')" @click.prevent="editWrapUpText"><template #media><f7-icon f7="text_alignleft"/></template></f7-list-item>
     </f7-list>
 
+    <!-- Sign-in protection sits with the account settings. -->
     <f7-block-title>{{ t('sectionSystem') }}</f7-block-title>
     <f7-list inset class="cc-settings-list">
-      <f7-list-item link class="security-row" :title="ct('登入防禦')" @click.prevent="goSecurity"><template #media><f7-icon f7="shield_lefthalf_fill"/></template></f7-list-item>
+      <f7-list-item :title="ct('聊天室終端機切換')"><template #media><f7-icon f7="chevron_left_slash_chevron_right"/></template><template #after><label class="toggle"><input type="checkbox" :aria-label="ct('聊天室終端機切換')" :checked="terminalSwitch" @change="saveTerminalSwitch($event.target.checked)"/><span class="toggle-icon"></span></label></template></f7-list-item>
+      <f7-list-item class="transcript-switch" :title="ct('Transcript 檢視')"><template #media><f7-icon f7="ant" class="ant-icon"/></template><template #after><label class="toggle"><input type="checkbox" :aria-label="ct('顯示 Transcript 檢視按鈕')" :checked="transcriptSwitch" @change="saveTranscriptSwitch($event.target.checked)"/><span class="toggle-icon"></span></label></template></f7-list-item>
       <!-- The peer link: pairing with another machine. -->
       <f7-list-item link class="peer-link-row" :title="ct('跨機連線')" @click.prevent="goPeerLink"><template #media><f7-icon f7="link"/></template></f7-list-item>
       <f7-list-item link :title="ct('範圍報告單')" :badge="openReports||null" badge-color="orange" @click.prevent="goReports"><template #media><f7-icon f7="lock_shield"/></template></f7-list-item>
-      <f7-list-item :title="ct('聊天室終端機切換')"><template #media><f7-icon f7="chevron_left_slash_chevron_right"/></template><template #after><label class="toggle"><input type="checkbox" :aria-label="ct('聊天室終端機切換')" :checked="terminalSwitch" @change="saveTerminalSwitch($event.target.checked)"/><span class="toggle-icon"></span></label></template></f7-list-item>
-      <f7-list-item class="transcript-switch" :title="ct('Transcript 檢視')"><template #media><f7-icon f7="ant" class="ant-icon"/></template><template #after><label class="toggle"><input type="checkbox" :aria-label="ct('顯示 Transcript 檢視按鈕')" :checked="transcriptSwitch" @change="saveTranscriptSwitch($event.target.checked)"/><span class="toggle-icon"></span></label></template></f7-list-item>
     </f7-list>
 
     <f7-block-title>{{ t('sectionAccount') }}</f7-block-title>
@@ -52,6 +52,7 @@
       <f7-list-item link :title="t('manageUsers')" @click.prevent="goUsers">
         <template #media><f7-icon f7="person_2" /></template>
       </f7-list-item>
+      <f7-list-item link class="security-row" :title="ct('登入防禦')" @click.prevent="goSecurity"><template #media><f7-icon f7="shield_lefthalf_fill"/></template></f7-list-item>
     </f7-list>
 
     <!-- anchored glass dropdown -->

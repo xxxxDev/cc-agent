@@ -14,19 +14,24 @@ function applyUser(user) {
   if (user?.language) setLang(user.language, { persist: false });
 }
 
-const VERIFY_TIMEOUT_MS = 8000, VERIFY_TRIES = 2;
+const VERIFY_TIMEOUT_MS = 8000, VERIFY_RETRY_FOR_MS = 90 * 1000;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Only the server saying so signs the page out. A check that fails any other way, the
+// service restarting for a new version, a proxy answering 502, a network that just
+// changed, is asked again for a while on the start page instead of showing the sign-in
+// screen; a sign-in still valid on the server was otherwise lost at every restart. Each
+// check keeps its own time limit.
+const signedOut = (e) => e?.status === 401 || e?.status === 403;
 export async function verifyAuth() {
   authLoading.value = true;
   authError.value = null;
   try {
-    // A request that never answers (a phone back from the background, a network just
-    // changed) would leave the app on its start page for good: each check gets a time
-    // limit, and one that runs out is asked again.
     let data;
-    for (let tries = 1; ; tries++) {
+    const until = Date.now() + VERIFY_RETRY_FOR_MS;
+    for (let wait = 1000; ; wait = Math.min(wait * 2, 8000)) {
       try { data = await api('/auth/verify', { signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS) }); break; }
-      catch (e) { if (e?.name !== 'TimeoutError' || tries >= VERIFY_TRIES) throw e; }
+      catch (e) { if (signedOut(e) || Date.now() + wait > until) throw e; await sleep(wait); }
     }
     applyUser(data.user);
   } catch {
