@@ -153,7 +153,7 @@ function reconcile(c,{fresh=false}={}) {
  // to the agent or start it ask afresh (fresh).
  if(!fresh&&sessionSeenAt.get(g)>Date.now()-SESSION_RECHECK_MS)return c;
  try{execFileSync('tmux',['-L',tmuxSocket,'has-session','-t',g.tmux],{stdio:'ignore',timeout:2000});sessionSeenAt.set(g,Date.now());return c;}catch{}
- sessionSeenAt.delete(g);permissions.cancel(g);g.compacting=false;g.manualCompact=false;g.phase='error';g.ready=false;g.heartbeat=0;
+ sessionSeenAt.delete(g);permissions.cancel(g);g.compacting=false;g.compactPending=false;g.manualCompact=false;g.phase='error';g.ready=false;g.heartbeat=0;
  g.lastError='Claude session 已中斷（例如重開機後），請重新連線。';save(c);
  return c;
 }
@@ -925,7 +925,7 @@ function stop(c) {
  const g=active(c);
  if(c.mode==='claude') {try{execFileSync('tmux',['-L',tmuxSocket,'kill-session','-t',g.tmux],{timeout:5000,stdio:'ignore'});}catch{}}
  sessionSeenAt.delete(g);
- permissions.cancel(g);g.compacting=false;g.manualCompact=false;g.phase='stopped';g.ready=false;g.heartbeat=0;g.token=randomBytes(32).toString('hex');
+ permissions.cancel(g);g.compacting=false;g.compactPending=false;g.manualCompact=false;g.phase='stopped';g.ready=false;g.heartbeat=0;g.token=randomBytes(32).toString('hex');
  // Paused, deleted or restarted: a wake waiting for a usage limit is dropped, so a
  // task the owner stopped is not taken up again.
  delete g.limitResume;delete g.wrapUp;
@@ -1331,6 +1331,9 @@ function markReady(c,g){g.ready=true;g.phase='ready';g.lastError='';g.startedAt=
 const COMPACT_SCREEN_GRACE_MS=15000;
 // How long a compaction that was on screen may be gone from it before it is taken as ended.
 const COMPACT_GONE_MS=30000;
+// How long a PreCompact may wait for its compaction to show on screen.
+const COMPACT_PENDING_MS=15*60*1000;
+const COMPACT_DRAWN=/Compacting conversation|Running PreCompact hooks/;
 // Every action bridge() handles, and exactly those the channel sends: channel/server.mjs
 // (the MCP tools, poll, permission-request and permission-ack), channel/runner.mjs (error,
 // starting, heartbeat) and channel/hook.mjs (precompact, postcompact, result, failure).
@@ -1502,14 +1505,22 @@ function bridge(c,action,data={}) {
   // for from the page started when it was sent.
   if(!g.manualCompact||!g.compactSince)g.compactSince=Date.now();
   if(!g.manualCompact)g.compactPercent=null;
-  g.compacting=true;g.compactSeen=false;g.compactDrawnAt=0;
+  // A subagent's compaction fires this hook too, in the same session and with nothing in
+  // the payload to tell them apart, and the agent stays free meanwhile (issue #5, PR #6).
+  // And a real one may first draw its line well after the hook: a compaction of several
+  // minutes left the page unlocked, its PreCompact let go after 15 s. So only one asked
+  // for from the page locks at once; any other waits for the agent's own screen to show
+  // it (takeCompactScreen), until the turn ends.
+  if(g.manualCompact)g.compacting=true;
+  else if(!g.compacting)g.compactPending=true;
+  g.compactSeen=false;g.compactDrawnAt=0;
   // A new file only, in a folder the agent can write: never through a link it left there
   // under a name it could guess.
   const backup=path.join(stateRoot,'workspaces',c.id,'g'+g.number,'precompact-'+Date.now()+'-'+randomUUID().slice(0,8)+'.json');
   try{const fd=fs.openSync(backup,fs.constants.O_WRONLY|fs.constants.O_CREAT|fs.constants.O_EXCL|fs.constants.O_NOFOLLOW,0o600);try{fs.writeSync(fd,JSON.stringify({messages:c.messages,memory:c.memory}));}finally{fs.closeSync(fd);}}catch(e){console.error(`precompact backup not written for ${c.id}: ${e.code||e.message}`);}
  }
  else if(action==='postcompact'){
-  g.compacting=false;
+  g.compacting=false;g.compactPending=false;
   // A start that compacted gets its whole ceiling again from here.
   if(g.phase==='starting'&&g.startedAt)g.startedAt=Date.now();
   const key=createHash('sha256').update(g.sessionId+String(data.eventKey||data.compact_summary||'')).digest('hex');
@@ -1528,6 +1539,7 @@ function bridge(c,action,data={}) {
  else if(action==='result'){
   // A turn that ended is not compacting: a compaction whose end never reached us
   // (no PostCompact, a restart in between) left the page on 整理對話記憶 for good.
+  g.compactPending=false;
   if(g.compacting&&!g.manualCompact){g.compacting=false;g.compactPercent=null;}
   // A turn that ended normally ran on a limit that is back.
   delete g.limitResume;
@@ -1593,6 +1605,7 @@ function bridge(c,action,data={}) {
   // The turn is over and Claude is still running, so the agent is ready for the
   // next message; the one it was answering is marked unanswered and the reason
   // shown, rather than leaving the page on "thinking" with sending refused.
+  g.compactPending=false;
   const failureKey=typeof data.eventKey==='string'?data.eventKey.slice(0,200):'';
   if(failureKey&&(g.failureKeys||[]).includes(failureKey))return {ok:true};
   if(failureKey)g.failureKeys=[...(g.failureKeys||[]),failureKey].slice(-32);
@@ -1620,8 +1633,8 @@ function bridge(c,action,data={}) {
   // The screen answers for the compaction it was read during: one that ended or failed
   // meanwhile, or another that began, is left to the next heartbeat.
   const key=c.id+':compact',token=g.token,session=g.sessionId,target=g.tmux,since=g.compactSince;
-  const same=()=>active(c)===g&&g.token===token&&g.sessionId===session&&g.tmux===target&&g.compactSince===since&&(g.manualCompact||g.compacting)&&!['error','stopped'].includes(g.phase);
-  if((g.manualCompact||g.compacting)&&!capturing.has(key)){
+  const same=()=>active(c)===g&&g.token===token&&g.sessionId===session&&g.tmux===target&&g.compactSince===since&&(g.manualCompact||g.compacting||g.compactPending)&&!['error','stopped'].includes(g.phase);
+  if((g.manualCompact||g.compacting||g.compactPending)&&!capturing.has(key)){
    capturing.add(key);
    capturePane(target)
     .then(screen=>{if(screen!==null&&same()&&takeCompactScreen(g,screen))save(c);})
@@ -1636,6 +1649,12 @@ function bridge(c,action,data={}) {
 function takeCompactScreen(g,screen){
  let changed=false;
  g.compactPercent=compactScreen.compactPercent(screen);
+ // A PreCompact not yet known to be the main thread's: the screen says so, or the turn
+ // ends, or it has waited longer than any compaction runs (an idle session has no turn).
+ if(g.compactPending){
+  if(COMPACT_DRAWN.test(screen)){g.compactPending=false;g.compacting=true;changed=true;}
+  else if(Date.now()-(g.compactSince||0)>COMPACT_PENDING_MS)g.compactPending=false;
+ }
  // Claude Code also fires PreCompact for a summary it precomputes in the
  // background while the agent keeps working; that one never draws
  // "Running PreCompact hooks" or "Compacting conversation" (2.1.286) and may never
@@ -1647,7 +1666,7 @@ function takeCompactScreen(g,screen){
  // idle", 2.1.296) and sends no PostCompact for it, and since a compacting agent takes
  // no message, no turn could end to clear it either: the page stayed on 整理對話記憶
  // until the agent was restarted.
- if(g.compacting&&!g.manualCompact){if(/Compacting conversation|Running PreCompact hooks/.test(screen)){g.compactSeen=true;g.compactDrawnAt=Date.now();}
+ if(g.compacting&&!g.manualCompact){if(COMPACT_DRAWN.test(screen)){g.compactSeen=true;g.compactDrawnAt=Date.now();}
   else if(!g.compactSeen&&g.compactSince&&Date.now()-g.compactSince>COMPACT_SCREEN_GRACE_MS){g.compacting=false;g.compactPercent=null;changed=true;}
   else if(g.compactSeen&&Date.now()-(g.compactDrawnAt||g.compactSince||0)>COMPACT_GONE_MS){g.compacting=false;g.compactPercent=null;changed=true;}}
  if(g.manualCompact){const last=screen.slice(screen.lastIndexOf('❯ /compact'));if(last.includes('Not enough messages to compact.')){g.manualCompact=false;g.phase='ready';g.lastError='訊息量不足，Claude 未執行 compact；可以繼續聊天。';changed=true;}}
