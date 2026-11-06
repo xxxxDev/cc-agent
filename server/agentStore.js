@@ -153,7 +153,7 @@ function reconcile(c,{fresh=false}={}) {
  // to the agent or start it ask afresh (fresh).
  if(!fresh&&sessionSeenAt.get(g)>Date.now()-SESSION_RECHECK_MS)return c;
  try{execFileSync('tmux',['-L',tmuxSocket,'has-session','-t',g.tmux],{stdio:'ignore',timeout:2000});sessionSeenAt.set(g,Date.now());return c;}catch{}
- sessionSeenAt.delete(g);permissions.cancel(g);g.compacting=false;g.compactPending=false;g.manualCompact=false;g.phase='error';g.ready=false;g.heartbeat=0;
+ sessionSeenAt.delete(g);permissions.cancel(g);g.compacting=false;g.compactPending=false;g.manualCompact=false;g.phase='error';g.ready=false;g.heartbeat=0;wakeFailed(c,g);
  g.lastError='Claude session 已中斷（例如重開機後），請重新連線。';save(c);
  return c;
 }
@@ -964,7 +964,10 @@ function send(c,text,key,attachmentIds=[],extra={}) {
  if(c.pendingRotation)throw error('正在準備交接，請稍候。',409);
  const files=attachments.resolve(stateRoot,c,attachmentIds);
  // Started only once the message is known good, so a refused one starts nothing.
- if(wake){launch(c);g=active(c);g.wokenBySend=true;add(c,'system','有訊息進來，正在啟動第 '+c.generation+' 代對話。',{notice:'woken'});}
+ if(wake){
+  // A failed start says so plainly to whoever sent it (a bot, another machine); the detail stays on the agent.
+  try{launch(c);}catch(e){try{active(c).lastError=e.message;save(c);}catch{}throw error('Agent 無法啟動，請稍後再試，或請擁有者重新連線。',503);}
+ g=active(c);g.wokenBySend=true;add(c,'system','有訊息進來，正在啟動第 '+c.generation+' 代對話。',{notice:'woken'});}
  // Anyone's message wakes it already: the automatic one is not sent after it.
  if(!extra.limitResume)delete g.limitResume;
  // Work goes on: the wrap-up check waits for the next finished answer.
@@ -1999,6 +2002,9 @@ function stopAgentsOf(owner){
  const stopped=[],failed=[];
  for(const c of state.conversations){
   if(c.owner!==owner)continue;
+  // One waiting for its first message (a lazy handoff) is held too, so neither a message
+  // nor a schedule starts it once the account is back (independent review).
+  if(active(c).dormant){delete active(c).dormant;c.pausedByOwner=true;save(c);continue;}
   if(active(c).phase==='stopped')continue;
   c.pausedByOwner=true;
   try{stop(c);add(c,'system','帳號已停用，這個 Agent 已停止；重新啟用帳號後，它和它的排程都會等到有人手動啟動它。',{notice:'account-disabled'});save(c);stopped.push(c.id);}
