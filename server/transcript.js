@@ -168,6 +168,9 @@ function trackBackground(state, record) {
 // Code's end-of-turn records, or an interruption, close it.
 const TURN_END = new Set(['turn_duration', 'stop_hook_summary']);
 const NOT_A_PROMPT = /^<(command-name|command-message|command-args|local-command-stdout|local-command-stderr|local-command-caveat)>/;
+// /compact is written as plain text and no end-of-turn record follows it, so taken as a
+// prompt it left an idle agent shown as working. Compacting has its own state.
+const COMPACT_COMMAND = /^\/compact(\s|$)/;
 const INTERRUPTED = '[Request interrupted by user';
 // A turn whose end never showed up stops counting once nothing has been written
 // for this long with no tool running.
@@ -183,7 +186,7 @@ function trackTurn(state, record) {
   const content = record.message?.content;
   if (typeof content === 'string') {
     const text = content.trimStart();
-    if (NOT_A_PROMPT.test(text)) return;
+    if (NOT_A_PROMPT.test(text) || COMPACT_COMMAND.test(text)) return;
     // Claude Code's own notes are meta; so are channel messages, which are prompts.
     if (record.isMeta && !text.startsWith('<channel ') && !AGENT_WAKE.test(text)) return;
     state.turnOpen = true;
