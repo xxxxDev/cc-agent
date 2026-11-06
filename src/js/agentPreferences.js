@@ -6,7 +6,7 @@ import {api} from './api.js';
 
 export const compactThreshold = ref(5);
 // What a handoff carries and whether one by hand asks first.
-export const handoff = ref({recent: 12, ask: true, max: 50});
+export const handoff = ref({recent: 12, ask: true, lazy: false, max: 50});
 // The subagents' model and effort for every agent that does not set its own.
 export const subagents = ref({model: '', lock: false, effort: ''});
 export const terminalSwitch = ref(false);

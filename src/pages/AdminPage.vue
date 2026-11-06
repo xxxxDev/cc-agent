@@ -127,6 +127,8 @@ function editHandoff(){
       <label>${ct('自動接續')}<select class="handoff-threshold">${options}</select></label>
       <label>${ct('帶入訊息')}（0～${h.max}）<input class="handoff-recent" type="number" min="0" max="${h.max}" step="1" inputmode="numeric"></label>
       <label class="handoff-ask-row">${ct('手動接續時詢問')}<span class="toggle"><input class="handoff-ask" type="checkbox"><span class="toggle-icon"></span></span></label>
+      <label>${ct('接續後')}<select class="handoff-lazy"><option value="now">${ct('立即啟動')}</option><option value="lazy">${ct('等第一則訊息')}</option></select></label>
+      <div class="sub-note">${ct('選「等第一則訊息」時，新 session 會在下一則訊息進來時才啟動，省下沒用到的開機額度；第一則回覆會慢一點。其他 agent 直接在本機傳來的訊息叫不醒它。')}</div>
       <div class="handoff-error" role="alert"></div>
     </div>`,
     buttons:[{text:ct('取消')},{text:ct('保存'),strong:true,close:false,onClick:async d=>{
@@ -134,7 +136,7 @@ function editHandoff(){
       // Said inside this dialog: Framework7 holds another one back until this closes.
       const say=text=>d.$el.find('.handoff-error').text(text);
       if(!/^\d+$/.test(text)||recent>h.max){say(ct('請輸入 0 到 ')+h.max);return;}
-      try{await saveAgentPreferences({compactThreshold:Number(d.$el.find('.handoff-threshold').val()),handoff:{recent,ask:d.$el.find('.handoff-ask').prop('checked')}});d.close();toast(t('settingsSaved'));}
+      try{await saveAgentPreferences({compactThreshold:Number(d.$el.find('.handoff-threshold').val()),handoff:{recent,ask:d.$el.find('.handoff-ask').prop('checked'),lazy:d.$el.find('.handoff-lazy').val()==='lazy'}});d.close();toast(t('settingsSaved'));}
       catch(e){say(e.message||t('settingsFailed'));}
     }}],
     destroyOnClose:true});
@@ -142,6 +144,7 @@ function editHandoff(){
   dialog.$el.find('.handoff-threshold').val(String(compactThreshold.value));
   dialog.$el.find('.handoff-recent').val(String(h.recent));
   dialog.$el.find('.handoff-ask').prop('checked',h.ask);
+  dialog.$el.find('.handoff-lazy').val(h.lazy?'lazy':'now');
   // The toggle's own markup takes the tap on the label.
   dialog.$el.find('.handoff-ask-row .toggle').on('click',e=>{if(e.target.tagName!=='INPUT'){e.preventDefault();const box=dialog.$el.find('.handoff-ask')[0];box.checked=!box.checked;}});
 }

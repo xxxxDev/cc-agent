@@ -404,7 +404,7 @@ watch(terminalOpen,(open,was)=>{
 },{flush:'pre'});
 // Sending is open while Claude answers too: the message waits in line, as in its
 // own terminal. Not while it compacts, which the server refuses.
-const canSend=computed(()=>(draft.value.trim()||files.value.length)&&(detail.value?.phase==='ready'||(detail.value?.phase==='busy'&&!detail.value?.compacting))&&!busy.value&&!agentLocked.value);
+const canSend=computed(()=>(draft.value.trim()||files.value.length)&&(detail.value?.phase==='ready'||(detail.value?.phase==='busy'&&!detail.value?.compacting)||detail.value?.dormant)&&!busy.value&&!agentLocked.value);
 async function attempt(fn){error.value='';try{return await fn();}catch(e){error.value=e.message;if(e.status===401){detail.value=null;selected.value=null;exitConversationRoute();}return null;}}
 function conversationMenu(c,event){const rect=event.currentTarget.getBoundingClientRect();menuPoint.value={clientX:event.clientX||rect.left+rect.width/2,clientY:event.clientY||rect.top+rect.height/2};menuConversation.value=c;}
 function renameConversation(c){f7.dialog.prompt(ct("輸入 Agent 名稱"),ct("重新命名"),async title=>{await attempt(()=>api('/conversations/'+c.id+'/rename',{method:'POST',body:JSON.stringify({title})}));const r=await attempt(()=>api('/conversations'));if(r)conversations.value=r.conversations;},()=>{},escapeHtml(c.title));}

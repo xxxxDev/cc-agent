@@ -485,6 +485,12 @@ const english = {
   "自動接續": "Automatic handoff",
   "帶入訊息": "Messages carried",
   "手動接續時詢問": "Ask each time by hand",
+  "接續後": "After a handoff",
+  "立即啟動": "Start at once",
+  "等第一則訊息再啟動": "start at the first message",
+  "等第一則訊息": "At the first message",
+  "已接續，等第一則訊息再啟動": "Handed off: starts at the first message",
+  "選「等第一則訊息」時，新 session 會在下一則訊息進來時才啟動，省下沒用到的開機額度；第一則回覆會慢一點。其他 agent 直接在本機傳來的訊息叫不醒它。": "With \"At the first message\", the new session starts when the next message arrives, saving the start-up of a session nobody uses; the first reply is slower. A message another agent sends straight to its session on this machine does not wake it.",
   "自動接續也帶「帶入訊息」的數量；個別 Agent 在 Agent Profile 設的壓縮門檻不受影響。": "An automatic handoff carries the same number of messages. A compaction threshold set in an agent's own Agent Profile is kept.",
   "接續對話": "Continue conversation",
   "記憶已保存": "Memory saved",
@@ -854,8 +860,8 @@ export function compactCount(n) {return lang.value==='zh-TW'?`${n} 次`:`${n} ${
 // The handoff policy as Settings shows it: 0 is never handing off automatically.
 export function handoffCount(n) {return lang.value==='zh-TW'?`${n} 則`:`${n} ${Number(n)===1?'message':'messages'}`;}
 // The admin page's handoff row: when it happens by itself, what it carries, whether it asks.
-export function handoffSummary(threshold,{recent=12,ask=true}={}) {
+export function handoffSummary(threshold,{recent=12,ask=true,lazy=false}={}) {
  const auto=Number(threshold)===0?ct('不自動換代'):lang.value==='zh-TW'?`壓縮 ${threshold} 次後自動`:`auto after ${compactCount(threshold)}`;
- return [auto,(lang.value==='zh-TW'?'帶 ':'carry ')+handoffCount(recent),ask?ct('每次詢問'):ct('不詢問')].join(lang.value==='zh-TW'?'・':' · ');
+ return [auto,(lang.value==='zh-TW'?'帶 ':'carry ')+handoffCount(recent),ask?ct('每次詢問'):ct('不詢問'),...(lazy?[ct('等第一則訊息再啟動')]:[])].join(lang.value==='zh-TW'?'・':' · ');
 }
 export function compactPolicy(n) {return Number(n)===0?ct('不自動換代'):compactCount(n);}

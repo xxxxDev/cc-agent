@@ -143,7 +143,7 @@ function reconcile(c,{fresh=false}={}) {
  // A compaction during the start is not on the clock either: an agent resuming a long
  // session may compact before it can call ready.
  if(g.phase==='starting'&&!g.compacting&&g.startedAt&&g.startedAt<Date.now()-(g.heartbeat>Date.now()-STALE_MS?STARTUP_SLOW_MS:STARTUP_LIMIT_MS)){
-  permissions.cancel(g);g.phase='error';g.ready=false;
+  permissions.cancel(g);g.phase='error';g.ready=false;wakeFailed(c,g);
   g.lastError='Claude 已啟動，但一直沒有完成連線交握。請按重新連線再試一次。';save(c);
   return c;
  }
@@ -227,7 +227,7 @@ function publicView(c,full=false,window) {
  const work=c.mode==='claude'&&alive?transcript.currentWork(stateRoot,c):{inTurn:false,background:0};
  const lastMessage=c.messages.findLast(m=>m.role==='user'||m.role==='assistant'||m.role==='relay');
  const preview=String(lastMessage?.text||lastMessage?.attachments?.map(f=>f.name).join(', ')||'').replace(/\s+/g,' ').trim();
- return {preview:Array.from(preview).slice(0,500).join('')+(Array.from(preview).length>500?'…':''),activeAt:lastMessage?.at||c.createdAt||null,id:c.id,...profile,...modelView(c),profileVersion:c.profileVersion||0,sessionModel:g.model||null,sessionEffort:g.effort||null,mode:c.mode,createdAt:c.createdAt,updatedAt:c.updatedAt,generation:c.generation,compactCount:g.compacts,threshold:c.threshold,thresholdOwn:!!c.thresholdOwn,wrapUp:c.wrapUpOff!==true,peerLink:peerView(c),phase:alive&&busyElsewhere(c,g,work)?'busy':g.phase,background:work.background,compacting:!!(g.manualCompact||g.compacting),compactingSince:(g.manualCompact||g.compacting)&&g.compactSince?new Date(g.compactSince).toISOString():null,compactPercent:(g.manualCompact||g.compacting)&&Number.isFinite(g.compactPercent)?g.compactPercent:null,connected:alive&&g.ready,tmux:g.tmux,sessionId:g.sessionId,pendingRotation:c.pendingRotation,checklists:c.checklists||[],avatar:c.avatar?'/api/conversations/'+c.id+'/avatar?v='+c.avatar.version:null,listGroup:c.listGroup||null,lastError:g.lastError||'',unread:unreadCount(c),toolPolicy:g.toolPolicy||'legacy',terminalPrompt:alive&&prompts.get(c.id)?.session===g.sessionId?(({key,title,body,options,selected,hint,since})=>({key,title,body,options,selected,hint,since}))(prompts.get(c.id)):null,permissions:permissions.pending(g),...(full?{handoffSetting:handoffSetting(),subagents:c.subagents?subagentClean(c.subagents):null,subagentDefault:subagentDefault(),subagentsApply:subagentsApply(c),subagentPending:subagentPending(c),subagentWaiting:!!c.relaunchOnStart&&subagentPending(c),memory:c.memory,...messageWindow(c,window),runs:c.runs.map(({token,seen,permissions,...x})=>x),usage:transcript.usage(stateRoot,c),progress:transcript.progress(stateRoot,c)}:{})};
+ return {preview:Array.from(preview).slice(0,500).join('')+(Array.from(preview).length>500?'…':''),activeAt:lastMessage?.at||c.createdAt||null,id:c.id,...profile,...modelView(c),profileVersion:c.profileVersion||0,sessionModel:g.model||null,sessionEffort:g.effort||null,mode:c.mode,createdAt:c.createdAt,updatedAt:c.updatedAt,generation:c.generation,compactCount:g.compacts,threshold:c.threshold,thresholdOwn:!!c.thresholdOwn,wrapUp:c.wrapUpOff!==true,peerLink:peerView(c),phase:alive&&busyElsewhere(c,g,work)?'busy':g.phase,background:work.background,compacting:!!(g.manualCompact||g.compacting),compactingSince:(g.manualCompact||g.compacting)&&g.compactSince?new Date(g.compactSince).toISOString():null,compactPercent:(g.manualCompact||g.compacting)&&Number.isFinite(g.compactPercent)?g.compactPercent:null,connected:alive&&g.ready,tmux:g.tmux,sessionId:g.sessionId,pendingRotation:c.pendingRotation,checklists:c.checklists||[],avatar:c.avatar?'/api/conversations/'+c.id+'/avatar?v='+c.avatar.version:null,listGroup:c.listGroup||null,lastError:g.lastError||'',unread:unreadCount(c),toolPolicy:g.toolPolicy||'legacy',terminalPrompt:alive&&prompts.get(c.id)?.session===g.sessionId?(({key,title,body,options,selected,hint,since})=>({key,title,body,options,selected,hint,since}))(prompts.get(c.id)):null,permissions:permissions.pending(g),dormant:!!(g.dormant&&g.phase==='stopped'),...(full?{handoffSetting:handoffSetting(),subagents:c.subagents?subagentClean(c.subagents):null,subagentDefault:subagentDefault(),subagentsApply:subagentsApply(c),subagentPending:subagentPending(c),subagentWaiting:!!c.relaunchOnStart&&subagentPending(c),memory:c.memory,...messageWindow(c,window),runs:c.runs.map(({token,seen,permissions,...x})=>x),usage:transcript.usage(stateRoot,c),progress:transcript.progress(stateRoot,c)}:{})};
 }
 // callerRole is a separate argument, never read from the request body: the body
 // is client-controlled, and the model and effort tiers in agentProfile depend on it.
@@ -561,6 +561,8 @@ function launch(c) {
   // starts the server. Hand it the agent allowlist, not the service's secrets.
   execFileSync('tmux',['-L',tmuxSocket,'new-session','-d','-s',g.tmux,'-c',dir,quote(process.execPath)+' '+quote(path.join(ROOT,'channel/runner.mjs'))+' '+quote(configPath)],{timeout:5000,env:agentEnv()});
   delete c.pausedByOwner;
+  // Started: no longer waiting for a first message (a failed start keeps it waiting).
+  delete g.dormant;
   g.model=config.model;g.effort=config.effort;g.subagentEnv=config.subagentEnv||{};g.profileHash=null;g.toolPolicy='native-bypass';g.phase='starting';g.ready=false;g.lastError='';g.heartbeat=Date.now();g.startedAt=Date.now();g.launchedAt=Date.now();save(c);
  }catch(e){g.phase='error';g.lastError='tmux 啟動失敗：'+e.message;save(c);throw error(g.lastError,500);}
 }
@@ -923,6 +925,9 @@ function starterOps(c,action,data){
 }
 function stop(c) {
  const g=active(c);
+ // Stopped by hand or paused: a waiting session is now an ordinary stopped one, which a
+ // message does not start.
+ delete g.dormant;delete g.wokenBySend;
  if(c.mode==='claude') {try{execFileSync('tmux',['-L',tmuxSocket,'kill-session','-t',g.tmux],{timeout:5000,stdio:'ignore'});}catch{}}
  sessionSeenAt.delete(g);
  permissions.cancel(g);g.compacting=false;g.compactPending=false;g.manualCompact=false;g.phase='stopped';g.ready=false;g.heartbeat=0;g.token=randomBytes(32).toString('hex');
@@ -941,13 +946,25 @@ function send(c,text,key,attachmentIds=[],extra={}) {
  // stale; nothing otherwise), not taken from the list's cached check: a message is
  // not handed to an agent that died within those fifteen seconds.
  if(c.mode==='claude')reconcile(c,{fresh:true});
- const g=active(c);
+ let g=active(c);
+ // A session left to start with its first message (a lazy handoff, issue #11) starts
+ // now and takes this one as soon as it is ready: anyone's message, from the page, a
+ // group, another machine or a schedule; not CC Agent's own wrap-up check, resume or
+ // login notice, which are about work this session has not done; never one paused.
+ // While a session started that way is coming up, more messages queue behind the
+ // first instead of being refused.
+ const own=extra.wrapUp||extra.limitResume||extra.loginNotice;
+ const wake=c.mode==='claude'&&g.dormant&&g.phase==='stopped'&&!own&&!c.pendingRotation&&!c.pausedByOwner&&!c.pausedForUpdate;
+ const waking=c.mode==='claude'&&g.wokenBySend&&!g.ready&&['starting','awaiting-workspace','awaiting-confirmation'].includes(g.phase)&&!own;
+ const woke=wake||waking;
  // A message may go in while Claude is answering, as in its own terminal: it is
  // queued and Claude takes it at the next point it can. Not while it is compacting or being started, reconnected or
  // handed off, when there is no session to take it.
- if(!g.ready||!['ready','busy'].includes(g.phase)||g.compacting||g.manualCompact)throw error('請等待目前回覆完成，或先連線 Claude。',409);
+ if(!woke&&(!g.ready||!['ready','busy'].includes(g.phase)||g.compacting||g.manualCompact))throw error('請等待目前回覆完成，或先連線 Claude。',409);
  if(c.pendingRotation)throw error('正在準備交接，請稍候。',409);
  const files=attachments.resolve(stateRoot,c,attachmentIds);
+ // Started only once the message is known good, so a refused one starts nothing.
+ if(wake){launch(c);g=active(c);g.wokenBySend=true;add(c,'system','有訊息進來，正在啟動第 '+c.generation+' 代對話。',{notice:'woken'});}
  // Anyone's message wakes it already: the automatic one is not sent after it.
  if(!extra.limitResume)delete g.limitResume;
  // Work goes on: the wrap-up check waits for the next finished answer.
@@ -956,14 +973,17 @@ function send(c,text,key,attachmentIds=[],extra={}) {
  // The placeholder title becomes the first message, for an agent an admin made
  // untitled; one an earlier build made from a template (templateId) keeps its name.
  if(c.title==='新的對話'&&!c.templateId)c.title=(text.trim()||files[0]?.name||'新的對話').slice(0,28);
- g.phase='busy';save(c);
+ // Starting stays starting: the channel's poll hands the queue over once it is ready.
+ if(g.ready||!woke)g.phase='busy';save(c);
  if(c.mode==='demo')setTimeout(()=>{if(active(c)!==g||g.phase!=='busy')return; m.delivery='completed';add(c,'assistant','【模擬回覆，未呼叫 Claude】\n已收到：'+m.text+'\n\n此模式可測試登入隔離、聊天保存與交接流程。已保存記憶：'+(c.memory||'尚無'));g.phase='ready';g.heartbeat=Date.now();save(c);},450);
  return m;
 }
 // How many recent messages a handoff carries, and whether one by hand asks first
-// (issue #9): one setting, which an automatic handoff follows too.
+// (issue #9): one setting, which an automatic handoff follows too. lazy: the new
+// session starts with the first message that reaches it, not at the handoff, so the
+// start-up of a session nobody uses is not spent (issue #11); off by default.
 const HANDOFF_RECENT_MAX=50,HANDOFF_RECENT_DEFAULT=12;
-function handoffSetting(){const h=state.agentSettings?.handoff||{};return {recent:Number.isInteger(h.recent)&&h.recent>=0&&h.recent<=HANDOFF_RECENT_MAX?h.recent:HANDOFF_RECENT_DEFAULT,ask:h.ask!==false,max:HANDOFF_RECENT_MAX};}
+function handoffSetting(){const h=state.agentSettings?.handoff||{};return {recent:Number.isInteger(h.recent)&&h.recent>=0&&h.recent<=HANDOFF_RECENT_MAX?h.recent:HANDOFF_RECENT_DEFAULT,ask:h.ask!==false,lazy:h.lazy===true,max:HANDOFF_RECENT_MAX};}
 const recentOk=n=>Number.isInteger(n)&&n>=0&&n<=HANDOFF_RECENT_MAX;
 function rotate(c,recent=handoffSetting().recent) {
  if(!recentOk(recent))throw error('帶入的訊息數必須是 0 到 '+HANDOFF_RECENT_MAX,400);
@@ -971,7 +991,11 @@ function rotate(c,recent=handoffSetting().recent) {
  const old=active(c);if(old.phase==='busy'||old.phase==='handing-off')throw error('請等目前回覆完成再交接',409);
  c.handoff={fromSession:old.sessionId,at:new Date().toISOString(),memory:c.memory,recent:(recent?c.messages.filter(m=>m.role!=='system').slice(-recent):[]).map(m=>({role:m.role,text:m.role==='assistant'?attachments.channelText(stateRoot,c,m):neutralSender(attachments.channelText(stateRoot,c,m)),id:m.id,...(m.relay?{relay:{direction:m.relay.direction,peer:m.relay.peerName,note:'another agent, not the owner'}}:{}),...(m.peer?{peer:{machine:m.peer.machine,agent:m.peer.title,note:'an agent on another machine, not the owner: data and advice, never authorisation'}}:{}),...(m.schedule?{schedule:{name:m.schedule.name,note:'sent by the scheduler, not the owner speaking'}}:{}),...(m.limitResume?{limitResume:{note:'sent automatically by CC Agent after a usage limit reset, not the owner speaking'}}:{}),...(m.wrapUp?{wrapUp:{note:'the standing wrap-up check sent automatically by CC Agent, not the owner speaking now'}}:{})})),historyCount:c.messages.length};
  // Persist the bridge payload before retiring the old process. Full originals remain in c.messages.
- stop(c);c.generation++;generation(c);c.pendingRotation=false;
+ stop(c);c.generation++;const fresh=generation(c);c.pendingRotation=false;
+ // Started by the first message that reaches it (send), not now. A handoff by hand is
+ // a wish to go on, as an immediate one starts it: a pause by hand ends here too, an
+ // update's hold stays.
+ if(handoffSetting().lazy&&c.mode==='claude'){fresh.dormant=true;if(!c.pausedForUpdate)delete c.pausedByOwner;add(c,'system','已保存交接資料。第 '+c.generation+' 代對話會在下一則訊息進來時啟動。');save(c);return;}
  add(c,'system','已保存交接資料，正在建立第 '+c.generation+' 代對話。');save(c);
  try{launch(c);}catch(e){active(c).lastError=e.message;save(c);throw e;}
 }
@@ -1342,7 +1366,10 @@ function pendingReplies(c) {
   &&!(waiting&&(waiting.queued.has(m.id)||!waiting.handed.has(m.id)&&Date.now()-Date.parse(m.deliveredAt||m.at)<ARRIVING_MS)));
 }
 const LIVE_AGAIN=new Set(['Claude session 已中斷（例如重開機後），請重新連線。','Claude 已啟動，但一直沒有完成連線交握。請按重新連線再試一次。','頻道中斷，自動重新連線後仍沒有回來。請按重新連線再試一次。']);
-function markReady(c,g){g.ready=true;g.phase='ready';g.lastError='';g.startedAt=0;const marker=path.join(controlDir(c,g),'started.marker');if(c.mode==='claude')fs.writeFileSync(marker,g.sessionId,{mode:0o600});}
+// A start a message caused that did not come up: what was queued for it is not handed
+// over hours later by a reconnect, and says so.
+function wakeFailed(c,g){if(!g.wokenBySend)return;delete g.wokenBySend;for(const m of c.messages)if(m.role==='user'&&m.delivery==='queued')m.delivery='interrupted';}
+function markReady(c,g){delete g.wokenBySend;g.ready=true;g.phase='ready';g.lastError='';g.startedAt=0;const marker=path.join(controlDir(c,g),'started.marker');if(c.mode==='claude')fs.writeFileSync(marker,g.sessionId,{mode:0o600});}
 const COMPACT_SCREEN_GRACE_MS=15000;
 // How long a compaction that was on screen may be gone from it before it is taken as ended.
 const COMPACT_GONE_MS=30000;
@@ -1670,7 +1697,7 @@ function bridge(c,action,data={}) {
   // The login is gone: a card at the foot of the chat, and a push.
   if(data.error==='authentication_failed'&&usesClaudeLogin(c)){g.lastError='';addLoginCard(c,{failed:true,retry:unanswered});}
  }
- else if(action==='error'){permissions.cancel(g);g.phase='error';g.ready=false;g.lastError=String(data.message||'Claude 已離線').slice(0,1000);}
+ else if(action==='error'){permissions.cancel(g);g.phase='error';g.ready=false;wakeFailed(c,g);g.lastError=String(data.message||'Claude 已離線').slice(0,1000);}
  else if(action==='starting'){g.phase='starting';g.startedAt=Date.now();}
  else if(action==='heartbeat'){
   // A heartbeat is only "still alive", and memory is what answers that while the
@@ -2266,6 +2293,7 @@ function setPreferences(owner,{compactThreshold,handoff,subagents,terminalSwitch
   if(!handoff||typeof handoff!=='object'||Array.isArray(handoff))throw error('接續設定格式不正確');
   if(handoff.recent!==undefined&&!recentOk(handoff.recent))throw error('帶入的訊息數必須是 0 到 '+HANDOFF_RECENT_MAX);
   if(handoff.ask!==undefined&&typeof handoff.ask!=='boolean')throw error('接續時詢問必須是開或關');
+  if(handoff.lazy!==undefined&&typeof handoff.lazy!=='boolean')throw error('接續後啟動的方式必須是立即或等第一則訊息');
  }
  // 0 means never hand off automatically; the manual handoff stays.
  if(compactThreshold!==undefined&&(!Number.isInteger(compactThreshold)||compactThreshold<0||compactThreshold>10))throw error('Compact 門檻必須為 0–10 次（0 為不自動換代）');
@@ -2274,7 +2302,7 @@ function setPreferences(owner,{compactThreshold,handoff,subagents,terminalSwitch
  if(transcriptSwitch!==undefined)state.agentSettings={...state.agentSettings,transcriptSwitch};
  if(compactThreshold!==undefined){state.agentSettings={...state.agentSettings,compactThreshold};for(const c of state.conversations)if(!c.archived&&!c.thresholdOwn){c.threshold=compactThreshold;if(compactThreshold===0)c.pendingRotation=false;}}
  if(checkedSubagents)state.agentSettings={...state.agentSettings,subagents:checkedSubagents};
- if(handoff!==undefined){const now=handoffSetting();state.agentSettings={...state.agentSettings,handoff:{recent:handoff.recent??now.recent,ask:handoff.ask??now.ask}};}
+ if(handoff!==undefined){const now=handoffSetting();state.agentSettings={...state.agentSettings,handoff:{recent:handoff.recent??now.recent,ask:handoff.ask??now.ask,lazy:handoff.lazy??now.lazy}};}
  if(retention!==undefined){const settings={...state.agentSettings};if(retention===null)delete settings.archiveRetentionDays;else settings.archiveRetentionDays=retention;state.agentSettings=settings;}
  if(wrapUp!==undefined){
   const next={...state.agentSettings?.wrapUp};
@@ -2749,7 +2777,7 @@ function runSchedules({now=Date.now(),ownerActive,only}={}){
    if(!c||c.archived){scheduleEnd(x,at,'skipped','Agent 已刪除',{extra:{nextAt:next}});continue;}
    if(!ownerActive(c.owner)){scheduleEnd(x,at,'skipped','擁有者帳號已停用',{extra:{nextAt:next}});continue;}
    const g=reconcile(c,{fresh:true})&&active(c);
-   if(!x.script&&!x.check&&!x.feed&&!takesMessages(c,g)&&['stopped','error'].includes(g.phase)&&x.whenPaused==='skip'){scheduleEnd(x,at,'skipped','Agent 沒有在執行',{extra:{nextAt:next}});continue;}
+   if(!x.script&&!x.check&&!x.feed&&!takesMessages(c,g)&&['stopped','error'].includes(g.phase)&&x.whenPaused==='skip'&&!(g.dormant&&!c.pausedByOwner&&!c.pausedForUpdate)){scheduleEnd(x,at,'skipped','Agent 沒有在執行',{extra:{nextAt:next}});continue;}
    scheduleRun(x,{nextAt:next,pendingRun:{since:at,due}});
   }
   if(!c||c.archived){scheduleEnd(x,at,'failed','Agent 已刪除');continue;}
@@ -2761,7 +2789,7 @@ function runSchedules({now=Date.now(),ownerActive,only}={}){
   const g=reconcile(c,{fresh:true})&&active(c);
   if(takesMessages(c,g)){deliverSchedule(x,c,at);continue;}
   const down=['stopped','error'].includes(g.phase);
-  const starts=x.pendingRun.manual||(x.whenPaused==='start'&&!c.pausedByOwner);
+  const starts=x.pendingRun.manual||(x.whenPaused==='start'&&!c.pausedByOwner)||(g.dormant&&!c.pausedByOwner&&!c.pausedForUpdate);
   if(down&&starts&&!x.pendingRun.launched){
    // Asked again right before the start, from the accounts NeDB holds in memory: the
    // ownerActive snapshot was read before an await, and a disable may have landed since.

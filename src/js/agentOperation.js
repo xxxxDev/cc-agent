@@ -7,7 +7,7 @@ import {estimatedCost} from './usageCost.js';
 import {api} from './api.js';
 
 export function statusLabel(d) {
- return ({'awaiting-workspace':ct("等待工作目錄確認"),'awaiting-confirmation':ct("等待本機 Channel 確認"),starting:ct("Claude agent 喚醒中"),ready:d?.mode==='demo'?ct("模擬助手已就緒"):d?.connected?ct("Claude 已連線"):ct("正在確認連線…"),busy:ct("正在思考與處理…"),stopped:ct("已暫停"),error:ct("需要重新連線"),'handing-off':ct("正在交接…")}[d?.phase]||ct("準備中"));
+ return ({'awaiting-workspace':ct("等待工作目錄確認"),'awaiting-confirmation':ct("等待本機 Channel 確認"),starting:ct("Claude agent 喚醒中"),ready:d?.mode==='demo'?ct("模擬助手已就緒"):d?.connected?ct("Claude 已連線"):ct("正在確認連線…"),busy:ct("正在思考與處理…"),stopped:d?.dormant?ct("已接續，等第一則訊息再啟動"):ct("已暫停"),error:ct("需要重新連線"),'handing-off':ct("正在交接…")}[d?.phase]||ct("準備中"));
 }
 
 // Tokens are exact; the dollar figure is derived from them, so keep them together.
