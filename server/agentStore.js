@@ -2395,6 +2395,13 @@ function setAccessFor(owner,id,access,callerRole){
 // Every agent is stopped first, whatever fails: one file write failing does not leave
 // the later full-access agents running; what could not be stopped or written is
 // returned for the admin.
+// An owner's file that could not be written is tried again each minute until it is.
+const savingAgain=new Map(),SAVE_RETRY_MS=Number(process.env.CC_AGENT_SAVE_RETRY_MS)||60_000;
+function saveAgain(owner){
+ if(savingAgain.has(owner))return;
+ const t=setInterval(()=>{try{save(owner);clearInterval(t);savingAgain.delete(owner);console.error(`conversations of ${owner} written again`);}catch(e){console.error(`conversations of ${owner} still not written: ${e.message}`);}},SAVE_RETRY_MS);
+ t.unref?.();savingAgain.set(owner,t);
+}
 function clearFullAccessFor(owner){
  let cleared=0;const failed=[],relaunch=[];
  for(const c of state.conversations.filter(x=>x.owner===owner)){
@@ -2407,7 +2414,10 @@ function clearFullAccessFor(owner){
   if(c.mode==='claude'){try{stop(c);}catch(e){failed.push({id:c.id,title:c.title||''});console.error(`agent ${c.id} of a demoted account not stopped: ${e.message}`);}}
   if(running)relaunch.push(c);
  }
- try{save(owner);}catch(e){console.error('demotion: conversations not written: '+e.message);if(!failed.some(f=>f.id==='*'))failed.push({id:'*',title:'conversations file not written'});}
+ // Not written: memory keeps the narrower scope (the safer side) and the file is written
+ // again every minute until it takes, so a restart cannot bring the full access back from
+ // the file. Reported as not finished.
+ try{save(owner);}catch(e){console.error('demotion: conversations not written: '+e.message);saveAgain(owner);if(!failed.some(f=>f.id==='*'))failed.push({id:'*',title:'conversations file not written'});}
  for(const c of relaunch){try{launch(c);}catch(e){console.error(`relaunch after a demotion failed for ${c.id}: ${e.message}`);}}
  return {cleared,failed};
 }

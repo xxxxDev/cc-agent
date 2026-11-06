@@ -1252,7 +1252,8 @@ function updateUserNow(req, res) {
           if (readErr || !user) return res.status(404).json({ message: 'User not found' });
           res.json({ user: publicUser(user) });
         });
-        }, (e) => { console.error('update: sign-ins not all removed:', e.message); res.status(500).json(CLEANUP_INCOMPLETE); });
+        // A demotion's agents left running are said here too, not lost behind the sign-in failure.
+        }, (e) => { console.error('update: sign-ins not all removed:', e.message); res.status(500).json({ ...CLEANUP_INCOMPLETE, ...(agentsLeft ? { agentsNotStopped: agentsLeft } : {}) }); });
       });
     });
   };
