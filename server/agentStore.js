@@ -1502,14 +1502,20 @@ function bridge(c,action,data={}) {
   // for from the page started when it was sent.
   if(!g.manualCompact||!g.compactSince)g.compactSince=Date.now();
   if(!g.manualCompact)g.compactPercent=null;
-  g.compacting=true;g.compactSeen=false;g.compactDrawnAt=0;
+  // A subagent's compaction fires this hook too, in the same session and with nothing in
+  // the payload to tell them apart (agent_id is left out, 2.1.319), and the agent stays
+  // free meanwhile. So only one asked for from the page locks it at once; any other waits
+  // for the main thread's own screen to show it (takeCompactScreen).
+  if(g.manualCompact)g.compacting=true;
+  else if(!g.compacting)g.compactPending=true;
+  g.compactSeen=false;g.compactDrawnAt=0;
   // A new file only, in a folder the agent can write: never through a link it left there
   // under a name it could guess.
   const backup=path.join(stateRoot,'workspaces',c.id,'g'+g.number,'precompact-'+Date.now()+'-'+randomUUID().slice(0,8)+'.json');
   try{const fd=fs.openSync(backup,fs.constants.O_WRONLY|fs.constants.O_CREAT|fs.constants.O_EXCL|fs.constants.O_NOFOLLOW,0o600);try{fs.writeSync(fd,JSON.stringify({messages:c.messages,memory:c.memory}));}finally{fs.closeSync(fd);}}catch(e){console.error(`precompact backup not written for ${c.id}: ${e.code||e.message}`);}
  }
  else if(action==='postcompact'){
-  g.compacting=false;
+  g.compacting=false;g.compactPending=false;
   // A start that compacted gets its whole ceiling again from here.
   if(g.phase==='starting'&&g.startedAt)g.startedAt=Date.now();
   const key=createHash('sha256').update(g.sessionId+String(data.eventKey||data.compact_summary||'')).digest('hex');
@@ -1528,6 +1534,7 @@ function bridge(c,action,data={}) {
  else if(action==='result'){
   // A turn that ended is not compacting: a compaction whose end never reached us
   // (no PostCompact, a restart in between) left the page on 整理對話記憶 for good.
+  g.compactPending=false;
   if(g.compacting&&!g.manualCompact){g.compacting=false;g.compactPercent=null;}
   // A turn that ended normally ran on a limit that is back.
   delete g.limitResume;
@@ -1620,8 +1627,8 @@ function bridge(c,action,data={}) {
   // The screen answers for the compaction it was read during: one that ended or failed
   // meanwhile, or another that began, is left to the next heartbeat.
   const key=c.id+':compact',token=g.token,session=g.sessionId,target=g.tmux,since=g.compactSince;
-  const same=()=>active(c)===g&&g.token===token&&g.sessionId===session&&g.tmux===target&&g.compactSince===since&&(g.manualCompact||g.compacting)&&!['error','stopped'].includes(g.phase);
-  if((g.manualCompact||g.compacting)&&!capturing.has(key)){
+  const same=()=>active(c)===g&&g.token===token&&g.sessionId===session&&g.tmux===target&&g.compactSince===since&&(g.manualCompact||g.compacting||g.compactPending)&&!['error','stopped'].includes(g.phase);
+  if((g.manualCompact||g.compacting||g.compactPending)&&!capturing.has(key)){
    capturing.add(key);
    capturePane(target)
     .then(screen=>{if(screen!==null&&same()&&takeCompactScreen(g,screen))save(c);})
@@ -1636,6 +1643,11 @@ function bridge(c,action,data={}) {
 function takeCompactScreen(g,screen){
  let changed=false;
  g.compactPercent=compactScreen.compactPercent(screen);
+ // A PreCompact not yet known to be the main thread's: the screen says so, or it never was.
+ if(g.compactPending){
+  if(g.manualCompact||/Compacting conversation|Running PreCompact hooks/.test(screen)){g.compactPending=false;g.compacting=true;changed=true;}
+  else if(Date.now()-(g.compactSince||0)>COMPACT_SCREEN_GRACE_MS)g.compactPending=false;
+ }
  // Claude Code also fires PreCompact for a summary it precomputes in the
  // background while the agent keeps working; that one never draws
  // "Running PreCompact hooks" or "Compacting conversation" (2.1.286) and may never
