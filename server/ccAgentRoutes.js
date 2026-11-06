@@ -91,6 +91,8 @@ app.post('/api/schedules/:id/test',...scheduleRoutes,adminOnly,async(req,res,nex
 app.delete('/api/schedules/:id',...scheduleRoutes,adminOnly,(req,res,next)=>{try{agents.removeSchedule(req.params.id);res.json({ok:true});}catch(e){next(e);}});
 app.patch('/api/agent-list',(req,res,next)=>{try{res.json(agents.setListPreferences(req.userId,req.body));}catch(e){next(e);}});
 app.patch('/api/preferences',(req,res,next)=>{try{res.json(agents.setPreferences(req.userId,req.body));}catch(e){next(e);}});
+// The admin page's subagent setting put into effect now on the agents it lists (still pending only).
+app.post('/api/preferences/subagents-apply',(req,res,next)=>{try{res.json(agents.applySubagentDefault(req.body?.ids));}catch(e){next(e);}});
 // Out-of-scope attempts by every agent, for the admin's review: the list, one
 // report, dismissing it, or widening that agent's scope from it. Admin only,
 // every route.
@@ -253,6 +255,9 @@ app.post('/api/conversations/:id/:action',(req,res,next)=>{try{
  case 'compact':agents.compact(c);break;
  case 'wrap-up':{if(req.role!=='admin')throw agents.error('Admin only',403);agents.setWrapUp(c,req.body.wrapUp);break;}
  case 'threshold':{if(req.role!=='admin')throw agents.error('Admin only',403);agents.setThreshold(c,req.body.threshold===null?null:req.body.threshold);break;}
+ // An agent's own subagent model and effort, or null to follow the admin page: an admin's, like the threshold.
+ case 'subagents':{if(req.role!=='admin')throw agents.error('Admin only',403);extra.subagentNeeds=agents.setSubagents(c,req.body?.subagents===null?null:req.body?.subagents);break;}
+ case 'subagents-apply':{if(req.role!=='admin')throw agents.error('Admin only',403);extra.subagentApply=agents.applyAgentSubagents(c);break;}
  case 'rename':if(typeof req.body.title!=='string'||!req.body.title.trim()||req.body.title.trim().length>80)throw agents.error('主題需為 1–80 字');c.title=req.body.title.trim();c.profileVersion=(c.profileVersion||0)+1;c.updatedAt=new Date().toISOString();agents.save();break;
  case 'archive':if(req.role!=='admin')throw agents.error('Agent 由管理員刪除。',403);agents.stop(c);c.archived=true;c.archivedAt=new Date().toISOString();agents.save(c);break;
  case 'interrupt':agents.interrupt(c);break;

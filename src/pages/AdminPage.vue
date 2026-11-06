@@ -17,6 +17,8 @@
       <!-- One row for how a handoff goes: the compactions before an automatic one, the
            recent messages it carries, and whether one by hand asks. -->
       <f7-list-item link no-chevron class="handoff-row" :title="ct('接續對話設定')" :after="handoffSummary(compactThreshold,handoff)" @click.prevent="editHandoff"><template #media><f7-icon f7="arrow_2_circlepath"/></template></f7-list-item>
+      <!-- The subagents' model and effort for every full-access Claude agent (issue #10). -->
+      <f7-list-item link no-chevron class="subagent-row" :title="ct('子代理模型與 Effort')" :after="subagentLabel(subagents)" @click.prevent="editSubagentDefault"><template #media><f7-icon f7="person_2"/></template></f7-list-item>
       <!-- The wrap-up check: wrap-up questions for after each finished task,
            sent by CC Agent once the agent has sat idle. -->
       <f7-list-item class="wrap-up-toggle" :title="ct('自動收尾檢查')" :footer="ct('預設關閉。開啟後，Agent 完成任務並閒置一段時間，會自動請它確認工作已保存、筆記是最新的；只讀資料或回答問題不會送。')"><template #media><f7-icon f7="checkmark_seal"/></template><template #after><label class="toggle"><input type="checkbox" :aria-label="ct('自動收尾檢查')" :checked="wrapUp.enabled" @change="saveWrapUp({enabled:$event.target.checked})"/><span class="toggle-icon"></span></label></template></f7-list-item>
@@ -60,12 +62,14 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { f7 } from 'framework7-vue';
 import { t } from '../js/i18n.js';
 import { api } from '../js/api.js';
+import { escapeHtml } from '../js/safeDialog.js';
 import { currentUser } from '../js/auth.js';
 import GlassDropdown from '../components/GlassDropdown.vue';
+import {editSubagents,subagentLabel} from '../js/subagentDialog.js';
 import UsageMeters from '../components/UsageMeters.vue';
 async function pullRefresh(done) { try { await Promise.all([loadUsage({fresh: true}), loadOpenReports(), loadAgentPreferences().catch(() => {})]); } finally { done(); } }
 import { usageGroups, watchUsage, loadUsage } from '../js/usage.js';
-import {handoff,wrapUp,archiveRetentionDays,compactThreshold,terminalSwitch,transcriptSwitch,loadAgentPreferences,saveAgentPreferences} from '../js/agentPreferences.js';
+import {subagents,handoff,wrapUp,archiveRetentionDays,compactThreshold,terminalSwitch,transcriptSwitch,loadAgentPreferences,saveAgentPreferences} from '../js/agentPreferences.js';
 
 const isAdmin = computed(() => currentUser.value?.role === 'admin');
 const toast = (text) => f7.toast.create({ text, closeTimeout: 1800 }).open();
@@ -101,6 +105,18 @@ async function saveWrapUp(patch){
   wrapUp.value={...previous,...patch};
   try{await saveAgentPreferences({wrapUp:patch});toast(t('settingsSaved'));}
   catch(e){wrapUp.value=previous;f7.dialog.alert(e.message||t('settingsFailed'));}
+}
+function editSubagentDefault(){
+  if(!isAdmin.value)return;
+  editSubagents({title:ct('子代理模型與 Effort'),text:ct('完整權限的 Claude agent 啟動的子代理用這裡的模型和 Effort；個別 agent 可以在 Agent Profile 另外設定。改了要等 agent 重新啟動才生效。'),value:subagents.value,
+    save:async next=>{
+      const r=await saveAgentPreferences({subagents:next});toast(t('settingsSaved'));
+      // The running agents following it take it when they start again: now, or later.
+      const pending=r?.subagentPending||[];
+      if(pending.length)setTimeout(()=>f7.dialog.create({title:ct('子代理模型與 Effort'),
+        text:pending.length+' '+ct('個 agent 要重新啟動才會套用：')+pending.map(a=>escapeHtml(a.title)+(a.busy?ct('（工作中）'):'')).join('、')+'<br><br>'+ct('現在套用：閒著的馬上重新啟動，工作中的等這次回覆結束；稍後：各自下次啟動時套用。'),
+        buttons:[{text:ct('稍後')},{text:ct('現在套用'),strong:true,onClick:async()=>{try{const n=await api('/preferences/subagents-apply',{method:'POST',body:JSON.stringify({ids:pending.map(a=>a.id)})});toast(ct('已套用')+'：'+ct('已重新啟動')+' '+(n.now||0)+'，'+ct('回覆結束後')+' '+(n['after-reply']||0));}catch(e){f7.dialog.alert(e.message);}}}],destroyOnClose:true}).open(),350);
+    }});
 }
 // The three are saved together: the server checks all of them before keeping any.
 function editHandoff(){

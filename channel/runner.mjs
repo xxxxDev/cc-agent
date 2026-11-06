@@ -297,14 +297,27 @@ if(ownerConfig){
 const DISCORD_PLUGIN='discord@claude-plugins-official';
 const settingsRoots=dir=>{const out=[dir];for(let d=path.dirname(dir);;d=path.dirname(d)){if(fs.existsSync(path.join(d,'.git')))out.push(d);if(d===path.dirname(d))return out;}};
 const noDiscord=path.join(controlDir,'no-discord');
+// The subagents' model and effort (server/agentStore.js subagentEnv) go into the env of
+// the workspace's own local settings, which Claude reads however it is started. Only
+// these three keys are CC Agent's there; it sets or removes them at every start and
+// leaves the rest of the file as it is.
+const SUBAGENT_KEYS=['CLAUDE_CODE_SUBAGENT_MODEL','CLAUDE_CODE_SUBAGENT_MODEL_FORCE','CLAUDE_CODE_SUBAGENT_EFFORT'];
+const subagentEnv=Object.fromEntries(Object.entries(config.subagentEnv&&typeof config.subagentEnv==='object'?config.subagentEnv:{}).filter(([k,v])=>SUBAGENT_KEYS.includes(k)&&typeof v==='string'&&/^[a-z0-9.-]{1,40}$/.test(v)));
 if(ownerConfig){
  try{
   for(const root of settingsRoots(config.cwd)){
    const local=path.join(root,'.claude','settings.local.json');
    let current={};try{current=JSON.parse(fs.readFileSync(local,'utf8'));}catch(e){if(e.code!=='ENOENT')throw new Error(local+' 無法讀取或不是合法 JSON');}
-   if(current.enabledPlugins?.[DISCORD_PLUGIN]!==false){fs.mkdirSync(path.dirname(local),{recursive:true});writeFresh(local,JSON.stringify({...current,enabledPlugins:{...current.enabledPlugins,[DISCORD_PLUGIN]:false}},null,2)+'\n');}
+   if(!current||typeof current!=='object'||Array.isArray(current))throw new Error(local+' 不是設定物件');
+   const next={...current,enabledPlugins:{...current.enabledPlugins,[DISCORD_PLUGIN]:false}};
+   if(root===config.cwd){
+    const env=Object.fromEntries(Object.entries(current.env&&typeof current.env==='object'?current.env:{}).filter(([k])=>!SUBAGENT_KEYS.includes(k)));
+    Object.assign(env,subagentEnv);
+    if(Object.keys(env).length)next.env=env;else delete next.env;
+   }
+   if(JSON.stringify(next)!==JSON.stringify(current)){fs.mkdirSync(path.dirname(local),{recursive:true});writeFresh(local,JSON.stringify(next,null,2)+'\n');}
   }
- }catch(e){await bridge(config,'error',{message:'無法關掉 Discord plugin，已拒絕啟動：'+e.message}).catch(()=>{});process.exit(1);}
+ }catch(e){await bridge(config,'error',{message:'無法寫入 agent 的本機設定（關掉 Discord plugin、子代理設定），已拒絕啟動：'+e.message}).catch(()=>{});process.exit(1);}
  fs.mkdirSync(noDiscord,{recursive:true,mode:0o700});
 }
 // TMPDIR too, for Claude itself and what it starts outside the sandbox; sandboxed
