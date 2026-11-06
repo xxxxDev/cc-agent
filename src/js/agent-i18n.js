@@ -761,6 +761,7 @@ const english = {
   "送出": "Send",
   "不送": "Don't send",
   "回覆給": "Reply to",
+  "回覆在這裡": "Answered here",
   "已傳給": "Sent to",
   "排隊中": "Queued",
   "草稿，等你送出": "Draft, waiting for you to send",

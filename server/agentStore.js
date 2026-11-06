@@ -1321,6 +1321,15 @@ function chooseTerminalOption(c,data){
 }
 // An arrival from another session is answered by a final post to the chat.
 const owedRelays=c=>c.messages.filter(m=>m.role==='relay'&&m.relay?.direction==='in'&&m.relay.handed&&!m.relay.answered&&m.generation===c.generation);
+// A message one answer may close along with another: the owner's own web message in
+// this generation. One from a group, another machine or an outside chat is answered
+// where it came from, so it takes a reply of its own.
+function linkable(c,id,answered=false){
+ const m=typeof id==='string'&&c.messages.find(x=>x.id===id&&x.role==='user'&&x.generation===c.generation);
+ if(!m)throw error('Reply must reference a message in this generation',409);
+ if(!answered&&(m.group||m.peer||m.external))throw error('A message from a group, another machine or an outside chat needs a reply of its own',409);
+ return m;
+}
 function pendingReplies(c) {
  const waiting=c.mode==='claude'?transcript.waiting(stateRoot,c):null;
  return c.messages.filter(m=>m.role==='user'&&m.generation===c.generation&&m.delivery==='delivered'
@@ -1462,8 +1471,21 @@ function bridge(c,action,data={}) {
   return {ok:true,group:x.name};
  }
  if(action==='ready')markReady(c,g);
+ else if(action==='reply'&&data.answeredBy!==undefined){
+  // One answer can close several messages: agents closed the second one with a bubble
+  // saying the result was in the "next" one, while it was above. This closes a message
+  // with a final reply already given to another, adding no bubble: the message links
+  // to that reply.
+  if(typeof data.answeredBy!=='string'||data.final!==true)throw error('answered_by takes the message_id already answered, with final true');
+  const m=linkable(c,data.messageId),src=linkable(c,data.answeredBy,true);
+  const r=[...c.messages].reverse().find(x=>x.role==='assistant'&&x.final===true&&x.inReplyTo===src.id&&x.generation===c.generation);
+  if(!r)throw error('answered_by must name a message you have already sent a final reply to',409);
+  if(m.delivery!=='completed'){m.delivery='completed';m.answeredIn=r.id;g.lastError='';armWrapUp(c,g,m);save(c);}
+  return {ok:true,linkedTo:r.id};
+ }
  else if(action==='reply'){
   if(typeof data.text!=='string'||!data.text.trim()||data.text.length>64000)throw error('Invalid reply');
+  if(data.alsoAnswers!==undefined&&(!Array.isArray(data.alsoAnswers)||data.alsoAnswers.length>20||data.final!==true))throw error('also_answers takes up to 20 message_ids, with final true');
   if(data.final!==undefined&&typeof data.final!=='boolean')throw error('final must be a boolean');
   const m=c.messages.find(m=>m.id===data.messageId&&m.role==='user'&&m.generation===c.generation);
   if(!m)throw error('Reply must reference a message in this generation',409);
@@ -1475,6 +1497,7 @@ function bridge(c,action,data={}) {
   if(previous&&(previous.inReplyTo!==target.id||previous.text!==data.text||previous.final!==final))throw error('Reply retry does not match the original',409);
   // Closed only once attachments are saved; a retry of the same reply cannot change what it originally completed.
   if(!previous){
+   for(const id of data.alsoAnswers||[])linkable(c,id);
    const files=attachments.fromPaths(stateRoot,c,data.files,attachableFolders(c));
    // A wrap-up check that found everything done is not worth a notification.
    const r=add(c,'assistant',data.text,{replyKey:data.replyKey,inReplyTo:target.id,final,...(target.loginNotice&&final||target.wrapUp&&final&&WRAP_UP_DONE.test(data.text)?{notifyPending:false,quiet:true}:{notifyPending:true}),...(files.length?{attachments:files}:{})});
@@ -1483,6 +1506,8 @@ function bridge(c,action,data={}) {
    if(gx&&gx.members.includes(c.id)){r.notifyPending=false;groupStore.addMessage(gx,{role:'assistant',agentId:c.id,text:data.text,final,inReplyTo:m.group.messageId,...(files.length?{attachments:files,attachmentsFrom:c.id}:{}),...groupPush(gx,c,data.text)});groupStore.save();}
    g.lastError='';
    if(final){target.delivery='completed';armWrapUp(c,g,target);try{peerReply(c,target,r);}catch(e){console.error('peer reply:',e.message);}}
+   // The others this same answer completes, each linked to it.
+   if(final)for(const id of new Set(data.alsoAnswers||[])){const x=linkable(c,id);if(x!==target&&x.delivery!=='completed'){x.delivery='completed';x.answeredIn=r.id;}}
   }
  }
  else if(action==='memory'){
@@ -1591,7 +1616,7 @@ function bridge(c,action,data={}) {
    if(data.checkFinal===true&&data.stopHookActive!==true&&pending.some(m=>!m.finalReminder)){
     pending.forEach(m=>{m.finalReminder=true;});
     const ids=pending.map(m=>m.id).join(', ');
-    const response={ok:true,decision:'block',reason:ownerLanguage(c.owner)==='zh-TW'?'尚有訊息未送達最終結果。請使用 mcp__executive__reply，為下列 message_id 送出 final=true 的完成回覆：'+ids+'。不要只寫在終端機，也不要把進度當成完成；若工作受阻，回覆實際限制。':'Some messages have no final result yet. Use mcp__executive__reply to send a final=true reply for each of these message_id values: '+ids+'. Text left only in the terminal does not reach the chat, and progress is not completion; if the work is blocked, reply with the actual limitation.'};
+    const response={ok:true,decision:'block',reason:ownerLanguage(c.owner)==='zh-TW'?'尚有訊息未送達最終結果。請使用 mcp__executive__reply，為下列 message_id 送出 final=true 的完成回覆：'+ids+'。不要只寫在終端機，也不要把進度當成完成；若工作受阻，回覆實際限制。若某則的結果已經在你給另一則的完成回覆裡，改用 reply 的 answered_by 填那一則的 message_id 標完成，不要再發一則訊息說結果在哪一則。':'Some messages have no final result yet. Use mcp__executive__reply to send a final=true reply for each of these message_id values: '+ids+'. Text left only in the terminal does not reach the chat, and progress is not completion; if the work is blocked, reply with the actual limitation. If the result for one of them is already in your final reply to another, call reply with answered_by set to that other message_id to close it, instead of sending another message saying where the result is.'};
     if(stopKey)g.stopReceipt={key:stopKey,epoch:g.deliveryEpoch||0,ids:pending.map(m=>m.id),response};
     g.phase='busy';save(c);
     return response;
