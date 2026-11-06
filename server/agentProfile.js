@@ -25,7 +25,10 @@ const allowed=(role,member,admin)=>role==='admin'?admin:member;
 // Sonnet 5 went the same way for Sonnet 5.5.
 const SUCCESSORS={'claude-opus-5':'claude-opus-5-5','claude-sonnet-5':'claude-sonnet-5-5'};
 const successor=model=>SUCCESSORS[model]||model;
-function profile(c={}){return {title:c.title||'',description:c.description||'',memory:c.memory||'',model:successor(c.model)||DEFAULT_MODEL,effort:c.effort||'high',access:agentAccess.of(c)};}
+function profile(c={}){return {title:c.title||'',description:c.description||'',memory:c.memory||'',model:successor(c.model)||DEFAULT_MODEL,effort:c.effort||'high',subagentModel:c.subagentModel||'',subagentEffort:c.subagentEffort||'',access:agentAccess.of(c)};}
+// The owner's choice for the subagents this agent starts, as an instruction to it: the
+// agent passes them when it starts one.
+function subagentGuidance(c={}){const {subagentModel:m,subagentEffort:e}=profile(c);if(!m&&!e)return null;return 'When you start a subagent, unless the owner asks otherwise, pass'+(m?` model "${/^claude-([a-z]+)-/.exec(m)?.[1]||m}"`:'')+(m&&e?' and':'')+(e?` effort "${e}"`:'')+'.';}
 // Model ids are data passed to native Claude, never a provider or launch command.
 const isClaude=model=>typeof model==='string'&&/^claude-[a-z0-9][a-z0-9.-]{0,80}$/.test(model);
 // What an agent runs when its saved model is not a Claude model.
@@ -34,7 +37,7 @@ function fit(model){return isClaude(model)?successor(model):CLAUDE_FALLBACK;}
 function validate(input={},base={},callerRole){
  if(!input||typeof input!=='object'||Array.isArray(input))throw Object.assign(new Error('Profile must be an object'),{status:400});
  if(Object.hasOwn(input,'launchCommand'))throw Object.assign(new Error('Agents start with native claude; launchCommand is not supported'),{status:400});
- const p={...profile(base),...Object.fromEntries(Object.entries(input).filter(([k])=>['title','description','memory','model','effort'].includes(k)))};
+ const p={...profile(base),...Object.fromEntries(Object.entries(input).filter(([k])=>['title','description','memory','model','effort','subagentModel','subagentEffort'].includes(k)))};
  p.model=input.model===undefined?fit(p.model):successor(p.model);
  // What an agent can reach is an admin's to set. A member's client sends the
  // profile back whole, so an unchanged scope is fine; a different one is refused.
@@ -51,6 +54,10 @@ function validate(input={},base={},callerRole){
  const models=allowed(callerRole,MODELS,ADMIN_MODELS).concat(isClaude(base.model)?[successor(base.model)]:[]);
  const efforts=allowed(callerRole,EFFORTS,ADMIN_EFFORTS).concat(base.effort?[base.effort]:[]);
  if(!models.includes(p.model)||!efforts.includes(p.effort))throw Object.assign(new Error('Invalid model or effort'),{status:400});
+ // Empty leaves the choice to the agent. Same tiers as the agent's own.
+ if(typeof p.subagentModel!=='string'||typeof p.subagentEffort!=='string')throw Object.assign(new Error('Invalid subagent setting'),{status:400});
+ if(p.subagentModel&&!allowed(callerRole,MODELS,ADMIN_MODELS).concat(base.subagentModel||[]).includes(p.subagentModel))throw Object.assign(new Error('Invalid subagent model'),{status:400});
+ if(p.subagentEffort&&!allowed(callerRole,EFFORTS,ADMIN_EFFORTS).concat(base.subagentEffort||[]).includes(p.subagentEffort))throw Object.assign(new Error('Invalid subagent effort'),{status:400});
  return p;
 }
-module.exports={profile,validate,successor,fit,DEFAULT_MODEL,MODELS,EFFORTS,ADMIN_MODELS,ADMIN_EFFORTS};
+module.exports={subagentGuidance,profile,validate,successor,fit,DEFAULT_MODEL,MODELS,EFFORTS,ADMIN_MODELS,ADMIN_EFFORTS};

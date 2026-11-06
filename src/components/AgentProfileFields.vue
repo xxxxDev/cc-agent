@@ -40,6 +40,13 @@
   <f7-list-input :label="ct('模型')" type="select" :value="modelValue.model" @update:value="pick('model',$event)"><option v-for="id in modelOptions" :key="id" :value="id">{{modelLabel(id)}}</option></f7-list-input>
   <f7-list-input label="Effort" type="select" :value="modelValue.effort" @update:value="pick('effort',$event)"><option v-for="id in effortOptions" :key="id" :value="id">{{effortLabel(id)}}</option></f7-list-input>
  </f7-list>
+ <!-- Told to the agent as an instruction; no restart. -->
+ <template v-if="foldText">
+  <f7-list inset strong-ios class="model-effort">
+   <f7-list-input :label="ct('子代理模型')" type="select" :value="modelValue.subagentModel||''" @update:value="set('subagentModel',$event)"><option value="">{{ct('由 Agent 決定')}}</option><option v-for="id in models(admin,modelValue.subagentModel)" :key="id" :value="id">{{modelLabel(id)}}</option></f7-list-input>
+   <f7-list-input :label="ct('子代理 Effort')" type="select" :value="modelValue.subagentEffort||''" @update:value="set('subagentEffort',$event)"><option value="">{{ct('由 Agent 決定')}}</option><option v-for="id in efforts(admin,modelValue.subagentEffort)" :key="id" :value="id">{{effortLabel(id)}}</option></f7-list-input>
+  </f7-list>
+ </template>
  </template>
  <!-- What the page showing this wants between the model and the access scope. -->
  <slot name="before-access"/>

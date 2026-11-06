@@ -1365,7 +1365,7 @@ function bridge(c,action,data={}) {
  // The channel polls from the moment it starts, so the address is known before the
  // model has called any tool; it saves only when the address is new.
  if(platform.isWin&&(action==='bootstrap'||action==='ready'||action==='poll'))registerAddress(c,g,data.address);
- if(action==='bootstrap'){if(['starting','error'].includes(g.phase)&&!g.compacting){markReady(c,g);save(c);}return {profile:agentProfile.profile(c),memory:c.memory,handoff:c.handoff||null,reference:referenceInfo(c),checklists:checklists.summary(c)};}
+ if(action==='bootstrap'){if(['starting','error'].includes(g.phase)&&!g.compacting){markReady(c,g);save(c);}return {profile:agentProfile.profile(c),subagents:agentProfile.subagentGuidance(c),memory:c.memory,handoff:c.handoff||null,reference:referenceInfo(c),checklists:checklists.summary(c)};}
  if(action==='poll') {
   // The channel of this generation is asking for messages, so its session is alive: an
   // agent marked as cut off or as never having finished its handshake comes back by
@@ -2020,7 +2020,7 @@ function updateProfile(c,input,callerRole){
  return changedModel;
 }
 function profileMessage(c,g,text){
- const p=agentProfile.profile(c),context=JSON.stringify({name:p.title,description:p.description,memory:p.memory});
+ const p=agentProfile.profile(c),subagents=agentProfile.subagentGuidance(c),context=JSON.stringify({name:p.title,description:p.description,memory:p.memory,...(subagents?{subagents}:{})});
  const hash=createHash('sha256').update(context).digest('hex');if(g.profileHash===hash)return text;
  g.profileHash=hash;return 'Agent profile supplied by this conversation owner (user instructions):\n'+context+'\n\nUser message:\n'+text;
 }

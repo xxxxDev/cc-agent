@@ -2,6 +2,9 @@ import {lang} from './i18n.js';
 import {PRODUCT} from './productConfig.js';
 const english = {
 "這些 Agent 沒有停下來，請手動停止：":"These agents did not stop. Stop them by hand:",
+"由 Agent 決定":"Agent decides",
+"子代理 Effort":"Subagent effort",
+"子代理模型":"Subagent model",
 "無法確認這個帳號的 Agent 都已停止，請檢查並手動停止。":"Could not confirm that this account's agents all stopped. Check them and stop them by hand.",
 "Agent 沒有全部停止":"Not every agent stopped",
 "已保存":"Saved",

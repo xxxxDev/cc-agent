@@ -64,7 +64,7 @@ export async function settleOperation(id, kind, body, {current, update}) {
 
 // Agent Profile's draft, taken when it opens, and what of it is saved.
 export function profileDraftOf(d) {
- return {title:d.title,description:d.description||'',memory:d.memory||'',model:d.model,effort:d.effort,access:d.access||{allow:[],exclude:[],domains:[]},profileVersion:d.profileVersion};
+ return {title:d.title,description:d.description||'',memory:d.memory||'',model:d.model,effort:d.effort,subagentModel:d.subagentModel||'',subagentEffort:d.subagentEffort||'',access:d.access||{allow:[],exclude:[],domains:[]},profileVersion:d.profileVersion};
 }
 export function followSetting(profile) {
  return {...profile};
