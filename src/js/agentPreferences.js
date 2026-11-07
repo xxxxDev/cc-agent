@@ -17,6 +17,8 @@ export const terminalSwitch = ref(false);
 export const transcriptSwitch = ref(false);
 // Days a deleted agent is kept before it is purged, or null for never (the default).
 export const archiveRetentionDays = ref(null);
+// Days a checklist whose every item is done is kept after its last change, or null for never.
+export const checklistRetentionDays = ref(null);
 // The wrap-up check sent to an agent that finished a task: on or off,
 // the minutes it sits idle first, and its words.
 export const wrapUp = ref({enabled: false, minutes: 10, text: '', custom: false});
@@ -34,6 +36,7 @@ function absorb(preferences) {
   transcriptSwitch.value = preferences.transcriptSwitch === true;
   if (preferences.wrapUp && typeof preferences.wrapUp === 'object') wrapUp.value = preferences.wrapUp;
   archiveRetentionDays.value = Number.isInteger(preferences.archiveRetentionDays) ? preferences.archiveRetentionDays : null;
+  checklistRetentionDays.value = Number.isInteger(preferences.checklistRetentionDays) ? preferences.checklistRetentionDays : null;
   scopedAgents.value = typeof preferences.scopedAgents === 'boolean' ? preferences.scopedAgents : null;
   preferencesLoaded.value = true;
   return preferences;

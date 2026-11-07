@@ -1882,6 +1882,27 @@ function purgeAt(c,days=archiveRetentionDays()){
 }
 const UNSENT_ATTACHMENT_HOURS=24;
 const DAY=86400000;
+// How long a checklist whose every item is done is kept, counted from its last change,
+// or null to keep it (the default, as before). An admin's setting for every agent; one with
+// anything to do, doing or blocked is kept.
+const CHECKLIST_RETENTION_CHOICES=[1,3,7,30];
+function checklistRetentionDays(){const d=state.agentSettings?.checklistRetentionDays;return CHECKLIST_RETENTION_CHOICES.includes(d)?d:null;}
+const checklistFinished=(l,now,days)=>Array.isArray(l?.items)&&l.items.length>0&&l.items.every(i=>i?.status==='done')&&now-Date.parse(l.updatedAt)>days*DAY;
+// Archived agents are left as they were deleted. Each list removed is in the audit log;
+// the open pages drop it at their next live check, since their view carries the lists.
+function sweepFinishedChecklists(now,days=checklistRetentionDays()){
+ if(days===null)return 0;
+ let removed=0;
+ for(const c of state.conversations){
+  if(c.archived||!Array.isArray(c.checklists)||!c.checklists.length)continue;
+  const gone=c.checklists.filter(l=>checklistFinished(l,now,days));
+  if(!gone.length)continue;
+  c.checklists=c.checklists.filter(l=>!gone.includes(l));
+  save(c);
+  for(const l of gone){removed+=1;try{require('./services/audit').audit({action:'checklist-expired',by:'retention',owner:c.owner,conversationId:c.id,listId:l.id,title:l.title||'',days});}catch{}}
+ }
+ return removed;
+}
 
 // An agent's own Claude transcript lives at ~/.claude/projects/<workspace path
 // with non-alphanumerics turned into ->. Only ever remove the directory that
@@ -1954,6 +1975,7 @@ function purgeOwner(owner){
 // both are "storage nobody asked to keep".
 function sweepRetention({now=Date.now()}={}){
  const removed=[],touched=new Set(),days=archiveRetentionDays();
+ const finishedLists=sweepFinishedChecklists(now);
  for(const c of [...state.conversations]){
   if(!c.archived)continue;
   const due=purgeAt(c,days);
@@ -1970,7 +1992,7 @@ function sweepRetention({now=Date.now()}={}){
 
  // Both orphan sweeps below decide by absence, so they must never run against a
  // state that failed to load: an empty list would read as "everything is orphaned".
- if(!state.conversations.length)return {conversations:removed.length,attachments:0,workspaces:0};
+ if(!state.conversations.length)return {conversations:removed.length,attachments:0,workspaces:0,checklists:finishedLists};
 
  // Workspaces whose conversation is gone: a conversation removed from the records
  // by any other path leaves its workspace and Claude transcripts behind, and
@@ -2011,7 +2033,7 @@ function sweepRetention({now=Date.now()}={}){
    }
   }
  }
- return {conversations:removed.length,attachments:files,workspaces};
+ return {conversations:removed.length,attachments:files,workspaces,checklists:finishedLists};
 }
 
 // A disabled account's agents, every one of them:
@@ -2390,11 +2412,11 @@ function reviveSilentChannels({now=Date.now(),relaunch=(c)=>{stop(c);launch(c);}
  }
 }
 setInterval(()=>{try{reviveSilentChannels();}catch(e){console.error('channel revive: '+e.message);}},60_000).unref();
-function getPreferences(owner){return {...(platform.isWin?{scopedAgents:false}:{}),wrapUp:wrapUpSettings(ownerLanguage(owner)),archiveRetentionDays:archiveRetentionDays(),compactThreshold:state.agentSettings?.compactThreshold??5,handoff:handoffSetting(),subagents:subagentDefault(),autoCompact:autoCompactDefault(),autoCompactPresets:AUTO_COMPACT_PRESETS,terminalSwitch:state.agentSettings?.terminalSwitch===true,transcriptSwitch:state.agentSettings?.transcriptSwitch===true};}
-function setPreferences(owner,{compactThreshold,handoff,subagents,autoCompact,terminalSwitch,transcriptSwitch,archiveRetentionDays:retention,wrapUp,...rest}={}){
+function getPreferences(owner){return {...(platform.isWin?{scopedAgents:false}:{}),wrapUp:wrapUpSettings(ownerLanguage(owner)),archiveRetentionDays:archiveRetentionDays(),checklistRetentionDays:checklistRetentionDays(),compactThreshold:state.agentSettings?.compactThreshold??5,handoff:handoffSetting(),subagents:subagentDefault(),autoCompact:autoCompactDefault(),autoCompactPresets:AUTO_COMPACT_PRESETS,terminalSwitch:state.agentSettings?.terminalSwitch===true,transcriptSwitch:state.agentSettings?.transcriptSwitch===true};}
+function setPreferences(owner,{compactThreshold,handoff,subagents,autoCompact,terminalSwitch,transcriptSwitch,archiveRetentionDays:retention,checklistRetentionDays:listRetention,wrapUp,...rest}={}){
  // Unsupported settings are refused, never ignored.
  if(Object.keys(rest).length)throw error('不支援的設定：'+Object.keys(rest).join(', '));
- if(compactThreshold===undefined&&handoff===undefined&&subagents===undefined&&autoCompact===undefined&&terminalSwitch===undefined&&transcriptSwitch===undefined&&retention===undefined&&wrapUp===undefined)throw error('沒有要更新的設定');
+ if(listRetention===undefined&&compactThreshold===undefined&&handoff===undefined&&subagents===undefined&&autoCompact===undefined&&terminalSwitch===undefined&&transcriptSwitch===undefined&&retention===undefined&&wrapUp===undefined)throw error('沒有要更新的設定');
  // Every field is checked before any is saved: a request refused over one field leaves
  // all the others as they were, in memory and on disk.
  // The wrap-up check: on or off, the minutes an agent sits idle first, and its words
@@ -2408,6 +2430,7 @@ function setPreferences(owner,{compactThreshold,handoff,subagents,autoCompact,te
  // Checked now, applied last: a request refused over another field must not leave
  // a retention in memory for the next sweep to act on.
  if(retention!==undefined&&retention!==null&&(!Number.isInteger(retention)||retention<1||retention>RETENTION_MAX_DAYS))throw error(`保留天數必須是 1–${RETENTION_MAX_DAYS} 天，或不刪除`);
+ if(listRetention!==undefined&&listRetention!==null&&!CHECKLIST_RETENTION_CHOICES.includes(listRetention))throw error('已完成待辦事項的保留天數必須是 '+CHECKLIST_RETENTION_CHOICES.join('、')+' 天，或不刪除');
  // The chat/terminal switch is off unless an admin asks for it: the conversation page is the normal way in, and the
  // terminal is for looking at what an agent is doing.
  if(terminalSwitch!==undefined&&typeof terminalSwitch!=='boolean')throw error('終端機切換設定必須是開或關');
@@ -2431,6 +2454,7 @@ function setPreferences(owner,{compactThreshold,handoff,subagents,autoCompact,te
  if(autoCompact!==undefined){const settings={...state.agentSettings};if(autoCompact===null)delete settings.autoCompact;else settings.autoCompact=autoCompact;state.agentSettings=settings;}
  if(handoff!==undefined){const now=handoffSetting();state.agentSettings={...state.agentSettings,handoff:{recent:handoff.recent??now.recent,ask:handoff.ask??now.ask,lazy:handoff.lazy??now.lazy}};}
  if(retention!==undefined){const settings={...state.agentSettings};if(retention===null)delete settings.archiveRetentionDays;else settings.archiveRetentionDays=retention;state.agentSettings=settings;}
+ if(listRetention!==undefined){const settings={...state.agentSettings};if(listRetention===null)delete settings.checklistRetentionDays;else settings.checklistRetentionDays=listRetention;state.agentSettings=settings;}
  if(wrapUp!==undefined){
   const next={...state.agentSettings?.wrapUp};
   if(wrapUp.enabled!==undefined)next.enabled=wrapUp.enabled;
@@ -3069,7 +3093,7 @@ const heldUntil=(x,kind)=>kind==='result'?x.resultPending?.after:kind==='failure
 const pendingScheduleNotifications=(now=Date.now())=>scheduleStore.list().flatMap(x=>Object.entries(NOTIFY_FIELD).filter(([kind,f])=>x[f]&&!(Date.parse(heldUntil(x,kind)||0)>now)).map(([kind])=>({schedule:x,kind})));
 const markScheduleNotified=(id,kind='proposal')=>{scheduleStore.patch(id,{[NOTIFY_FIELD[kind]]:false});};
 const scheduleCheckList=()=>scheduleChecks.list().map(scheduleChecks.view);
-module.exports={loginShutdown:signal=>claudeLogin.shutdown(signal),loginView:()=>claudeLogin.view(),loginStart:()=>claudeLogin.start(),loginCode:text=>claudeLogin.code(text),loginCancel,loginResend,loginFailed,loginProven,reviveSilentChannels,peerLinkDigest,peerExchange,peerKey,peerLink,peerConfig,peerWidens,setPeerConfig,peerDraft,peerView,relaunchMarked,tmuxSocket,subagentList,runLimitResumes,runWrapUps,setWrapUp,mentionsFor,commandInGroup,groupList,reorderGroups,groupFor,groupView,createGroup,updateGroup,removeGroup,updateGroupChecklist,sendToGroup,searchGroup,deliverGroups,chooseTerminalOption,updateChecklist:(c,data,by)=>{const r=checklists.apply(c,data,by);save(c);return r;},syncAllRelays,syncRelays,scheduleCheckList,schedulesFor,addSchedule,approveSchedule,updateSchedule,removeSchedule,rejectSchedule,runSchedules,runScheduleNow,testSchedule,SCHEDULE_WAIT_MS,pendingScheduleNotifications,markScheduleNotified,searchMessages,runCommand,commandsFor,setThreshold,setSubagents,applyAgentSubagents,applySubagentDefault,subagentEnv,setAutoCompact,applyAgentAutoCompact,profileRestartNeeds,applyAgentRestart,applyAutoCompactDefault,autoCompactEnv,AUTO_COMPACT_PRESETS,listPreferences,setListPreferences,setAvatar,clearAvatar,avatarLocation,AVATAR_MAX_BYTES,clearFullAccessFor,pendingReportNotifications,markReportsNotified,archiveFor,setAccessFor,accessReports:()=>reports.list().map(reportView),accessReport:id=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(r);},resolveAccessReport:(id,patch)=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(reports.update(id,patch));},grantAccess,reconcile,reconnect,purgeOwner,sweepRetention,stopAgentsOf,bridgeActions:()=>[...BRIDGE_ACTIONS],archivedList,restoreArchived,keepArchived,purgeArchived,archiveRetentionDays,RETENTION_MAX_DAYS,UNSENT_ATTACHMENT_HOURS,STALE_MS,STARTUP_SLOW_MS,STARTUP_LIMIT_MS,messageTranscript,importHistory,interrupt,markViewing,isViewing,attachableFolders,MESSAGE_PAGE,updateProfile,reorder,pendingNotifications,getPreferences,setPreferences,decidePermission,confirmWorkspace,confirmChannel,compact,stateRoot,create,get,list,publicView,launch,stop,send,rotate,bridge,byToken,active,save,error};
+module.exports={CHECKLIST_RETENTION_CHOICES,checklistRetentionDays,loginShutdown:signal=>claudeLogin.shutdown(signal),loginView:()=>claudeLogin.view(),loginStart:()=>claudeLogin.start(),loginCode:text=>claudeLogin.code(text),loginCancel,loginResend,loginFailed,loginProven,reviveSilentChannels,peerLinkDigest,peerExchange,peerKey,peerLink,peerConfig,peerWidens,setPeerConfig,peerDraft,peerView,relaunchMarked,tmuxSocket,subagentList,runLimitResumes,runWrapUps,setWrapUp,mentionsFor,commandInGroup,groupList,reorderGroups,groupFor,groupView,createGroup,updateGroup,removeGroup,updateGroupChecklist,sendToGroup,searchGroup,deliverGroups,chooseTerminalOption,updateChecklist:(c,data,by)=>{const r=checklists.apply(c,data,by);save(c);return r;},syncAllRelays,syncRelays,scheduleCheckList,schedulesFor,addSchedule,approveSchedule,updateSchedule,removeSchedule,rejectSchedule,runSchedules,runScheduleNow,testSchedule,SCHEDULE_WAIT_MS,pendingScheduleNotifications,markScheduleNotified,searchMessages,runCommand,commandsFor,setThreshold,setSubagents,applyAgentSubagents,applySubagentDefault,subagentEnv,setAutoCompact,applyAgentAutoCompact,profileRestartNeeds,applyAgentRestart,applyAutoCompactDefault,autoCompactEnv,AUTO_COMPACT_PRESETS,listPreferences,setListPreferences,setAvatar,clearAvatar,avatarLocation,AVATAR_MAX_BYTES,clearFullAccessFor,pendingReportNotifications,markReportsNotified,archiveFor,setAccessFor,accessReports:()=>reports.list().map(reportView),accessReport:id=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(r);},resolveAccessReport:(id,patch)=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(reports.update(id,patch));},grantAccess,reconcile,reconnect,purgeOwner,sweepRetention,stopAgentsOf,bridgeActions:()=>[...BRIDGE_ACTIONS],archivedList,restoreArchived,keepArchived,purgeArchived,archiveRetentionDays,RETENTION_MAX_DAYS,UNSENT_ATTACHMENT_HOURS,STALE_MS,STARTUP_SLOW_MS,STARTUP_LIMIT_MS,messageTranscript,importHistory,interrupt,markViewing,isViewing,attachableFolders,MESSAGE_PAGE,updateProfile,reorder,pendingNotifications,getPreferences,setPreferences,decidePermission,confirmWorkspace,confirmChannel,compact,stateRoot,create,get,list,publicView,launch,stop,send,rotate,bridge,byToken,active,save,error};
 
 // Account deletion checks the agents an account actually has running.
 module.exports.lifecycleInventory=async()=>({sources:[{provider:"claude",providerLabel:"Claude Code",ok:true}],schedules:state.conversations.filter(c=>!['stopped','error'].includes(active(c).phase)).map(c=>({id:c.id,ownerUserId:c.owner,provider:"claude",status:active(c).phase,running:active(c).phase==="busy"}))});

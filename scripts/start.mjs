@@ -72,9 +72,9 @@ service.startService({app,port:site.servicePort(),
   const agents=require('../server/agentStore.js');
   const stopNotifications=require('../server/notifications.js').startNotifications(agents);
   // Storage that nobody asked to keep: conversations archived past the grace period,
-  // and attachments staged but never sent. Swept at startup and every six hours,
-  // unref'd so it never holds the process open.
-  const sweep=()=>{try{const r=agents.sweepRetention();if(r.conversations||r.attachments||r.workspaces)console.log(`retention: removed ${r.conversations} archived conversation(s), ${r.attachments} unsent attachment file(s), ${r.workspaces} orphaned workspace(s)`);}catch(e){console.error('retention sweep failed:',e.message);}};
+  // attachments staged but never sent, and finished checklists past their setting. Swept
+  // at startup and every six hours, unref'd so it never holds the process open.
+  const sweep=()=>{try{const r=agents.sweepRetention();if(r.conversations||r.attachments||r.workspaces||r.checklists)console.log(`retention: removed ${r.conversations} archived conversation(s), ${r.attachments} unsent attachment file(s), ${r.workspaces} orphaned workspace(s), ${r.checklists||0} finished checklist(s)`);}catch(e){console.error('retention sweep failed:',e.message);}};
   sweep();
   setInterval(sweep,6*60*60*1000).unref();
   // Schedules the owner approved fall due here (server/schedules.js); half a minute

@@ -37,6 +37,8 @@
       <f7-list-item class="wrap-up-toggle" :title="ct('自動收尾檢查')" :footer="ct('預設關閉。開啟後，Agent 完成任務並閒置一段時間，會自動請它確認工作已保存、筆記是最新的；只讀資料或回答問題不會送。')"><template #media><f7-icon f7="checkmark_seal"/></template><template #after><label class="toggle"><input type="checkbox" :aria-label="ct('自動收尾檢查')" :checked="wrapUp.enabled" @change="saveWrapUp({enabled:$event.target.checked})"/><span class="toggle-icon"></span></label></template></f7-list-item>
       <f7-list-item v-if="wrapUp.enabled" link no-chevron class="wrap-up-minutes" :title="ct('收尾檢查等待時間')" :after="wrapUp.minutes+' '+ct('分鐘')" @click.prevent="openDropdown('wrapUp',$event)"><template #media><f7-icon f7="timer"/></template></f7-list-item>
       <f7-list-item v-if="wrapUp.enabled" link no-chevron class="wrap-up-text" :title="ct('收尾檢查內容')" :after="wrapUp.custom?ct('自訂'):ct('內建')" @click.prevent="editWrapUpText"><template #media><f7-icon f7="text_alignleft"/></template></f7-list-item>
+      <!-- Finished checklists removed after these days. -->
+      <f7-list-item link no-chevron class="checklist-retention" :title="ct('已完成的待辦事項保留')" :after="checklistRetentionLabel(checklistRetentionDays)" :footer="ct('整份清單的項目都完成後，從最後一次更新起算，到期自動刪除；還有未完成、進行中或卡住項目的清單不會刪。')" @click.prevent="openDropdown('checklistRetention',$event)"><template #media><f7-icon f7="checkmark_square"/></template></f7-list-item>
     </f7-list>
 
     <!-- Sign-in protection sits with the account settings. -->
@@ -82,7 +84,7 @@ import {editSubagents,subagentLabel} from '../js/subagentDialog.js';
 import UsageMeters from '../components/UsageMeters.vue';
 async function pullRefresh(done) { try { await Promise.all([loadUsage({fresh: true}), loadOpenReports(), loadAgentPreferences().catch(() => {})]); } finally { done(); } }
 import { usageGroups, watchUsage, loadUsage } from '../js/usage.js';
-import {subagents,autoCompact,autoCompactPresets,handoff,wrapUp,archiveRetentionDays,compactThreshold,terminalSwitch,transcriptSwitch,loadAgentPreferences,saveAgentPreferences} from '../js/agentPreferences.js';
+import {subagents,autoCompact,autoCompactPresets,handoff,wrapUp,archiveRetentionDays,checklistRetentionDays,compactThreshold,terminalSwitch,transcriptSwitch,loadAgentPreferences,saveAgentPreferences} from '../js/agentPreferences.js';
 
 const isAdmin = computed(() => currentUser.value?.role === 'admin');
 const toast = (text) => f7.toast.create({ text, closeTimeout: 1800 }).open();
@@ -177,6 +179,7 @@ const dropdownItems = computed(() => {
   if(dropdownKind.value==='lazy')return [{value:'now',label:ct('立即啟動')},{value:'lazy',label:ct('等第一則訊息')}];
   if(dropdownKind.value==='autoCompact')return [{value:'default',label:autoCompactLabel(null)},...autoCompactPresets.value.map(n=>({value:String(n),label:autoCompactLabel(n)}))];
   if(dropdownKind.value==='retention')return [{value:'never',label:retentionLabel(null)},...RETENTION_CHOICES.map(d=>({value:String(d),label:retentionLabel(d)}))];
+  if(dropdownKind.value==='checklistRetention')return [{value:'never',label:checklistRetentionLabel(null)},...CHECKLIST_RETENTION_CHOICES.map(d=>({value:String(d),label:checklistRetentionLabel(d)}))];
   return [...Array.from({length:10},(_,i)=>({value:String(i+1),label:compactCount(i+1)})),{value:'0',label:compactPolicy(0)}];
 });
 const dropdownSelected = computed(() => {
@@ -184,6 +187,7 @@ const dropdownSelected = computed(() => {
   if(dropdownKind.value==='lazy')return handoff.value.lazy?'lazy':'now';
   if(dropdownKind.value==='autoCompact')return autoCompact.value?String(autoCompact.value):'default';
   if(dropdownKind.value==='retention')return archiveRetentionDays.value===null?'never':String(archiveRetentionDays.value);
+  if(dropdownKind.value==='checklistRetention')return checklistRetentionDays.value===null?'never':String(checklistRetentionDays.value);
   return String(compactThreshold.value);
 });
 
@@ -211,10 +215,19 @@ async function saveRetention(value){
   await saveAgentPreferences({archiveRetentionDays:days});toast(t('settingsSaved'));
  }catch(e){f7.dialog.alert(e.message);}
 }
+// Finished checklists: kept (the default) or removed this many days after their last change.
+const CHECKLIST_RETENTION_CHOICES=[1,3,7,30];
+const checklistRetentionLabel=days=>days?days+' '+ct('天'):ct('不刪除');
+async function saveChecklistRetention(value){
+ const days=value==='never'?null:Number(value);
+ if(days===checklistRetentionDays.value)return;
+ try{await saveAgentPreferences({checklistRetentionDays:days});toast(t('settingsSaved'));}catch(e){f7.dialog.alert(e.message);}
+}
 async function onDropdownSelect(value) {
   if(!isAdmin.value)return;
   if(dropdownKind.value==='wrapUp'){await saveWrapUp({minutes:Number(value)});return;}
   if(dropdownKind.value==='retention'){await saveRetention(value);return;}
+  if(dropdownKind.value==='checklistRetention'){await saveChecklistRetention(value);return;}
   if(dropdownKind.value==='lazy'){await saveHandoff({lazy:value==='lazy'});return;}
   if(dropdownKind.value==='autoCompact'){await saveAutoCompact(value);return;}
   try{await saveAgentPreferences({compactThreshold:Number(value)});toast(t('settingsSaved'));}catch(e){f7.dialog.alert(e.message);}
