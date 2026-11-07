@@ -102,7 +102,7 @@ Agents on two of your computers can talk to each other, for example a build agen
 
 ## Seeing what an agent does
 
-- **Live progress** in the conversation's title bar, and whether it is still working in the background.
+- **Live progress** in the chat: the tool the agent is using, which step it is on and how long it has worked, and whether it is still working in the background.
 - **Terminal view.** Switch to the agent's real Claude Code terminal, beside the chat on a computer. An admin turns the switch on in the Admin tab.
 - **Transcript inspector.** Tap any message to see what that exchange sent to the model and got back, with tool calls, tokens and an estimated cost from API reference prices (not a bill), and the subagents the agent started. Admins only, turned on in the Admin tab.
 - **Context ring and usage view.** On a computer, a ring beside the To-dos button shows how full the agent's context is. It opens **Usage**: the context window (how much is used, where it auto-compacts, the model and effort), unfolding to each running subagent's context; your plan's 5-hour and weekly limits; the agent's auto-compact timing, which an admin can open in Agent Profile from there; and the agent's total tokens and estimated cost. A refresh button asks again. On a phone, **Usage** is in the ⋯ menu.
