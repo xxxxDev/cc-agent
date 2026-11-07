@@ -22,24 +22,24 @@
   </div>
  </f7-page></f7-view></f7-popup>
 
-  <f7-popup ref="infoPopup" :opened="infoOpen" :close-by-backdrop-click="false" :swipe-to-close="sheetSwipe" @popup:closed="infoOpen=false" class="conversation-info" :class="{'sheet-swipe':sheetSwipe}"><div v-if="sheetSwipe" class="sheet-grabber" aria-hidden="true"/><f7-view><f7-page><f7-navbar><f7-nav-left><f7-link icon-only icon-f7="xmark" :aria-label="ct('關閉對話資訊')" @click="closeProfile()"/></f7-nav-left><f7-nav-title>{{'Agent Profile'}}</f7-nav-title><f7-nav-right><!-- Save without scrolling to the button at the end. --><f7-link v-if="user?.role==='admin'" icon-only icon-f7="floppy_disk" class="profile-save" :class="{disabled:profileSaving||!profileDirty||!profileDraft?.title?.trim()}" :aria-label="ct('保存 Agent Profile')" @click="!profileSaving&&profileDirty&&profileDraft?.title?.trim()&&saveProfile()"/></f7-nav-right></f7-navbar>
+  <f7-popup ref="infoPopup" :opened="infoOpen" :close-by-backdrop-click="false" :swipe-to-close="sheetSwipe" :push="sheetSwipe" @popup:closed="infoOpen=false" class="conversation-info" :class="{'sheet-swipe':sheetSwipe}"><div v-if="sheetSwipe" class="sheet-grabber" aria-hidden="true"/><f7-view><f7-page><f7-navbar><f7-nav-left><f7-link icon-only icon-f7="xmark" :aria-label="ct('關閉對話資訊')" @click="closeProfile()"/></f7-nav-left><f7-nav-title>{{'Agent Profile'}}</f7-nav-title><f7-nav-right><!-- Save without scrolling to the button at the end. --><f7-link v-if="user?.role==='admin'" icon-only icon-f7="floppy_disk" class="profile-save" :class="{disabled:profileSaving||!profileDirty||!profileDraft?.title?.trim()}" :aria-label="ct('保存 Agent Profile')" @click="!profileSaving&&profileDirty&&profileDraft?.title?.trim()&&saveProfile()"/></f7-nav-right></f7-navbar>
    <AgentProfilePanel v-if="infoOpen" @trace-start="infoOpen=false"/>
   </f7-page></f7-view></f7-popup>
 <!-- Searching this conversation, from the search
        button beside the terminal switch; a tap on a result opens the message. -->
-  <f7-popup :opened="searchPopupOpen" :swipe-to-close="sheetSwipe" @popup:opened="focusSearch" @popup:closed="searchPopupOpen&&(searchOpen=false)" class="message-search-popup" :class="{'sheet-swipe':sheetSwipe}"><div v-if="sheetSwipe" class="sheet-grabber" aria-hidden="true"/><f7-view><f7-page>
+  <f7-popup :opened="searchPopupOpen" :swipe-to-close="sheetSwipe" :push="sheetSwipe" @popup:opened="focusSearch" @popup:closed="searchPopupOpen&&(searchOpen=false)" class="message-search-popup" :class="{'sheet-swipe':sheetSwipe}"><div v-if="sheetSwipe" class="sheet-grabber" aria-hidden="true"/><f7-view><f7-page>
    <f7-navbar><f7-nav-left><f7-link popup-close icon-only icon-f7="xmark" :aria-label="ct('關閉搜尋')"/></f7-nav-left><f7-nav-title>{{ct('搜尋這個對話')}}</f7-nav-title></f7-navbar>
    <f7-list inset><f7-list-input v-model:value="searchText" type="search" :placeholder="ct('搜尋聊天記錄')" :aria-label="ct('搜尋聊天記錄')" class="message-search-input"/></f7-list>
    <MessageSearchResults v-if="searchPopupOpen&&selected" :query="searchText" :conversation-id="selected" @pick="pickFound"/>
   </f7-page></f7-view></f7-popup>
 <!-- The agent's checklists on a phone. -->
-  <f7-popup :opened="checklistPopupOpen" :swipe-to-close="sheetSwipe" @popup:closed="checklistPopupOpen&&(checklistOpen=false)" class="checklist-popup" :class="{'sheet-swipe':sheetSwipe}"><div v-if="sheetSwipe" class="sheet-grabber" aria-hidden="true"/><f7-view><f7-page>
+  <f7-popup :opened="checklistPopupOpen" :swipe-to-close="sheetSwipe" :push="sheetSwipe" @popup:closed="checklistPopupOpen&&(checklistOpen=false)" class="checklist-popup" :class="{'sheet-swipe':sheetSwipe}"><div v-if="sheetSwipe" class="sheet-grabber" aria-hidden="true"/><f7-view><f7-page>
    <f7-navbar><f7-nav-left><f7-link popup-close icon-only icon-f7="xmark" :aria-label="ct('關閉待辦事項')"/></f7-nav-left><f7-nav-title>{{ct('待辦事項')}}</f7-nav-title><f7-nav-right><f7-link icon-only icon-f7="plus" class="checklist-new" :aria-label="ct('新增清單')" @click="newChecklist"/></f7-nav-right></f7-navbar>
    <ChecklistPanel v-if="checklistPopupOpen" :key="selected"/>
   </f7-page></f7-view></f7-popup>
 <!-- How full the context is, from the phone's 「⋯」 menu or beside the terminal; the right
        column on a desktop. -->
-  <f7-popup :opened="usagePopupOpen" :swipe-to-close="sheetSwipe" @popup:closed="usagePopupOpen&&(usageOpen=false)" class="usage-popup" :class="{'sheet-swipe':sheetSwipe}"><div v-if="sheetSwipe" class="sheet-grabber" aria-hidden="true"/><f7-view><f7-page>
+  <f7-popup :opened="usagePopupOpen" :swipe-to-close="sheetSwipe" :push="sheetSwipe" @popup:closed="usagePopupOpen&&(usageOpen=false)" class="usage-popup" :class="{'sheet-swipe':sheetSwipe}"><div v-if="sheetSwipe" class="sheet-grabber" aria-hidden="true"/><f7-view><f7-page>
    <f7-navbar><f7-nav-left><f7-link popup-close icon-only icon-f7="xmark" :aria-label="ct('關閉用量')"/></f7-nav-left><f7-nav-title>{{ct('用量')}}</f7-nav-title><f7-nav-right><f7-link icon-only icon-f7="arrow_clockwise" class="usage-refresh" :class="{spinning:usageRefreshing}" :aria-label="ct('重新整理用量')" @click="refreshUsage"/></f7-nav-right></f7-navbar>
    <ContextUsagePanel v-if="usagePopupOpen" :usage="detail?.contextUsage" :agent="detail"/>
   </f7-page></f7-view></f7-popup>
@@ -114,9 +114,9 @@ export default {components:{GlassDropdown,AgentProfileFields,AgentProfilePanel,M
  menuAction(value){const c=w.menuConversation.value;if(!c)return;if(value==="rename")w.renameConversation(c);if(value==="remove")w.deleteConversation(c);w.menuConversation.value=null;}}}};
 </script>
 <style scoped>
-/* A phone sheet stops short of the top, so the page's navbar shows above it, as iOS sheets
-   do; inside it the status bar's room is not needed. */
-.popup.sheet-swipe{top:calc(env(safe-area-inset-top, 0px) + 52px);height:auto;bottom:0;border-radius:16px 16px 0 0;overflow:hidden;--f7-safe-area-top:0px;}
+/* A phone sheet uses Framework7's push: it stands almost full height and the page behind
+   steps back and darkens, as an iOS card does; Framework7 places it. */
+.popup.sheet-swipe{overflow:hidden;}
 /* The grab handle of a sheet that closes by a pull down, inside the navbar's top: above the
    view, which Framework7 lifts to z-index 5000. */
 .sheet-grabber{position:absolute;top:calc(var(--f7-safe-area-top) + 5px);left:50%;width:36px;height:5px;margin-left:-18px;border-radius:var(--cc-radius-pill);background:var(--cc-color-text-tertiary);z-index:5001;pointer-events:none;}
