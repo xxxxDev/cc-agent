@@ -365,6 +365,9 @@ const english = {
 "打開後 agent 不能另外換模型，所有子代理都用同一個模型。":"When on, the agent cannot pick another model: every subagent uses this one.",
 "agent 仍可能為某一次另外調整 Effort。":"The agent may still pick another effort for one subagent.",
 "完整權限的 Claude agent 啟動的子代理用這裡的模型和 Effort；個別 agent 可以在 Agent Profile 另外設定。改了要等 agent 重新啟動才生效。":"Subagents of full-access Claude agents use this model and effort; an agent can set its own in Agent Profile. Applies when an agent next starts.",
+"自動壓縮時機":"Auto-compact timing",
+"Claude Code 預設":"Claude Code default",
+"用到這個量就先壓縮，超過模型上限不起作用。太低會一直壓縮。只影響 CC Agent 的 agent。":"Compacts once the context reaches this much; no effect above the model's limit. Too low and it keeps compacting. Only CC Agent's agents are affected.",
 "只套用在這個 agent。選「跟隨管理設定」就照管理頁的設定。改了要等 agent 重新啟動才生效。":"For this agent only. Follow the Admin setting to use the admin page's. Applies when the agent next starts.",
 "範圍報告單":"Scope reports",
 "Agent 碰到範圍外的動作時會被擋下，並在這裡開一張報告單。可以略過，或替那個 Agent 開通。":"When an agent tries something outside its access it is refused, and a report lands here. Dismiss it, or widen that agent's access.",
@@ -871,3 +874,12 @@ export function handoffSummary(threshold,{recent=12,ask=true,lazy=false}={}) {
  return [auto,(lang.value==='zh-TW'?'帶 ':'carry ')+handoffCount(recent),ask?ct('每次詢問'):ct('不詢問'),...(lazy?[ct('等第一則訊息再啟動')]:[])].join(lang.value==='zh-TW'?'・':' · ');
 }
 export function compactPolicy(n) {return Number(n)===0?ct('不自動換代'):compactCount(n);}
+// When Claude Code compacts (issue #12): null is its own default, otherwise a token
+// count, 「30 萬 token」 or "300k tokens".
+export function autoCompactLabel(n) {
+ if (!n) return ct('Claude Code 預設');
+ return lang.value==='zh-TW'?`${n/10000} 萬 token`:`${n/1000}k tokens`;
+}
+// An agent's choice that has none of its own, with what the admin page says now.
+// Short, as the rows beside it say it (「跟隨管理設定（5 次）」), so the title still fits on a phone.
+export function autoCompactFollow(n) {const v=!n?(lang.value==='zh-TW'?'預設':'default'):(lang.value==='zh-TW'?`${n/10000} 萬`:`${n/1000}k`);return `${ct('跟隨管理設定')}（${v}）`.replace('（',lang.value==='zh-TW'?'（':' (').replace(/）$/,lang.value==='zh-TW'?'）':')');}

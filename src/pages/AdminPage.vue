@@ -22,6 +22,8 @@
 
     <f7-block-title>{{ t('sectionHandoff') }}</f7-block-title>
     <f7-list inset class="fs-settings-list handoff-list">
+      <!-- When each agent's Claude Code compacts (issue #12). -->
+      <f7-list-item link no-chevron class="auto-compact-row" :title="ct('自動壓縮時機')" :after="autoCompactLabel(autoCompact)" :footer="ct('用到這個量就先壓縮，超過模型上限不起作用。太低會一直壓縮。只影響 CC Agent 的 agent。')" @click.prevent="openDropdown('autoCompact',$event)"><template #media><f7-icon f7="rectangle_compress_vertical"/></template></f7-list-item>
       <f7-list-item link no-chevron class="handoff-threshold-row" :title="ct('Compact 自動接續')" :after="compactPolicy(compactThreshold)" @click.prevent="openDropdown('compact',$event)"><template #media><f7-icon f7="arrow_2_circlepath"/></template></f7-list-item>
       <!-- How many recent messages a handoff carries, by hand or automatic (issue #9). -->
       <f7-list-item link no-chevron class="handoff-recent-row" :title="ct('接續時帶入訊息')" :after="handoffCount(handoff.recent)" @click.prevent="editHandoffRecent"><template #media><f7-icon f7="text_bubble"/></template></f7-list-item>
@@ -68,7 +70,7 @@
 </template>
 
 <script setup>
-import {ct,compactCount,compactPolicy,handoffCount} from '../js/agent-i18n.js';
+import {ct,compactCount,compactPolicy,handoffCount,autoCompactLabel} from '../js/agent-i18n.js';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { f7 } from 'framework7-vue';
 import { t } from '../js/i18n.js';
@@ -80,7 +82,7 @@ import {editSubagents,subagentLabel} from '../js/subagentDialog.js';
 import UsageMeters from '../components/UsageMeters.vue';
 async function pullRefresh(done) { try { await Promise.all([loadUsage({fresh: true}), loadOpenReports(), loadAgentPreferences().catch(() => {})]); } finally { done(); } }
 import { usageGroups, watchUsage, loadUsage } from '../js/usage.js';
-import {subagents,handoff,wrapUp,archiveRetentionDays,compactThreshold,terminalSwitch,transcriptSwitch,loadAgentPreferences,saveAgentPreferences} from '../js/agentPreferences.js';
+import {subagents,autoCompact,autoCompactPresets,handoff,wrapUp,archiveRetentionDays,compactThreshold,terminalSwitch,transcriptSwitch,loadAgentPreferences,saveAgentPreferences} from '../js/agentPreferences.js';
 
 const isAdmin = computed(() => currentUser.value?.role === 'admin');
 const toast = (text) => f7.toast.create({ text, closeTimeout: 1800 }).open();
@@ -123,11 +125,22 @@ function editSubagentDefault(){
     save:async next=>{
       const r=await saveAgentPreferences({subagents:next});toast(t('settingsSaved'));
       // The running agents following it take it when they start again: now, or later.
-      const pending=r?.subagentPending||[];
-      if(pending.length)setTimeout(()=>f7.dialog.create({title:ct('子代理模型與 Effort'),
-        text:pending.length+' '+ct('個 agent 要重新啟動才會套用：')+pending.map(a=>escapeHtml(a.title)+(a.busy?ct('（工作中）'):'')).join('、')+'<br><br>'+ct('現在套用：閒著的馬上重新啟動，工作中的等這次回覆結束；稍後：各自下次啟動時套用。'),
-        buttons:[{text:ct('稍後')},{text:ct('現在套用'),strong:true,onClick:async()=>{try{const n=await api('/preferences/subagents-apply',{method:'POST',body:JSON.stringify({ids:pending.map(a=>a.id)})});toast(ct('已套用')+'：'+ct('已重新啟動')+' '+(n.now||0)+'，'+ct('回覆結束後')+' '+(n['after-reply']||0));}catch(e){f7.dialog.alert(e.message);}}}],destroyOnClose:true}).open(),350);
+      offerApply(ct('子代理模型與 Effort'),r?.subagentPending||[],'/preferences/subagents-apply');
     }});
+}
+// The running agents following an admin page setting that start with it only when they
+// start again: listed, and restarted only on "apply now".
+function offerApply(title,pending,endpoint){
+  if(pending.length)setTimeout(()=>f7.dialog.create({title,
+    text:pending.length+' '+ct('個 agent 要重新啟動才會套用：')+pending.map(a=>escapeHtml(a.title)+(a.busy?ct('（工作中）'):'')).join('、')+'<br><br>'+ct('現在套用：閒著的馬上重新啟動，工作中的等這次回覆結束；稍後：各自下次啟動時套用。'),
+    buttons:[{text:ct('稍後')},{text:ct('現在套用'),strong:true,onClick:async()=>{try{const n=await api(endpoint,{method:'POST',body:JSON.stringify({ids:pending.map(a=>a.id)})});toast(ct('已套用')+'：'+ct('已重新啟動')+' '+(n.now||0)+'，'+ct('回覆結束後')+' '+(n['after-reply']||0));}catch(e){f7.dialog.alert(e.message);}}}],destroyOnClose:true}).open(),350);
+}
+// When every agent's Claude Code compacts unless it has its own (issue #12).
+async function saveAutoCompact(value){
+  const next=value==='default'?null:Number(value);
+  if(next===autoCompact.value)return;
+  try{const r=await saveAgentPreferences({autoCompact:next});toast(t('settingsSaved'));offerApply(ct('自動壓縮時機'),r?.autoCompactPending||[],'/preferences/auto-compact-apply');}
+  catch(e){f7.dialog.alert(e.message||t('settingsFailed'));}
 }
 // The handoff settings, one row each.
 async function saveHandoff(patch,event){
@@ -162,12 +175,14 @@ const dropdownKind = ref('compact');
 const dropdownItems = computed(() => {
   if(dropdownKind.value==='wrapUp')return [...new Set([...WRAP_UP_MINUTES,wrapUp.value.minutes])].sort((a,b)=>a-b).map(n=>({value:String(n),label:n+' '+ct('分鐘')}));
   if(dropdownKind.value==='lazy')return [{value:'now',label:ct('立即啟動')},{value:'lazy',label:ct('等第一則訊息')}];
+  if(dropdownKind.value==='autoCompact')return [{value:'default',label:autoCompactLabel(null)},...autoCompactPresets.value.map(n=>({value:String(n),label:autoCompactLabel(n)}))];
   if(dropdownKind.value==='retention')return [{value:'never',label:retentionLabel(null)},...RETENTION_CHOICES.map(d=>({value:String(d),label:retentionLabel(d)}))];
   return [...Array.from({length:10},(_,i)=>({value:String(i+1),label:compactCount(i+1)})),{value:'0',label:compactPolicy(0)}];
 });
 const dropdownSelected = computed(() => {
   if(dropdownKind.value==='wrapUp')return String(wrapUp.value.minutes);
   if(dropdownKind.value==='lazy')return handoff.value.lazy?'lazy':'now';
+  if(dropdownKind.value==='autoCompact')return autoCompact.value?String(autoCompact.value):'default';
   if(dropdownKind.value==='retention')return archiveRetentionDays.value===null?'never':String(archiveRetentionDays.value);
   return String(compactThreshold.value);
 });
@@ -201,6 +216,7 @@ async function onDropdownSelect(value) {
   if(dropdownKind.value==='wrapUp'){await saveWrapUp({minutes:Number(value)});return;}
   if(dropdownKind.value==='retention'){await saveRetention(value);return;}
   if(dropdownKind.value==='lazy'){await saveHandoff({lazy:value==='lazy'});return;}
+  if(dropdownKind.value==='autoCompact'){await saveAutoCompact(value);return;}
   try{await saveAgentPreferences({compactThreshold:Number(value)});toast(t('settingsSaved'));}catch(e){f7.dialog.alert(e.message);}
 }
 

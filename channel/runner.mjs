@@ -298,11 +298,19 @@ const DISCORD_PLUGIN='discord@claude-plugins-official';
 const settingsRoots=dir=>{const out=[dir];for(let d=path.dirname(dir);;d=path.dirname(d)){if(fs.existsSync(path.join(d,'.git')))out.push(d);if(d===path.dirname(d))return out;}};
 const noDiscord=path.join(controlDir,'no-discord');
 // The subagents' model and effort (server/agentStore.js subagentEnv) go into the env of
-// the workspace's own local settings, which Claude reads however it is started. Only
-// these three keys are CC Agent's there; it sets or removes them at every start and
-// leaves the rest of the file as it is.
+// the workspace's own local settings, which Claude reads however it is started. So does
+// when it compacts (CLAUDE_CODE_AUTO_COMPACT_WINDOW, agentStore.js autoCompactEnv; issue
+// #12): a token count, digits only, 100000 to 1000000. Only these keys are CC Agent's
+// there; it sets or removes them at every start and leaves the rest of the file as it
+// is. Any other key or value is dropped.
 const SUBAGENT_KEYS=['CLAUDE_CODE_SUBAGENT_MODEL','CLAUDE_CODE_SUBAGENT_MODEL_FORCE','CLAUDE_CODE_SUBAGENT_EFFORT'];
-const subagentEnv=Object.fromEntries(Object.entries(config.subagentEnv&&typeof config.subagentEnv==='object'?config.subagentEnv:{}).filter(([k,v])=>SUBAGENT_KEYS.includes(k)&&typeof v==='string'&&/^[a-z0-9.-]{1,40}$/.test(v)));
+const AUTO_COMPACT_KEY='CLAUDE_CODE_AUTO_COMPACT_WINDOW';
+const MANAGED_KEYS=[...SUBAGENT_KEYS,AUTO_COMPACT_KEY];
+const envOf=v=>Object.entries(v&&typeof v==='object'&&!Array.isArray(v)?v:{});
+const subagentEnv=Object.fromEntries([
+ ...envOf(config.subagentEnv).filter(([k,v])=>SUBAGENT_KEYS.includes(k)&&typeof v==='string'&&/^[a-z0-9.-]{1,40}$/.test(v)),
+ ...envOf(config.autoCompactEnv).filter(([k,v])=>k===AUTO_COMPACT_KEY&&typeof v==='string'&&/^[1-9]\d{5,6}$/.test(v)&&Number(v)>=100000&&Number(v)<=1000000),
+]);
 if(ownerConfig){
  try{
   for(const root of settingsRoots(config.cwd)){
@@ -311,13 +319,13 @@ if(ownerConfig){
    if(!current||typeof current!=='object'||Array.isArray(current))throw new Error(local+' 不是設定物件');
    const next={...current,enabledPlugins:{...current.enabledPlugins,[DISCORD_PLUGIN]:false}};
    if(root===config.cwd){
-    const env=Object.fromEntries(Object.entries(current.env&&typeof current.env==='object'?current.env:{}).filter(([k])=>!SUBAGENT_KEYS.includes(k)));
+    const env=Object.fromEntries(Object.entries(current.env&&typeof current.env==='object'?current.env:{}).filter(([k])=>!MANAGED_KEYS.includes(k)));
     Object.assign(env,subagentEnv);
     if(Object.keys(env).length)next.env=env;else delete next.env;
    }
    if(JSON.stringify(next)!==JSON.stringify(current)){fs.mkdirSync(path.dirname(local),{recursive:true});writeFresh(local,JSON.stringify(next,null,2)+'\n');}
   }
- }catch(e){await bridge(config,'error',{message:'無法寫入 agent 的本機設定（關掉 Discord plugin、子代理設定），已拒絕啟動：'+e.message}).catch(()=>{});process.exit(1);}
+ }catch(e){await bridge(config,'error',{message:'無法寫入 agent 的本機設定（關掉 Discord plugin、子代理與自動壓縮設定），已拒絕啟動：'+e.message}).catch(()=>{});process.exit(1);}
  fs.mkdirSync(noDiscord,{recursive:true,mode:0o700});
 }
 // TMPDIR too, for Claude itself and what it starts outside the sandbox; sandboxed
@@ -325,7 +333,10 @@ if(ownerConfig){
 // TMPPREFIX in that folder, for any shell Claude does not set it for: zsh's default,
 // /tmp/zsh, is outside its scope, and every here-document would fail.
 // A full-access agent keeps the owner's git identity; a scoped one cannot read it.
-const env={...agentEnv(),TMPDIR:agentTmp+'/',CLAUDE_CODE_TMPDIR:agentTmp,...(platform.isWin?{TEMP:agentTmp,TMP:agentTmp}:{}),...(full?{}:{GIT_CONFIG_GLOBAL:gitConfig,TMPPREFIX:path.join(sandboxTmp,'zsh')}),...(ownerConfig?{DISCORD_STATE_DIR:noDiscord}:{}),...(noConnectors?{ENABLE_CLAUDEAI_MCP_SERVERS:'false'}:{})};
+// A scoped agent reads no settings.local.json (--setting-sources project --settings), so
+// when it compacts is handed to it in its environment instead: the same checked value,
+// set only by CC Agent (issue #12).
+const env={...agentEnv(),TMPDIR:agentTmp+'/',CLAUDE_CODE_TMPDIR:agentTmp,...(platform.isWin?{TEMP:agentTmp,TMP:agentTmp}:{}),...(full?{}:{GIT_CONFIG_GLOBAL:gitConfig,TMPPREFIX:path.join(sandboxTmp,'zsh')}),...(ownerConfig?{DISCORD_STATE_DIR:noDiscord}:{}),...(noConnectors?{ENABLE_CLAUDEAI_MCP_SERVERS:'false'}:{}),...(!full&&subagentEnv[AUTO_COMPACT_KEY]?{[AUTO_COMPACT_KEY]:subagentEnv[AUTO_COMPACT_KEY]}:{})};
 
 const transcript=path.join(platform.isWin?homeDir:env.HOME,'.claude','projects',config.cwd.replace(/[^a-zA-Z0-9]/g,'-'),config.sessionId+'.jsonl');
 const resumed=config.resume||fs.existsSync(transcript)||fs.existsSync(path.join(controlDir,'started.marker'));

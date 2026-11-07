@@ -227,7 +227,7 @@ function publicView(c,full=false,window) {
  const work=c.mode==='claude'&&alive?transcript.currentWork(stateRoot,c):{inTurn:false,background:0};
  const lastMessage=c.messages.findLast(m=>m.role==='user'||m.role==='assistant'||m.role==='relay');
  const preview=String(lastMessage?.text||lastMessage?.attachments?.map(f=>f.name).join(', ')||'').replace(/\s+/g,' ').trim();
- return {preview:Array.from(preview).slice(0,500).join('')+(Array.from(preview).length>500?'…':''),activeAt:lastMessage?.at||c.createdAt||null,id:c.id,...profile,...modelView(c),profileVersion:c.profileVersion||0,sessionModel:g.model||null,sessionEffort:g.effort||null,mode:c.mode,createdAt:c.createdAt,updatedAt:c.updatedAt,generation:c.generation,compactCount:g.compacts,threshold:c.threshold,thresholdOwn:!!c.thresholdOwn,wrapUp:c.wrapUpOff!==true,peerLink:peerView(c),phase:alive&&busyElsewhere(c,g,work)?'busy':g.phase,background:work.background,compacting:!!(g.manualCompact||g.compacting),compactingSince:(g.manualCompact||g.compacting)&&g.compactSince?new Date(g.compactSince).toISOString():null,compactPercent:(g.manualCompact||g.compacting)&&Number.isFinite(g.compactPercent)?g.compactPercent:null,connected:alive&&g.ready,tmux:g.tmux,sessionId:g.sessionId,pendingRotation:c.pendingRotation,checklists:c.checklists||[],avatar:c.avatar?'/api/conversations/'+c.id+'/avatar?v='+c.avatar.version:null,listGroup:c.listGroup||null,lastError:g.lastError||'',unread:unreadCount(c),toolPolicy:g.toolPolicy||'legacy',terminalPrompt:alive&&prompts.get(c.id)?.session===g.sessionId?(({key,title,body,options,selected,hint,since})=>({key,title,body,options,selected,hint,since}))(prompts.get(c.id)):null,permissions:permissions.pending(g),dormant:!!(g.dormant&&g.phase==='stopped'),...(full?{handoffSetting:handoffSetting(),subagents:c.subagents?subagentClean(c.subagents):null,subagentDefault:subagentDefault(),subagentsApply:subagentsApply(c),subagentPending:subagentPending(c),subagentWaiting:!!c.relaunchOnStart&&subagentPending(c),memory:c.memory,...messageWindow(c,window),runs:c.runs.map(({token,seen,permissions,...x})=>x),usage:transcript.usage(stateRoot,c),progress:transcript.progress(stateRoot,c)}:{})};
+ return {preview:Array.from(preview).slice(0,500).join('')+(Array.from(preview).length>500?'…':''),activeAt:lastMessage?.at||c.createdAt||null,id:c.id,...profile,...modelView(c),profileVersion:c.profileVersion||0,sessionModel:g.model||null,sessionEffort:g.effort||null,mode:c.mode,createdAt:c.createdAt,updatedAt:c.updatedAt,generation:c.generation,compactCount:g.compacts,threshold:c.threshold,thresholdOwn:!!c.thresholdOwn,wrapUp:c.wrapUpOff!==true,peerLink:peerView(c),phase:alive&&busyElsewhere(c,g,work)?'busy':g.phase,background:work.background,compacting:!!(g.manualCompact||g.compacting),compactingSince:(g.manualCompact||g.compacting)&&g.compactSince?new Date(g.compactSince).toISOString():null,compactPercent:(g.manualCompact||g.compacting)&&Number.isFinite(g.compactPercent)?g.compactPercent:null,connected:alive&&g.ready,tmux:g.tmux,sessionId:g.sessionId,pendingRotation:c.pendingRotation,checklists:c.checklists||[],avatar:c.avatar?'/api/conversations/'+c.id+'/avatar?v='+c.avatar.version:null,listGroup:c.listGroup||null,lastError:g.lastError||'',unread:unreadCount(c),toolPolicy:g.toolPolicy||'legacy',terminalPrompt:alive&&prompts.get(c.id)?.session===g.sessionId?(({key,title,body,options,selected,hint,since})=>({key,title,body,options,selected,hint,since}))(prompts.get(c.id)):null,permissions:permissions.pending(g),dormant:!!(g.dormant&&g.phase==='stopped'),...(full?{handoffSetting:handoffSetting(),subagents:c.subagents?subagentClean(c.subagents):null,subagentDefault:subagentDefault(),subagentsApply:subagentsApply(c),subagentPending:subagentPending(c),subagentWaiting:!!c.relaunchOnStart&&subagentPending(c),autoCompactOwn:autoCompactOwn(c),autoCompact:autoCompactOwn(c)?autoCompactValue(c.autoCompact.window):null,autoCompactDefault:autoCompactDefault(),autoCompactEffective:autoCompactSetting(c),autoCompactApply:autoCompactApply(c),autoCompactPending:autoCompactPending(c),autoCompactWaiting:!!c.relaunchOnStart&&autoCompactPending(c),memory:c.memory,...messageWindow(c,window),runs:c.runs.map(({token,seen,permissions,...x})=>x),usage:transcript.usage(stateRoot,c),progress:transcript.progress(stateRoot,c)}:{})};
 }
 // callerRole is a separate argument, never read from the request body: the body
 // is client-controlled, and the model and effort tiers in agentProfile depend on it.
@@ -539,7 +539,7 @@ function launch(c) {
  // Its own chat's attachments, readable where it runs scoped (a file the owner sent could not be opened).
  const attachDir=attachments.directory(stateRoot,c);fs.mkdirSync(attachDir,{recursive:true,mode:0o700});
  // Only these keys: channel/runner.mjs refuses any unsupported launch key.
- const config={tmuxSocket,...(platform.isWin?{tmux:g.tmux}:{}),agentStarter:agentStarter(c),peerSend:peerToolsFor(c),reference:referenceDir(c),attachments:attachDir,conversationId:c.id,sessionId:g.sessionId,token:g.token,generation:g.number,server:'http://127.0.0.1:'+require('./siteConfig').servicePort(),root:ROOT,cwd:dir,resume:g.number===1&&!!c.resumeSessionId,memory:c.memory,profile:agentProfile.profile(c),model,effort:agentProfile.profile(c).effort,handoff:c.handoff||null,access,...(ownerIsActiveAdmin(c.owner)?{}:{mcpTickedOnly:true}),...(subagentsApply(c)&&Object.keys(subagentEnv(c)).length?{subagentEnv:subagentEnv(c)}:{})};
+ const config={tmuxSocket,...(platform.isWin?{tmux:g.tmux}:{}),agentStarter:agentStarter(c),peerSend:peerToolsFor(c),reference:referenceDir(c),attachments:attachDir,conversationId:c.id,sessionId:g.sessionId,token:g.token,generation:g.number,server:'http://127.0.0.1:'+require('./siteConfig').servicePort(),root:ROOT,cwd:dir,resume:g.number===1&&!!c.resumeSessionId,memory:c.memory,profile:agentProfile.profile(c),model,effort:agentProfile.profile(c).effort,handoff:c.handoff||null,access,...(ownerIsActiveAdmin(c.owner)?{}:{mcpTickedOnly:true}),...(subagentsApply(c)&&Object.keys(subagentEnv(c)).length?{subagentEnv:subagentEnv(c)}:{}),...(autoCompactApply(c)&&Object.keys(autoCompactEnv(c)).length?{autoCompactEnv:autoCompactEnv(c)}:{})};
  const control=controlDir(c,g);fs.mkdirSync(control,{recursive:true,mode:0o700});
  // Earlier launches kept these in the workspace; nothing reads them there any more.
  // A marker left there still means the session has started: carried over as a new
@@ -563,7 +563,7 @@ function launch(c) {
   delete c.pausedByOwner;
   // Started: no longer waiting for a first message (a failed start keeps it waiting).
   delete g.dormant;delete g.bootstrapped;delete g.startupSkipped;
-  g.model=config.model;g.effort=config.effort;g.subagentEnv=config.subagentEnv||{};g.profileHash=null;g.toolPolicy='native-bypass';g.phase='starting';g.ready=false;g.lastError='';g.heartbeat=Date.now();g.startedAt=Date.now();g.launchedAt=Date.now();save(c);
+  g.model=config.model;g.effort=config.effort;g.subagentEnv=config.subagentEnv||{};g.autoCompactEnv=config.autoCompactEnv||{};g.profileHash=null;g.toolPolicy='native-bypass';g.phase='starting';g.ready=false;g.lastError='';g.heartbeat=Date.now();g.startedAt=Date.now();g.launchedAt=Date.now();save(c);
  }catch(e){g.phase='error';g.lastError='tmux 啟動失敗：'+e.message;save(c);throw error(g.lastError,500);}
 }
 // The profile's control is labelled 啟動 / 重新連線 and has to honour both halves.
@@ -2195,13 +2195,7 @@ function setSubagents(c,value){
  save(c);
  return subagentNeeds(c);
 }
-function subagentNeeds(c){
- if(!subagentsApply(c))return 'none';
- const g=active(c);
- if(['stopped','error'].includes(g.phase))return 'next-start';
- if(!subagentPending(c))return 'none';
- return ['ready','awaiting-workspace','awaiting-confirmation'].includes(g.phase)&&quietForRestart(c,g)?'idle':'busy';
-}
+function subagentNeeds(c){return restartNeeds(c,subagentsApply,subagentPending);}
 // The admin's yes to that question, for one agent: only while it is still pending.
 function applyAgentSubagents(c){return subagentPending(c)?applySubagents(c):'none';}
 // The running agents that follow the admin page and run with something else than it says now.
@@ -2211,6 +2205,54 @@ function applySubagentDefault(ids){
  if(!Array.isArray(ids)||ids.some(id=>typeof id!=='string'))throw error('ids 格式不正確');
  const out={now:0,'after-reply':0,'next-start':0};
  for(const c of subagentFollowersPending())if(ids.includes(c.id)){try{out[applySubagents(c)]++;}catch(e){out['next-start']++;console.error(`subagent apply for ${c.id}: ${e.message}`);}}
+ return out;
+}
+// When an agent's Claude Code compacts its context (issue #12):
+// CLAUDE_CODE_AUTO_COMPACT_WINDOW, a token count Claude Code compacts a little before,
+// handed over the way the subagents' setting is and put into effect with the same
+// restart asked for first. null is Claude Code's own default (compact when nearly
+// full). An admin page default, and an agent's own ({window}) or none to follow it, as
+// thresholdOwn. A full-access agent reads it from its workspace's local settings, a
+// scoped one from its environment (channel/runner.mjs). No preset below 200k: start-up
+// alone can take over 50k, and a lower window compacts again and again.
+const AUTO_COMPACT_PRESETS=[200000,300000,400000,500000,700000];
+const autoCompactValue=v=>AUTO_COMPACT_PRESETS.includes(v)?v:null;
+function autoCompactCheck(v){if(v!==null&&!AUTO_COMPACT_PRESETS.includes(v))throw error('自動壓縮時機必須是 Claude Code 預設或 '+AUTO_COMPACT_PRESETS.join('、')+' token 之一');return v;}
+function autoCompactDefault(){return autoCompactValue(state.agentSettings?.autoCompact);}
+const autoCompactOwn=c=>!!c.autoCompact&&typeof c.autoCompact==='object';
+function autoCompactSetting(c){return autoCompactOwn(c)?autoCompactValue(c.autoCompact.window):autoCompactDefault();}
+function autoCompactApply(c){return c.mode==='claude';}
+function autoCompactEnv(c){const n=autoCompactSetting(c);return n?{CLAUDE_CODE_AUTO_COMPACT_WINDOW:String(n)}:{};}
+// What its running session started with: g.autoCompactEnv, set at launch; one started
+// before it was recorded was given nothing, since no such key was written until then.
+function autoCompactPending(c){
+ const g=active(c),started=g.autoCompactEnv||{};
+ return autoCompactApply(c)&&g.phase!=='stopped'&&envKey(started)!==envKey(autoCompactEnv(c));
+}
+// What saving asks next, as subagentNeeds: none, next-start, idle or busy.
+function restartNeeds(c,applies,pending){
+ if(!applies(c))return 'none';
+ const g=active(c);
+ if(['stopped','error'].includes(g.phase))return 'next-start';
+ if(!pending(c))return 'none';
+ return ['ready','awaiting-workspace','awaiting-confirmation'].includes(g.phase)&&quietForRestart(c,g)?'idle':'busy';
+}
+// 'follow' takes its own away; null (Claude Code's default) or a preset is its own. Saved only.
+function setAutoCompact(c,value){
+ if(c.archived)throw error('Agent archived',409);
+ if(value==='follow')delete c.autoCompact;else c.autoCompact={window:autoCompactCheck(value)};
+ save(c);
+ return restartNeeds(c,autoCompactApply,autoCompactPending);
+}
+// The yes to that question for one agent, the same restart the subagents' setting uses.
+function applyAgentAutoCompact(c){return autoCompactPending(c)?applySubagents(c):'none';}
+// Only the admin's own agents are listed and restarted now: another account's agents take
+// the new default at their next start, never restarted by someone else.
+function autoCompactFollowersPending(owner){return state.conversations.filter(c=>!c.archived&&c.owner===owner&&!autoCompactOwn(c)&&autoCompactPending(c));}
+function applyAutoCompactDefault(ids,owner){
+ if(!Array.isArray(ids)||ids.some(id=>typeof id!=='string'))throw error('ids 格式不正確');
+ const out={now:0,'after-reply':0,'next-start':0};
+ for(const c of autoCompactFollowersPending(owner))if(ids.includes(c.id)){try{out[applySubagents(c)]++;}catch(e){out['next-start']++;console.error(`auto-compact apply for ${c.id}: ${e.message}`);}}
  return out;
 }
 // A relaunch asked for in the data (relaunchOnStart: written by whoever changed an agent's
@@ -2283,11 +2325,11 @@ function reviveSilentChannels({now=Date.now(),relaunch=(c)=>{stop(c);launch(c);}
  }
 }
 setInterval(()=>{try{reviveSilentChannels();}catch(e){console.error('channel revive: '+e.message);}},60_000).unref();
-function getPreferences(owner){return {...(platform.isWin?{scopedAgents:false}:{}),wrapUp:wrapUpSettings(ownerLanguage(owner)),archiveRetentionDays:archiveRetentionDays(),compactThreshold:state.agentSettings?.compactThreshold??5,handoff:handoffSetting(),subagents:subagentDefault(),terminalSwitch:state.agentSettings?.terminalSwitch===true,transcriptSwitch:state.agentSettings?.transcriptSwitch===true};}
-function setPreferences(owner,{compactThreshold,handoff,subagents,terminalSwitch,transcriptSwitch,archiveRetentionDays:retention,wrapUp,...rest}={}){
+function getPreferences(owner){return {...(platform.isWin?{scopedAgents:false}:{}),wrapUp:wrapUpSettings(ownerLanguage(owner)),archiveRetentionDays:archiveRetentionDays(),compactThreshold:state.agentSettings?.compactThreshold??5,handoff:handoffSetting(),subagents:subagentDefault(),autoCompact:autoCompactDefault(),autoCompactPresets:AUTO_COMPACT_PRESETS,terminalSwitch:state.agentSettings?.terminalSwitch===true,transcriptSwitch:state.agentSettings?.transcriptSwitch===true};}
+function setPreferences(owner,{compactThreshold,handoff,subagents,autoCompact,terminalSwitch,transcriptSwitch,archiveRetentionDays:retention,wrapUp,...rest}={}){
  // Unsupported settings are refused, never ignored.
  if(Object.keys(rest).length)throw error('不支援的設定：'+Object.keys(rest).join(', '));
- if(compactThreshold===undefined&&handoff===undefined&&subagents===undefined&&terminalSwitch===undefined&&transcriptSwitch===undefined&&retention===undefined&&wrapUp===undefined)throw error('沒有要更新的設定');
+ if(compactThreshold===undefined&&handoff===undefined&&subagents===undefined&&autoCompact===undefined&&terminalSwitch===undefined&&transcriptSwitch===undefined&&retention===undefined&&wrapUp===undefined)throw error('沒有要更新的設定');
  // Every field is checked before any is saved: a request refused over one field leaves
  // all the others as they were, in memory and on disk.
  // The wrap-up check: on or off, the minutes an agent sits idle first, and its words
@@ -2307,6 +2349,7 @@ function setPreferences(owner,{compactThreshold,handoff,subagents,terminalSwitch
  // Whether the conversation's navbar offers the Transcript column; off until an admin switches it on. Its routes stay admin-only either way.
  if(transcriptSwitch!==undefined&&typeof transcriptSwitch!=='boolean')throw error('Transcript 檢視設定必須是開或關');
  const checkedSubagents=subagents!==undefined?subagentCheck(subagents):undefined;
+ if(autoCompact!==undefined)autoCompactCheck(autoCompact);
  if(handoff!==undefined){
   if(!handoff||typeof handoff!=='object'||Array.isArray(handoff))throw error('接續設定格式不正確');
   if(handoff.recent!==undefined&&!recentOk(handoff.recent))throw error('帶入的訊息數必須是 0 到 '+HANDOFF_RECENT_MAX);
@@ -2320,6 +2363,7 @@ function setPreferences(owner,{compactThreshold,handoff,subagents,terminalSwitch
  if(transcriptSwitch!==undefined)state.agentSettings={...state.agentSettings,transcriptSwitch};
  if(compactThreshold!==undefined){state.agentSettings={...state.agentSettings,compactThreshold};for(const c of state.conversations)if(!c.archived&&!c.thresholdOwn){c.threshold=compactThreshold;if(compactThreshold===0)c.pendingRotation=false;}}
  if(checkedSubagents)state.agentSettings={...state.agentSettings,subagents:checkedSubagents};
+ if(autoCompact!==undefined){const settings={...state.agentSettings};if(autoCompact===null)delete settings.autoCompact;else settings.autoCompact=autoCompact;state.agentSettings=settings;}
  if(handoff!==undefined){const now=handoffSetting();state.agentSettings={...state.agentSettings,handoff:{recent:handoff.recent??now.recent,ask:handoff.ask??now.ask,lazy:handoff.lazy??now.lazy}};}
  if(retention!==undefined){const settings={...state.agentSettings};if(retention===null)delete settings.archiveRetentionDays;else settings.archiveRetentionDays=retention;state.agentSettings=settings;}
  if(wrapUp!==undefined){
@@ -2333,8 +2377,11 @@ function setPreferences(owner,{compactThreshold,handoff,subagents,terminalSwitch
  if(terminalSwitch!==undefined||transcriptSwitch!==undefined||compactThreshold!==undefined)save();
  saveSettings();
  // After a change to the subagents' setting, the running agents it does not reach until they start again.
- const pending=checkedSubagents?subagentFollowersPending().map(c=>({id:c.id,title:c.title,busy:active(c).phase!=='ready'||busyElsewhere(c,active(c))})):undefined;
- return {...getPreferences(owner),...(pending?{subagentPending:pending}:{})};
+ const listed=c=>({id:c.id,title:c.title,busy:active(c).phase!=='ready'||busyElsewhere(c,active(c))});
+ const pending=checkedSubagents?subagentFollowersPending().map(listed):undefined;
+ // The same for when they compact: only the admin's own agents.
+ const compactPending=autoCompact!==undefined?autoCompactFollowersPending(owner).map(listed):undefined;
+ return {...getPreferences(owner),...(pending?{subagentPending:pending}:{}),...(compactPending?{autoCompactPending:compactPending}:{})};
 }
 function decidePermission(c,data){permissions.decide(active(c),data);save(c);}
 // The raw material behind one bubble. Admin-only at the route: this is the agent's
@@ -2957,7 +3004,7 @@ const heldUntil=(x,kind)=>kind==='result'?x.resultPending?.after:kind==='failure
 const pendingScheduleNotifications=(now=Date.now())=>scheduleStore.list().flatMap(x=>Object.entries(NOTIFY_FIELD).filter(([kind,f])=>x[f]&&!(Date.parse(heldUntil(x,kind)||0)>now)).map(([kind])=>({schedule:x,kind})));
 const markScheduleNotified=(id,kind='proposal')=>{scheduleStore.patch(id,{[NOTIFY_FIELD[kind]]:false});};
 const scheduleCheckList=()=>scheduleChecks.list().map(scheduleChecks.view);
-module.exports={loginShutdown:signal=>claudeLogin.shutdown(signal),loginView:()=>claudeLogin.view(),loginStart:()=>claudeLogin.start(),loginCode:text=>claudeLogin.code(text),loginCancel,loginResend,loginFailed,loginProven,reviveSilentChannels,peerLinkDigest,peerExchange,peerKey,peerLink,peerConfig,peerWidens,setPeerConfig,peerDraft,peerView,relaunchMarked,tmuxSocket,subagentList,runLimitResumes,runWrapUps,setWrapUp,mentionsFor,commandInGroup,groupList,reorderGroups,groupFor,groupView,createGroup,updateGroup,removeGroup,updateGroupChecklist,sendToGroup,searchGroup,deliverGroups,chooseTerminalOption,updateChecklist:(c,data,by)=>{const r=checklists.apply(c,data,by);save(c);return r;},syncAllRelays,syncRelays,scheduleCheckList,schedulesFor,addSchedule,approveSchedule,updateSchedule,removeSchedule,rejectSchedule,runSchedules,runScheduleNow,testSchedule,SCHEDULE_WAIT_MS,pendingScheduleNotifications,markScheduleNotified,searchMessages,runCommand,commandsFor,setThreshold,setSubagents,applyAgentSubagents,applySubagentDefault,subagentEnv,listPreferences,setListPreferences,setAvatar,clearAvatar,avatarLocation,AVATAR_MAX_BYTES,clearFullAccessFor,pendingReportNotifications,markReportsNotified,archiveFor,setAccessFor,accessReports:()=>reports.list().map(reportView),accessReport:id=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(r);},resolveAccessReport:(id,patch)=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(reports.update(id,patch));},grantAccess,reconcile,reconnect,purgeOwner,sweepRetention,stopAgentsOf,bridgeActions:()=>[...BRIDGE_ACTIONS],archivedList,restoreArchived,keepArchived,purgeArchived,archiveRetentionDays,RETENTION_MAX_DAYS,UNSENT_ATTACHMENT_HOURS,STALE_MS,STARTUP_SLOW_MS,STARTUP_LIMIT_MS,messageTranscript,importHistory,interrupt,markViewing,isViewing,attachableFolders,MESSAGE_PAGE,updateProfile,reorder,pendingNotifications,getPreferences,setPreferences,decidePermission,confirmWorkspace,confirmChannel,compact,stateRoot,create,get,list,publicView,launch,stop,send,rotate,bridge,byToken,active,save,error};
+module.exports={loginShutdown:signal=>claudeLogin.shutdown(signal),loginView:()=>claudeLogin.view(),loginStart:()=>claudeLogin.start(),loginCode:text=>claudeLogin.code(text),loginCancel,loginResend,loginFailed,loginProven,reviveSilentChannels,peerLinkDigest,peerExchange,peerKey,peerLink,peerConfig,peerWidens,setPeerConfig,peerDraft,peerView,relaunchMarked,tmuxSocket,subagentList,runLimitResumes,runWrapUps,setWrapUp,mentionsFor,commandInGroup,groupList,reorderGroups,groupFor,groupView,createGroup,updateGroup,removeGroup,updateGroupChecklist,sendToGroup,searchGroup,deliverGroups,chooseTerminalOption,updateChecklist:(c,data,by)=>{const r=checklists.apply(c,data,by);save(c);return r;},syncAllRelays,syncRelays,scheduleCheckList,schedulesFor,addSchedule,approveSchedule,updateSchedule,removeSchedule,rejectSchedule,runSchedules,runScheduleNow,testSchedule,SCHEDULE_WAIT_MS,pendingScheduleNotifications,markScheduleNotified,searchMessages,runCommand,commandsFor,setThreshold,setSubagents,applyAgentSubagents,applySubagentDefault,subagentEnv,setAutoCompact,applyAgentAutoCompact,applyAutoCompactDefault,autoCompactEnv,AUTO_COMPACT_PRESETS,listPreferences,setListPreferences,setAvatar,clearAvatar,avatarLocation,AVATAR_MAX_BYTES,clearFullAccessFor,pendingReportNotifications,markReportsNotified,archiveFor,setAccessFor,accessReports:()=>reports.list().map(reportView),accessReport:id=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(r);},resolveAccessReport:(id,patch)=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(reports.update(id,patch));},grantAccess,reconcile,reconnect,purgeOwner,sweepRetention,stopAgentsOf,bridgeActions:()=>[...BRIDGE_ACTIONS],archivedList,restoreArchived,keepArchived,purgeArchived,archiveRetentionDays,RETENTION_MAX_DAYS,UNSENT_ATTACHMENT_HOURS,STALE_MS,STARTUP_SLOW_MS,STARTUP_LIMIT_MS,messageTranscript,importHistory,interrupt,markViewing,isViewing,attachableFolders,MESSAGE_PAGE,updateProfile,reorder,pendingNotifications,getPreferences,setPreferences,decidePermission,confirmWorkspace,confirmChannel,compact,stateRoot,create,get,list,publicView,launch,stop,send,rotate,bridge,byToken,active,save,error};
 
 // Account deletion checks the agents an account actually has running.
 module.exports.lifecycleInventory=async()=>({sources:[{provider:"claude",providerLabel:"Claude Code",ok:true}],schedules:state.conversations.filter(c=>!['stopped','error'].includes(active(c).phase)).map(c=>({id:c.id,ownerUserId:c.owner,provider:"claude",status:active(c).phase,running:active(c).phase==="busy"}))});

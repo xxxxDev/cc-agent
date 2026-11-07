@@ -20,12 +20,15 @@
    </f7-list>
    <input ref="avatarInput" class="agent-picture-input" type="file" accept="image/*" hidden @change="chooseAvatar"/>
    <GlassDropdown :open="thresholdOpen" :point="thresholdPoint" :items="thresholdItems" :selected="thresholdSelected" @close="thresholdOpen=false" @select="chooseThreshold"/>
+   <GlassDropdown :open="autoCompactOpen" :point="autoCompactPoint" :items="autoCompactItems" :selected="autoCompactSelected" @close="autoCompactOpen=false" @select="chooseAutoCompact"/>
   </template>
   <AgentProfileFields :key="detail.id" v-model="profileDraft" :collapsed="false" :fold-text="true" :admin="user?.role==='admin'" :readonly="user?.role!=='admin'" :show-access="true" @engine-change="engineNote" :allow-full="user?.role==='admin'">
    <!-- This agent's own compact policy, or the one on the Admin tab, above the access scope. Applies at once. -->
    <template v-if="user?.role==='admin'" #before-access><f7-list inset class="cc-settings-list agent-compact">
     <!-- Its subagents' model and effort, or the admin page's; asked before it starts again. -->
     <f7-list-item v-if="detail.subagentsApply" link no-chevron class="agent-subagents" :title="ct('子代理模型與 Effort')" :after="subagentRowLabel" :footer="subagentHint" @click.prevent="editAgentSubagents"></f7-list-item>
+    <!-- When its Claude Code compacts, or the admin page's; asked before it starts again (issue #12). -->
+    <f7-list-item v-if="detail.autoCompactApply" link no-chevron class="agent-auto-compact" :title="ct('自動壓縮時機')" :after="autoCompactRowLabel" :footer="autoCompactHint" @click.prevent="openAutoCompact($event)"></f7-list-item>
     <f7-list-item link no-chevron :title="ct('Compact 後自動接續')" :after="thresholdLabel" @click.prevent="openThreshold($event)"></f7-list-item>
     <!-- The wrap-up check after a finished task, for this agent. -->
     <f7-list-item class="agent-wrap-up" :title="ct('自動收尾檢查')" :footer="wrapUpGlobal?undefined:ct('管理頁的總開關目前是關的，不會送出。')"><template #after><f7-toggle :checked="detail.wrapUp!==false" @toggle:change="setWrapUp"/></template></f7-list-item>
@@ -69,8 +72,8 @@ import {api} from "../js/api.js";
 import {escapeHtml} from "../js/safeDialog.js";
 import {adminProblem,withAdminAgain} from "../js/adminAgain.js";
 import {f7} from "framework7-vue";
-import {compactCount,compactPolicy} from "../js/agent-i18n.js";
-import {compactThreshold,wrapUp} from "../js/agentPreferences.js";
+import {compactCount,compactPolicy,autoCompactLabel,autoCompactFollow} from "../js/agent-i18n.js";
+import {compactThreshold,wrapUp,autoCompactPresets} from "../js/agentPreferences.js";
 import {editSubagents,subagentLabel} from "../js/subagentDialog.js";
 import {defaultAvatar,avatarShape} from "../js/avatarShape.js";
 // Why an agent cannot be opened to the peer link (server peerWhyNot).
@@ -82,6 +85,22 @@ const hint=(el,binding)=>{el.title=binding.value||'';};
 export default {components:{AgentProfileFields,AgentDiagnostics,GlassDropdown},directives:{hint},emits:['trace-start'],setup(){const w=inject("workspace");const avatarInput=ref(null);
  let engineToast=null;
  const thresholdOpen=ref(false),thresholdPoint=ref({clientX:0,clientY:0});
+ const autoCompactOpen=ref(false),autoCompactPoint=ref({clientX:0,clientY:0});
+ const toast=text=>f7.toast.create({text:w.ct(text),closeTimeout:3000}).open();
+ const merge=r=>{if(r&&r.id===w.detail.value?.id)w.detail.value={...w.detail.value,...r,messages:w.detail.value?.messages||r.messages,hasOlder:w.detail.value?.hasOlder};};
+ // A setting saved but not in effect until the agent starts again (subagents, auto-compact):
+ // starting it again is asked first, and only on yes is it applied.
+ function askRestart(d,needs,title,applyAction,applyKey){
+  if(needs==='next-start'){toast('已保存，下次啟動時套用。');return;}
+  if(needs!=='idle'&&needs!=='busy'){toast('設定已保存');return;}
+  toast('設定已保存');
+  const apply=async()=>{try{const a=await api('/conversations/'+d.id+'/'+applyAction,{method:'POST',body:'{}'});merge(a);
+    toast({now:'agent 已重新啟動並套用。','after-reply':'會在 agent 這次完成後自動重新啟動套用。','next-start':'下次啟動時套用。'}[a?.[applyKey]]||'設定已保存');}catch(e){f7.dialog.alert(e.message);}};
+  setTimeout(()=>f7.dialog.create({title,
+    text:escapeHtml(d.title)+' '+w.ct(needs==='idle'?'要重新啟動才會套用，現在重新啟動嗎？聊天內容不會不見。':'正在工作，要在它這次完成後自動重新啟動套用嗎？'),
+    buttons:[{text:w.ct('稍後')},{text:w.ct(needs==='idle'?'重新啟動':'好'),strong:true,onClick:apply}],destroyOnClose:true}).open(),350);
+ }
+ const pendingHint=(pending,waiting)=>pending?w.ct(waiting?'等 agent 閒下來會自動重新啟動；要立即套用，請按上方的「重啟」。':'還沒套用，按上方的「重啟」才會生效。'):undefined;
  const following=()=>w.ct('跟隨管理設定')+'（'+compactPolicy(compactThreshold.value)+'）';
  // The peer link section: a draft of on, ticks and auto-reply, saved together; the
  // paired machines' directories to tick from, read when the panel shows an agent.
@@ -129,21 +148,26 @@ export default {components:{AgentProfileFields,AgentDiagnostics,GlassDropdown},d
   setWrapUp:async on=>{if((w.detail.value?.wrapUp!==false)===!!on)return;if(await w.action('wrap-up',{wrapUp:!!on}))f7.toast.create({text:w.ct('設定已保存'),closeTimeout:1800}).open();},
   subagentRowLabel:computed(()=>{const d=w.detail.value;return (d?.subagents?subagentLabel(d.subagents):w.ct('跟隨管理設定')+'（'+subagentLabel(d?.subagentDefault)+'）')+(d?.subagentPending?w.ct('（重新啟動後套用）'):'');}),
   editAgentSubagents:()=>{const d=w.detail.value;if(!d)return;editSubagents({title:d.title+' '+w.ct('的子代理模型與 Effort'),text:w.ct('只套用在這個 agent。選「跟隨管理設定」就照管理頁的設定。改了要等 agent 重新啟動才生效。'),value:d.subagents||d.subagentDefault,own:{follow:!d.subagents},
-   save:async next=>{const r=await api('/conversations/'+d.id+'/subagents',{method:'POST',body:JSON.stringify({subagents:next})});if(r&&r.id===d.id)w.detail.value={...w.detail.value,...r,messages:w.detail.value?.messages||r.messages,hasOlder:w.detail.value?.hasOlder};
-   const toast=text=>f7.toast.create({text:w.ct(text),closeTimeout:3000}).open();
+   save:async next=>{const r=await api('/conversations/'+d.id+'/subagents',{method:'POST',body:JSON.stringify({subagents:next})});merge(r);
    // Saved only: starting it again is asked first.
-   const needs=r?.subagentNeeds;
-   if(needs==='next-start'){toast('已保存，下次啟動時套用。');return;}
-   if(needs!=='idle'&&needs!=='busy'){toast('設定已保存');return;}
-   toast('設定已保存');
-   const apply=async()=>{try{const a=await api('/conversations/'+d.id+'/subagents-apply',{method:'POST',body:'{}'});if(a&&a.id===d.id)w.detail.value={...w.detail.value,...a,messages:w.detail.value?.messages||a.messages,hasOlder:w.detail.value?.hasOlder};
-     toast({now:'agent 已重新啟動並套用。','after-reply':'會在 agent 這次完成後自動重新啟動套用。','next-start':'下次啟動時套用。'}[a?.subagentApply]||'設定已保存');}catch(e){f7.dialog.alert(e.message);}};
-   setTimeout(()=>f7.dialog.create({title:w.ct('子代理模型與 Effort'),
-     text:escapeHtml(d.title)+' '+w.ct(needs==='idle'?'要重新啟動才會套用，現在重新啟動嗎？聊天內容不會不見。':'正在工作，要在它這次完成後自動重新啟動套用嗎？'),
-     buttons:[{text:w.ct('稍後')},{text:w.ct(needs==='idle'?'重新啟動':'好'),strong:true,onClick:apply}],destroyOnClose:true}).open(),350);
+   askRestart(d,r?.subagentNeeds,w.ct('子代理模型與 Effort'),'subagents-apply','subagentApply');
   }});},
   // Not in effect yet: what still has to happen.
-  subagentHint:computed(()=>{const d=w.detail.value;if(!d?.subagentPending)return undefined;return w.ct(d.subagentWaiting?'等 agent 閒下來會自動重新啟動；要立即套用，請按上方的「重啟」。':'還沒套用，按上方的「重啟」才會生效。');}),
+  subagentHint:computed(()=>pendingHint(w.detail.value?.subagentPending,w.detail.value?.subagentWaiting)),
+  // When its Claude Code compacts: its own, or following the admin page (issue #12).
+  autoCompactOpen,autoCompactPoint,
+  autoCompactRowLabel:computed(()=>{const d=w.detail.value;return (d?.autoCompactOwn?autoCompactLabel(d.autoCompact):autoCompactFollow(d?.autoCompactDefault))+(d?.autoCompactPending?w.ct('（重新啟動後套用）'):'');}),
+  autoCompactItems:computed(()=>[{value:'follow',label:autoCompactFollow(w.detail.value?.autoCompactDefault)},{value:'default',label:autoCompactLabel(null)},...autoCompactPresets.value.map(n=>({value:String(n),label:autoCompactLabel(n)}))]),
+  autoCompactSelected:computed(()=>{const d=w.detail.value;return !d?.autoCompactOwn?'follow':d.autoCompact?String(d.autoCompact):'default';}),
+  autoCompactHint:computed(()=>pendingHint(w.detail.value?.autoCompactPending,w.detail.value?.autoCompactWaiting)),
+  openAutoCompact:event=>{autoCompactPoint.value={clientX:event?.clientX??0,clientY:event?.clientY??0};autoCompactOpen.value=true;},
+  chooseAutoCompact:async value=>{
+   autoCompactOpen.value=false;const d=w.detail.value;if(!d)return;
+   const next=value==='follow'?'follow':value==='default'?null:Number(value);
+   try{const r=await api('/conversations/'+d.id+'/auto-compact',{method:'POST',body:JSON.stringify({autoCompact:next})});merge(r);
+    askRestart(d,r?.autoCompactNeeds,w.ct('自動壓縮時機'),'auto-compact-apply','autoCompactApply');}
+   catch(e){f7.dialog.alert(e.message);}
+  },
   chooseThreshold:async value=>{thresholdOpen.value=false;if(await w.action('threshold',{threshold:value==='follow'?null:Number(value)}))f7.toast.create({text:w.ct('設定已保存'),closeTimeout:1800}).open();},
   avatarInput,
   // What changing the model or effort does is said when one is changed, not all the

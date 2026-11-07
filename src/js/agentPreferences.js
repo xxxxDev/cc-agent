@@ -9,6 +9,9 @@ export const compactThreshold = ref(5);
 export const handoff = ref({recent: 12, ask: true, lazy: false, max: 50});
 // The subagents' model and effort for every agent that does not set its own.
 export const subagents = ref({model: '', lock: false, effort: ''});
+// When every agent's Claude Code compacts, unless it has its own: null is Claude Code's default (issue #12).
+export const autoCompact = ref(null);
+export const autoCompactPresets = ref([200000, 300000, 400000, 500000, 700000]);
 export const terminalSwitch = ref(false);
 // The Transcript column's button; off until an admin switches it on.
 export const transcriptSwitch = ref(false);
@@ -25,6 +28,8 @@ function absorb(preferences) {
   if (Number.isInteger(preferences.compactThreshold)) compactThreshold.value = preferences.compactThreshold;
   if (preferences.handoff && typeof preferences.handoff === 'object') handoff.value = preferences.handoff;
   if (preferences.subagents && typeof preferences.subagents === 'object') subagents.value = preferences.subagents;
+  if (preferences.autoCompact === null || Number.isInteger(preferences.autoCompact)) autoCompact.value = preferences.autoCompact;
+  if (Array.isArray(preferences.autoCompactPresets)) autoCompactPresets.value = preferences.autoCompactPresets;
   terminalSwitch.value = preferences.terminalSwitch === true;
   transcriptSwitch.value = preferences.transcriptSwitch === true;
   if (preferences.wrapUp && typeof preferences.wrapUp === 'object') wrapUp.value = preferences.wrapUp;
