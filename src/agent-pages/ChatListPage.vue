@@ -119,7 +119,7 @@ import {inject,ref,computed} from "vue";import GlassDropdown from "../components
 .agent-select[aria-checked="true"] {color:#34c759;}
 /* In the list's column, its circle under the rows' circles: the list is 828px wide
    and centred on a desktop, 16px in from each side on a phone. */
-.select-all-row {display:flex;align-items:center;gap:6px;margin:0 max(16px,calc((100% - 828px) / 2)) -8px;padding:4px 16px 4px 26px;font-size:14px;color:var(--cc-color-text-secondary);}
+.select-all-row {display:flex;align-items:center;gap:6px;margin:0 max(var(--f7-list-inset-side-margin,16px),calc((100% - 828px) / 2)) -8px;padding:4px 16px 4px 26px;font-size:14px;color:var(--cc-color-text-secondary);}
 .select-all-label {cursor:pointer;user-select:none;white-space:nowrap;}
 .presence-choose {display:inline-flex;width:auto;align-items:center;gap:5px;flex:0 0 auto;margin-left:4px;padding:4px 10px;border:1px solid transparent;border-radius:999px;background:rgba(120,120,128,.16);color:inherit;font:inherit;font-size:13px;white-space:nowrap;cursor:pointer;}
 .presence-choose.active {border-color:#34c759;background:rgba(52,199,89,.18);color:var(--f7-text-color, inherit);}
