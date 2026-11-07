@@ -1,5 +1,8 @@
 {
   "name": "cc-agent",
+  "description": "A self-hosted PWA that runs your Claude Code subscription as a personal multi-agent workspace.",
+  "license": "MIT",
+  "repository": "github:xxxxDev/cc-agent",
   "private": true,
   "type": "module",
   "scripts": {
