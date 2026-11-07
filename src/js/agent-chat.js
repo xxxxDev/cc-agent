@@ -727,7 +727,10 @@ async function jumpTo(conversationId,messageId){
   if(!box||!el)return false;
   jumpSeq++;atBottom.value=false;
   box.closest('.page')?.dispatchEvent(new CustomEvent('conversation:unpin'));
-  box.scrollTop+=el.getBoundingClientRect().top-box.getBoundingClientRect().top-box.clientHeight/3;
+  // Measured in the page's own pixels: a phone sheet closing with Framework7's push still
+  // has the page behind scaled down, which would shorten the distance on screen.
+  const frame=box.getBoundingClientRect(),scale=frame.height/box.offsetHeight||1;
+  box.scrollTop+=(el.getBoundingClientRect().top-frame.top)/scale-box.clientHeight/3;
  }finally{
   olderBusy.value=false;
   requestAnimationFrame(()=>requestAnimationFrame(()=>{pagingBack.value=false;}));
