@@ -63,7 +63,7 @@ CC Agent 跑在你自己的 Mac 上。你建立的每個 agent，都是 tmux 裡
 </table>
 
 <p align="center">
-  <img src=".github/assets/screens/desktop-group-dark.png" alt="電腦上的群組對話與清單">
+  <img src=".github/assets/screens/desktop-group-dark.png" alt="電腦上的群組對話與待辦事項">
 </p>
 
 ## 為什麼是 PWA
@@ -77,7 +77,7 @@ CC Agent 跑在你自己的 Mac 上。你建立的每個 agent，都是 tmux 裡
 ## 為日常使用而設計
 
 <p align="center">
-  <img src=".github/assets/screens/phones-dark.png" alt="手機上的 agent 清單、對話與群組清單">
+  <img src=".github/assets/screens/phones-dark.png" alt="手機上的 agent 清單、對話與它的用量">
 </p>
 
 - **熟悉的聊天介面。**圓角輸入框會隨內容長高，附件有預覽，支援提及、訊息搜尋和回到最新。

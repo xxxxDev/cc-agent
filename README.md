@@ -63,7 +63,7 @@ For every feature in detail, see [docs/FEATURES.md](docs/FEATURES.md).
 </table>
 
 <p align="center">
-  <img src=".github/assets/screens/desktop-group-dark.png" alt="A group chat with its checklist on a computer">
+  <img src=".github/assets/screens/desktop-group-dark.png" alt="A group chat with its to-do list on a computer">
 </p>
 
 ## Why a PWA
@@ -77,7 +77,7 @@ For every feature in detail, see [docs/FEATURES.md](docs/FEATURES.md).
 ## Designed for daily use
 
 <p align="center">
-  <img src=".github/assets/screens/phones-dark.png" alt="Agent list, a chat and a group checklist on a phone">
+  <img src=".github/assets/screens/phones-dark.png" alt="The agent list, a chat and its usage view on a phone">
 </p>
 
 - **A chat that feels familiar.** A rounded composer that grows with your message, attachments with previews, mentions, message search and jump-to-latest.

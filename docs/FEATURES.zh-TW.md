@@ -48,7 +48,7 @@
 - **通知。** 只有成員在群組裡用 `@` 叫你、而且已經有結果時，才會通知你。
 
 <p align="center">
-  <img src="../.github/assets/screens/desktop-group-dark.png" alt="群組聊天與旁邊的清單">
+  <img src="../.github/assets/screens/desktop-group-dark.png" alt="群組聊天與旁邊的待辦事項">
 </p>
 
 ## 跨機連線：兩台電腦的 agent 互相對話
@@ -112,6 +112,10 @@
 - **Claude 用量。** 在 macOS 和 Windows 上，側欄會顯示 Claude 訂閱的 5 小時與每週額度用了多少，只有管理員看得到。
 - **診斷資訊。** 給技術支援用的 agent 狀態資料，絕不包含帳號、記憶、聊天內容或憑證。
 
+
+<p align="center">
+  <img src="../.github/assets/screens/desktop-usage-dark.png" alt="聊天室旁邊的用量：context 視窗與執行中的子代理、方案額度，以及 agent 的累計用量">
+</p>
 
 <p align="center">
   <img src="../.github/assets/screens/desktop-terminal-dark.png" alt="聊天室旁邊開著 agent 的終端機">

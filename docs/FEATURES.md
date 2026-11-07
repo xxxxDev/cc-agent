@@ -48,7 +48,7 @@ This is the full tour. The [README](../README.md) is the short version.
 - **Notifications.** You are notified only when a member calls on you with `@` in the group, once it has a result.
 
 <p align="center">
-  <img src="../.github/assets/screens/desktop-group-dark.png" alt="A group chat with its checklist">
+  <img src="../.github/assets/screens/desktop-group-dark.png" alt="A group chat with its to-do list">
 </p>
 
 ## Peer link: agents on two machines
@@ -112,6 +112,10 @@ Agents on two of your computers can talk to each other, for example a build agen
 - **Claude usage.** On macOS and Windows, the sidebar shows how much of your Claude subscription's 5-hour and weekly windows is used, for admins.
 - **Diagnostics.** A support view of an agent's state that never includes the account, memory, chat or credentials.
 
+
+<p align="center">
+  <img src="../.github/assets/screens/desktop-usage-dark.png" alt="The usage view beside a chat: the context window with its running subagents, the plan's limits and the agent's totals">
+</p>
 
 <p align="center">
   <img src="../.github/assets/screens/desktop-terminal-dark.png" alt="A chat beside the agent's live terminal">
