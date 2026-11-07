@@ -937,6 +937,14 @@ function stop(c) {
  for(const m of c.messages)if(['queued','delivered'].includes(m.delivery)){m.delivery='interrupted';}
  save(c);
 }
+// A quoted message's first words on one line, plain enough for an attribute on the
+// <channel> tag: no control or separator characters, and the marks that could end or
+// open one (< > " ' &) as look-alikes that cannot.
+const REPLY_MARKS={'<':'‹','>':'›','"':'”',"'":'’','&':'＆'};
+function replyPreviewOf(m){
+ const words=String(m.text||'').trim()||(m.attachments||[]).map(f=>f?.name||'').filter(Boolean).join(', ');
+ return Array.from(words.replace(/[\p{C}\p{Z}\s]+/gu,' ').replace(/[<>"'&]/g,ch=>REPLY_MARKS[ch]).trim()).slice(0,80).join('').trim();
+}
 function send(c,text,key,attachmentIds=[],extra={}) {
  if(c.archived)throw error('Agent archived',409);
  if(typeof text!=='string'||(!text.trim()&&!attachmentIds?.length)||text.length>16000)throw error('請輸入 1–16000 字的訊息');
@@ -963,6 +971,17 @@ function send(c,text,key,attachmentIds=[],extra={}) {
  if(!woke&&(!g.ready||!['ready','busy'].includes(g.phase)||g.compacting||g.manualCompact))throw error('請等待目前回覆完成，或先連線 Claude。',409);
  if(c.pendingRotation)throw error('正在準備交接，請稍候。',409);
  const files=attachments.resolve(stateRoot,c,attachmentIds);
+ // A reply to an earlier message: kept only when it names a message of this
+ // conversation (not a plain title); an unknown one is dropped, not refused. Its first
+ // words are kept with it, for the page while the quoted message is not loaded and for
+ // the channel event's reply_preview.
+ if(Object.hasOwn(extra,'replyTo')){
+  const target=typeof extra.replyTo==='string'?c.messages.find(x=>x.id===extra.replyTo&&x.role!=='system'):null;
+  extra={...extra};delete extra.replyTo;
+  // Words from another machine stay out of the owner's own channel event: the agent
+  // gets only the id and reads them with history.
+  if(target)Object.assign(extra,{replyTo:target.id,replyPreview:replyPreviewOf(target),...(target.peer||target.role==='relay'?{replyOutside:true}:{})});
+ }
  // Started only once the message is known good, so a refused one starts nothing.
  if(wake){
   // A failed start says so plainly to whoever sent it (a bot, another machine); the detail stays on the agent.
@@ -1436,7 +1455,7 @@ function bridge(c,action,data={}) {
   // agent then sends that group's members shows there.
   const named=pending.mentions?.find(m=>m.group&&groupStore.get(m.id)?.owner===c.owner);
   if(!pending.wrapUp)c.groupContext=pending.group?{id:pending.group.id,at:Date.now()}:named?{id:named.id,at:Date.now()}:null;const skipped=g.startupSkipped&&!g.bootstrapped;if(skipped)g.bootstrapped=true;
-  const text=(skipped?STARTUP_REMINDER:'')+profileMessage(c,g,pending.peer?peerWrap(c,pending,neutralSender(attachments.channelText(stateRoot,c,pending))):scheduleNote(pending)+limitResumeNote(pending)+wrapUpNote(pending)+groupNote(c,pending)+mentionNote(pending)+neutralSender(attachments.channelText(stateRoot,c,pending)));pending.delivery='delivered';pending.deliveredAt=new Date().toISOString();g.deliveryEpoch=(g.deliveryEpoch||0)+1;g.phase='busy';save(c);return {message:{id:pending.id,text,...senderOf(c,pending)},rotate:c.pendingRotation};}
+  const text=(skipped?STARTUP_REMINDER:'')+profileMessage(c,g,pending.peer?peerWrap(c,pending,neutralSender(attachments.channelText(stateRoot,c,pending))):scheduleNote(pending)+limitResumeNote(pending)+wrapUpNote(pending)+groupNote(c,pending)+mentionNote(pending)+neutralSender(attachments.channelText(stateRoot,c,pending)));pending.delivery='delivered';pending.deliveredAt=new Date().toISOString();g.deliveryEpoch=(g.deliveryEpoch||0)+1;g.phase='busy';save(c);return {message:{id:pending.id,text,...senderOf(c,pending),...replyMeta(pending)},rotate:c.pendingRotation};}
   return {rotate:c.pendingRotation};
  }
  // An agent sets up a long-running schedule the owner agreed to in its conversation;
@@ -1583,7 +1602,12 @@ function bridge(c,action,data={}) {
   save(c);return {ok:true,changed:after!==before};
  }
  else if(action==='history'){
-  const q=String(data.query||'').slice(0,120).toLowerCase();return {messages:c.messages.filter(m=>!q||m.text.toLowerCase().includes(q)).slice(-30).map(m=>({...m,text:m.role==='assistant'?attachments.channelText(stateRoot,c,m):neutralSender(attachments.channelText(stateRoot,c,m))}))};
+  // A message id as the query (a channel event's reply_to) returns that message first,
+  // then what its text matches as before.
+  const raw=String(data.query||'').trim(),q=String(data.query||'').slice(0,120).toLowerCase();
+  const byId=raw?c.messages.find(m=>m.id===raw):null;
+  const found=[...(byId?[byId]:[]),...c.messages.filter(m=>m!==byId&&(!q||String(m.text||'').toLowerCase().includes(q))).slice(byId?-29:-30)];
+  return {messages:found.map(m=>({...m,text:m.role==='assistant'?attachments.channelText(stateRoot,c,m):neutralSender(attachments.channelText(stateRoot,c,m))}))};
  }
  else if(action==='precompact'){
   // When it started, for the page to say how long it has run; a /compact asked
@@ -2826,6 +2850,14 @@ function runWrapUps({now=Date.now(),startedAt=SERVICE_STARTED_AT,ownerActive=()=
   const lang=ownerLanguage(c.owner);
   try{send(c,wrapUpSettings(lang).text,'wrap-up-'+g.sessionId.slice(0,8)+'-'+w.at,[],{wrapUp:true,footnote:AUTO_FOOTNOTE.wrapUp[lang]});g.wrapUpBase=now;delete g.wrapUp;save(c);}catch{}
  }
+}
+// What a message replies to, for the channel event's meta (reply_to, reply_preview): the
+// id and about forty characters of the quoted message, never its whole text; the agent
+// reads the rest with history(id).
+function replyMeta(m){
+ if(typeof m.replyTo!=='string')return {};
+ const preview=m.replyOutside?'':Array.from(typeof m.replyPreview==='string'?m.replyPreview:'').slice(0,40).join('').trim();
+ return {replyTo:m.replyTo,...(preview?{replyPreview:preview}:{})};
 }
 // Who sent a message, for the channel event's meta (channel/server.mjs puts it on the
 // <channel> tag as sender and sender_username): written here from the stored message,

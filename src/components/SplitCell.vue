@@ -15,11 +15,11 @@
     <f7-block v-if="cellError||operationError" class="split-alert" role="alert">{{operationError||cellError}}</f7-block>
     <f7-block v-if="detail.lastError" class="split-last-error">{{detail.lastError}}<f7-button @click="reconnect">{{ct('重新連線')}}</f7-button></f7-block>
     <f7-block v-for="permission in detail.permissions||[]" :key="permission.request_id" class="split-permission"><p>{{permission.description}}</p><pre>{{permission.input_preview}}</pre><f7-button @click="action('permission',{request_id:permission.request_id,generation:permission.generation,behavior:'allow'})">{{ct('允許這一次')}}</f7-button><f7-button @click="action('permission',{request_id:permission.request_id,generation:permission.generation,behavior:'deny'})">{{ct('拒絕')}}</f7-button></f7-block>
-    <MessageList :peer-targets="detail.peerLink?.targets||[]" :messages="detail.messages" :conversation-id="conversationId" :has-older="detail.hasOlder" :older-busy="olderBusy"
+    <MessageList replyable :peer-targets="detail.peerLink?.targets||[]" :messages="detail.messages" :conversation-id="conversationId" :has-older="detail.hasOlder" :older-busy="olderBusy"
      :avatar="detail.avatar||defaultAvatar(detail)" :background-text="backgroundText" :typing="typing" :typing-text="typingText" :typing-note="typingNote"
      :interruptible="canInterrupt" :interrupting="interrupting" :inspectable="sidePanel==='inspector'" :inspect-id="inspectId" :found-id="foundId"
      :empty-text="ct('說明你的目標、背景，或想釐清的問題。')" @load-older="loadOlder" @preview="preview=$event" @interrupt="interrupt" @inspect="inspect"
-     @open-peer="$emit('open-peer',$event)" @open-group="$emit('open-group',$event)"/>
+     @open-peer="$emit('open-peer',$event)" @open-group="$emit('open-group',$event)" @reply="startReply"/>
     <!-- A menu waiting in the agent's terminal is answered here too, as on the
          conversation page; otherwise the chat would show only the agent at work. -->
     <TerminalPromptCard v-if="detail.terminalPrompt" :key="detail.terminalPrompt.key" :prompt="detail.terminalPrompt" :send="chooseTerminal" :can-open="false"/>
@@ -28,7 +28,7 @@
   </div></div>
   <input ref="fileInput" type="file" multiple hidden @change="pickFiles"/>
   <div ref="composer" class="split-composer" :inert="locked">
-   <ChatComposer v-if="detail" :highlights="mention.current.value.map(m=>'@'+m.title)" :editor-id="null" v-model:value="draft" :placeholder="ct('輸入訊息…')" @keydown="composerKeydown">
+   <ChatComposer v-if="detail" :highlights="mention.current.value.map(m=>'@'+m.title)" :editor-id="null" v-model:value="draft" :placeholder="ct('輸入訊息…')" :reply="replyDraft" @cancel-reply="replyDraft=null" @keydown="composerKeydown">
     <template #inner-start><f7-link icon-only icon-f7="plus" class="split-attach" :aria-label="ct('加入附件')" :class="{disabled:sending}" @click="chooseFiles"/></template>
     <template #before-inner><div v-if="files.length" class="split-drafts" :aria-label="ct('附件')">
      <f7-preloader v-if="sending" :size="18"/>
@@ -145,6 +145,10 @@ const scroller=ref(null),content=ref(null),composer=ref(null),composerHeight=ref
 const DRAFT_KEY='cc-split-draft:';
 const draft=ref((()=>{try{return sessionStorage.getItem(DRAFT_KEY+props.conversationId)||'';}catch{return '';}})());
 watch(draft,text=>{try{if(text)sessionStorage.setItem(DRAFT_KEY+props.conversationId,text);else sessionStorage.removeItem(DRAFT_KEY+props.conversationId);}catch{}});
+// The message the next one replies to, as on the conversation page.
+const replyDraft=ref(null);
+watch(()=>props.conversationId,()=>{replyDraft.value=null;});
+function startReply(quote){if(!quote?.id)return;replyDraft.value=quote;nextTick(()=>{const editor=composer.value?.querySelector('.chat-editor');if(editor&&!f7.device?.ios&&!f7.device?.android)editor.focus();});}
 // The conversation page's own drafts: kept per conversation, uploaded when sent.
 const attachmentDrafts=useAttachmentDrafts(computed(()=>props.conversationId),ref(null),sending,ct);
 const {files,fileInput,pickFiles,dropFiles,pasteFiles,removeFile,chooseFiles,previewDraft}=attachmentDrafts;
@@ -318,11 +322,12 @@ async function send(){
   finally{sending.value=false;}
   return;
  }
- const requestId=attachmentDrafts.requestId(id,text,items);sending.value=true;
+ const requestId=attachmentDrafts.requestId(id,text,items),quote=replyDraft.value;sending.value=true;
  try{
   const attachmentIds=await attachmentDrafts.upload(id,items);
-  await api(`/conversations/${id}/messages`,{method:'POST',body:JSON.stringify({text,requestId,attachmentIds,mentions:mention.current.value.map(m=>m.id)})});
+  await api(`/conversations/${id}/messages`,{method:'POST',body:JSON.stringify({text,requestId,attachmentIds,mentions:mention.current.value.map(m=>m.id),...(quote?{replyTo:quote.id}:{})})});
   attachmentDrafts.sent(id,items);
+  if(replyDraft.value===quote)replyDraft.value=null;
   if(draft.value===text)draft.value='';
   atBottom.value=true;await refresh();toBottom();
  }catch(e){f7.dialog.alert(e.message);}

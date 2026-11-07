@@ -2,11 +2,14 @@
  <!-- One conversation's bubbles: its messages, attachments, markdown and the typing
       bubbles, wherever a conversation is shown (the conversation page, a split-view
       cell). Main chat typing state comes from the workspace so its ticks do not redraw the list. -->
- <f7-messages :init="false" class="message-list" @click="onMarkdownClick" @animationend="onArrivalEnd">
+ <f7-messages ref="listEl" :init="false" class="message-list" @click="onMarkdownClick" @animationend="onArrivalEnd">
   <f7-messages-title v-if="!messages.length&&emptyText">{{emptyText}}</f7-messages-title>
   <div v-if="hasOlder" class="older-turns"><f7-preloader v-if="olderBusy" :size="18"/><f7-link v-else @click="$emit('load-older')">{{ct('載入更早的對話')}}</f7-link></div>
-  <template v-for="m in messages" :key="m.id"><ClaudeLoginCard v-if="m.notice==='login'" :message="m" :conversation-id="conversationId" :time="time(m.at)"/><f7-messages-title v-else-if="m.role==='system'&&!cardOf(m)" :data-message-id="m.id" :class="{'message-arrival':arrivingIds.has(m.id)}">{{m.text}}</f7-messages-title><div v-else-if="cardOf(m)" class="message schedule-card" :class="{'message-arrival':arrivingIds.has(m.id),'message-found':foundId===m.id,open:opened.has(m.id)}" :data-message-id="m.id" role="button" tabindex="0" :aria-expanded="String(opened.has(m.id))" @click="toggleOpen(m,$event)" @keydown.enter="toggleOpen(m,$event)"><div class="schedule-card-head"><f7-icon :f7="cardOf(m).icon" :size="15"/><span class="schedule-card-name">{{cardOf(m).name}}</span><span class="schedule-card-time">{{time(m.at)}}</span><f7-icon f7="chevron_down" :size="12" class="schedule-card-more"/></div><div v-if="scheduleResult(m)" class="schedule-card-result"><b v-if="scheduleResult(m).title">{{scheduleResult(m).title}}</b><span v-if="scheduleResult(m).summary">{{scheduleResult(m).summary}}</span></div><div v-if="m.outbound&&m.attachments?.length" class="message-files" @click.stop><div v-for="file in m.attachments" :key="file.id" class="attachment-chip"><a class="attachment-open" href="#" :title="file.name" @click.prevent="$emit('preview',{...file,group:m.attachments})"><f7-icon f7="doc" :size="20"/><span>{{file.name}}<small>{{file.size<1024?file.size+' B':(file.size/1024).toFixed(1)+' KB'}}</small></span></a></div></div><div v-if="opened.has(m.id)" class="schedule-card-body message-markdown message-copy" v-html="renderTypedMarkdown(m.text)"></div><div v-else class="schedule-card-preview">{{preview(scheduleInstruction(m.text))}}</div></div><f7-message v-else :data-message-id="m.id" :type="m.role==='user'&&!m.peer?'sent':'received'" :avatar="m.role==='assistant'?(m.speaker?.avatar||avatar):m.peer?peerIconOf(m):undefined" :name="m.speaker?.label" :first="true" :last="true" :tail="true" :class="{'message-arrival':arrivingIds.has(m.id),'avatar-icon':m.role==='assistant'&&avatarShape(m.speaker?.avatar||avatar)==='icon','attachment-only':m.attachments?.length&&!m.text,'inspectable':inspectable,'inspected':inspectable&&inspectId===m.id,'imported-turn':m.imported,'message-found':foundId===m.id,'relay-message':m.role==='relay'||!!m.speaker?.to,'relay-folded':folded(m)}" :aria-expanded="foldable(m)?String(!folded(m)):undefined" @click="onBubble(m,$event)"><template v-if="quotes.has(m.id)" #content-start><div class="reply-quote" @click.stop><div v-for="(q,i) in quotes.get(m.id).slice(0,expanded.has(m.id)?undefined:1)" :key="q.id" class="reply-quote-row" role="button" tabindex="0" :data-quote-id="q.id" :title="q.text" @click="jumpTo(q.id,$event)" @keydown.enter="jumpTo(q.id,$event)"><span class="reply-quote-who">{{q.who}}</span><span class="reply-quote-text">{{q.text}}</span><button v-if="i===0&&!expanded.has(m.id)&&quotes.get(m.id).length>1" type="button" class="reply-quote-more" :aria-label="ct('顯示所有回覆的訊息')" @click.stop="expand(m.id)">{{ct('＋{n} 則').replace('{n}',quotes.get(m.id).length-1)}}</button></div></div></template><template v-if="m.role==='relay'" #header><div class="relay-head"><f7-icon :f7="m.relay?.direction==='out'?'arrow_up_right':'arrow_down_left'" :size="14"/>{{m.relay?.direction==='out'?ct('已傳給 '):ct('來自 ')}}<a v-if="m.relay?.peerId" href="#" class="relay-peer" @click.prevent.stop="$emit('open-peer',m.relay.peerId)">{{m.relay.peerName}}</a><span v-else class="relay-peer">{{m.relay?.peerName}}<small> · {{ct('不在 CC Agent 內')}}</small></span></div></template><template v-else-if="m.attachments?.length" #header><div v-if="picturesOf(m).length" class="message-pictures" :class="{grid:picturesOf(m).length>1}"><a v-for="(file,i) in picturesOf(m).slice(0,4)" :key="file.id" class="message-picture" href="#" :aria-label="ct('預覽')+' '+file.name" @click.prevent="$emit('preview',{...file,group:m.attachments})"><img :src="attachmentUrl(file)" :alt="file.name" loading="lazy" draggable="false"/><span v-if="i===3&&picturesOf(m).length>4" class="message-picture-more">+{{picturesOf(m).length-4}}</span></a></div><div class="message-files"><div v-for="file in m.attachments" :key="file.id" class="attachment-chip"><a class="attachment-open" href="#" :title="file.name" @click.prevent="$emit('preview',{...file,group:m.attachments})"><f7-icon :f7="/\.(mp3|m4a|aac|wav|ogg|oga|opus|flac)$/i.test(file.name)?'music_note':/\.(mp4|m4v|mov|webm|ogv)$/i.test(file.name)?'film':'doc'" :size="20"/><span>{{file.name}}<small>{{file.size<1024?file.size+' B':(file.size/1024).toFixed(1)+' KB'}}</small></span></a><a class="attachment-download external" :href="attachmentUrl(file)" :download="file.name" target="_blank" rel="noopener" :aria-label="ct('下載')+' '+file.name" @click.stop="onDownload(file,$event)"><f7-icon f7="arrow_down_circle" :size="22"/></a></div></div></template><template #text><div v-if="m.text&&folded(m)" class="relay-preview"><span class="relay-preview-text">{{preview(m.text)}}</span><f7-icon f7="chevron_down" :size="12" class="relay-preview-more"/></div><div v-else-if="m.text" class="message-markdown message-copy" v-html="m.role==='assistant'?withOwner(renderMarkdown(m.text),m):withMentions(renderTypedMarkdown(m.text),m.mentions)"></div></template><template #footer>{{time(m.at)}}<span v-if="m.imported"> · {{ct('來自 session')}}</span><span v-if="m.schedule?.name" class="schedule-label"> · {{ct('排程：')}}{{m.schedule.name}}</span><span v-if="m.group?.name" class="schedule-label"> · {{ct('群組：')}}{{m.group.name}}</span><span v-if="m.peer?.machine" class="schedule-label"> · {{ct('來自 ')}}{{m.peer.machine}} · {{m.peer.title}}</span><span v-else-if="m.footnote" class="schedule-label"> · {{m.footnote}}</span><span v-if="m.peerOut" class="schedule-label peer-out-line"> · {{peerOutLine(m)}}</span><span v-if="m.peerOut?.status==='draft'&&isAdmin" class="peer-draft-actions" @click.stop><f7-button small fill round class="peer-draft-send" :class="{disabled:draftBusy.has(m.id)}" @click="decideDraft(m,true)">{{ct('送出')}}</f7-button><f7-button small round class="peer-draft-drop" :class="{disabled:draftBusy.has(m.id)}" @click="decideDraft(m,false)">{{ct('不送')}}</f7-button></span><button v-if="m.text" type="button" class="bubble-copy" :aria-label="ct('複製這則訊息')" :title="ct('複製這則訊息')" @click.stop="copyText(m.text)"><i class="icon f7-icons">doc_on_doc</i></button></template></f7-message></template>
+  <template v-for="m in messages" :key="m.id"><ClaudeLoginCard v-if="m.notice==='login'" :message="m" :conversation-id="conversationId" :time="time(m.at)"/><f7-messages-title v-else-if="m.role==='system'&&!cardOf(m)" :data-message-id="m.id" :class="{'message-arrival':arrivingIds.has(m.id)}">{{m.text}}</f7-messages-title><div v-else-if="cardOf(m)" class="message schedule-card" :class="{'message-arrival':arrivingIds.has(m.id),'message-found':foundId===m.id,open:opened.has(m.id)}" :data-message-id="m.id" role="button" tabindex="0" :aria-expanded="String(opened.has(m.id))" @click="toggleOpen(m,$event)" @keydown.enter="toggleOpen(m,$event)"><div class="schedule-card-head"><f7-icon :f7="cardOf(m).icon" :size="15"/><span class="schedule-card-name">{{cardOf(m).name}}</span><span class="schedule-card-time">{{time(m.at)}}</span><f7-icon f7="chevron_down" :size="12" class="schedule-card-more"/></div><div v-if="scheduleResult(m)" class="schedule-card-result"><b v-if="scheduleResult(m).title">{{scheduleResult(m).title}}</b><span v-if="scheduleResult(m).summary">{{scheduleResult(m).summary}}</span></div><div v-if="m.outbound&&m.attachments?.length" class="message-files" @click.stop><div v-for="file in m.attachments" :key="file.id" class="attachment-chip"><a class="attachment-open" href="#" :title="file.name" @click.prevent="$emit('preview',{...file,group:m.attachments})"><f7-icon f7="doc" :size="20"/><span>{{file.name}}<small>{{file.size<1024?file.size+' B':(file.size/1024).toFixed(1)+' KB'}}</small></span></a></div></div><div v-if="opened.has(m.id)" class="schedule-card-body message-markdown message-copy" v-html="renderTypedMarkdown(m.text)"></div><div v-else class="schedule-card-preview">{{preview(scheduleInstruction(m.text))}}</div></div><f7-message v-else :data-message-id="m.id" :type="isSent(m)?'sent':'received'" :avatar="m.role==='assistant'?(m.speaker?.avatar||avatar):m.peer?peerIconOf(m):undefined" :name="m.speaker?.label" :first="true" :last="true" :tail="true" :class="{'message-arrival':arrivingIds.has(m.id),'avatar-icon':m.role==='assistant'&&avatarShape(m.speaker?.avatar||avatar)==='icon','attachment-only':m.attachments?.length&&!m.text,'inspectable':inspectable,'inspected':inspectable&&inspectId===m.id,'imported-turn':m.imported,'message-found':foundId===m.id,'relay-message':m.role==='relay'||!!m.speaker?.to,'relay-folded':folded(m)}" :aria-expanded="foldable(m)?String(!folded(m)):undefined" @click="onBubble(m,$event)"><template v-if="m.role==='relay'||m.attachments?.length||quotes.has(m.id)" #header><div v-if="m.role==='relay'" class="relay-head"><f7-icon :f7="m.relay?.direction==='out'?'arrow_up_right':'arrow_down_left'" :size="14"/>{{m.relay?.direction==='out'?ct('已傳給 '):ct('來自 ')}}<a v-if="m.relay?.peerId" href="#" class="relay-peer" @click.prevent.stop="$emit('open-peer',m.relay.peerId)">{{m.relay.peerName}}</a><span v-else class="relay-peer">{{m.relay?.peerName}}<small> · {{ct('不在 CC Agent 內')}}</small></span></div><template v-else-if="m.attachments?.length"><div v-if="picturesOf(m).length" class="message-pictures" :class="{grid:picturesOf(m).length>1}"><a v-for="(file,i) in picturesOf(m).slice(0,4)" :key="file.id" class="message-picture" href="#" :aria-label="ct('預覽')+' '+file.name" @click.prevent="$emit('preview',{...file,group:m.attachments})"><img :src="attachmentUrl(file)" :alt="file.name" loading="lazy" draggable="false"/><span v-if="i===3&&picturesOf(m).length>4" class="message-picture-more">+{{picturesOf(m).length-4}}</span></a></div><div class="message-files"><template v-for="(file,fileAt) in m.attachments" :key="file.id"><ReplyQuote v-if="!m.text&&quotes.has(m.id)&&fileAt===m.attachments.length-1" class="in-files" :items="quotes.get(m.id)" :expanded="expanded.has(m.id)" :sent="isSent(m)" @jump="jumpTo" @expand="expand(m.id)"/><div class="attachment-chip"><a class="attachment-open" href="#" :title="file.name" @click.prevent="$emit('preview',{...file,group:m.attachments})"><f7-icon :f7="/\.(mp3|m4a|aac|wav|ogg|oga|opus|flac)$/i.test(file.name)?'music_note':/\.(mp4|m4v|mov|webm|ogv)$/i.test(file.name)?'film':'doc'" :size="20"/><span>{{file.name}}<small>{{file.size<1024?file.size+' B':(file.size/1024).toFixed(1)+' KB'}}</small></span></a><a class="attachment-download external" :href="attachmentUrl(file)" :download="file.name" target="_blank" rel="noopener" :aria-label="ct('下載')+' '+file.name" @click.stop="onDownload(file,$event)"><f7-icon f7="arrow_down_circle" :size="22"/></a></div></template></div></template><ReplyQuote v-if="quotes.has(m.id)&&(m.text||m.role==='relay'||!m.attachments?.length)" :items="quotes.get(m.id)" :expanded="expanded.has(m.id)" :sent="isSent(m)" @jump="jumpTo" @expand="expand(m.id)"/></template><template #text><div v-if="m.text&&folded(m)" class="relay-preview"><span class="relay-preview-text">{{preview(m.text)}}</span><f7-icon f7="chevron_down" :size="12" class="relay-preview-more"/></div><div v-else-if="m.text" class="message-markdown message-copy" v-html="m.role==='assistant'?withOwner(renderMarkdown(m.text),m):withMentions(renderTypedMarkdown(m.text),m.mentions)"></div></template><template #footer>{{time(m.at)}}<span v-if="m.imported"> · {{ct('來自 session')}}</span><span v-if="m.schedule?.name" class="schedule-label"> · {{ct('排程：')}}{{m.schedule.name}}</span><span v-if="m.group?.name" class="schedule-label"> · {{ct('群組：')}}{{m.group.name}}</span><span v-if="m.peer?.machine" class="schedule-label"> · {{ct('來自 ')}}{{m.peer.machine}} · {{m.peer.title}}</span><span v-else-if="m.footnote" class="schedule-label"> · {{m.footnote}}</span><span v-if="m.peerOut" class="schedule-label peer-out-line"> · {{peerOutLine(m)}}</span><span v-if="m.peerOut?.status==='draft'&&isAdmin" class="peer-draft-actions" @click.stop><f7-button small fill round class="peer-draft-send" :class="{disabled:draftBusy.has(m.id)}" @click="decideDraft(m,true)">{{ct('送出')}}</f7-button><f7-button small round class="peer-draft-drop" :class="{disabled:draftBusy.has(m.id)}" @click="decideDraft(m,false)">{{ct('不送')}}</f7-button></span><button v-if="m.text" type="button" class="bubble-copy" :aria-label="ct('複製這則訊息')" :title="ct('複製這則訊息')" @click.stop="copyText(m.text)"><i class="icon f7-icons">doc_on_doc</i></button><button v-if="replyable" type="button" class="bubble-reply" :aria-label="ct('回覆')" v-tip="ct('回覆')" @click.stop="startReply(m)"><i class="icon f7-icons">arrowshape_turn_up_left</i></button></template></f7-message></template>
   <TypingBubbles :background-text="backgroundText" :typing="typing" :typing-text="typingText" :typing-note="typingNote" :interruptible="interruptible" :interrupting="interrupting" @interrupt="$emit('interrupt')"/>
+  <!-- A long press on a bubble (js/bubbleGestures.js): the page dimmed but for the
+       bubble, two round buttons over it, a tap anywhere else closing them. -->
+  <Teleport to="body"><div v-if="bubbleMenu" class="bubble-menu-backdrop" @click="gestures.close()" @touchmove.prevent><svg class="bubble-menu-dim" aria-hidden="true" width="100%" height="100%"><defs><mask :id="'bubble-menu-hole-'+uid"><rect width="100%" height="100%" fill="#fff"/><rect class="bubble-menu-hole" v-bind="gestures.holeStyle.value" rx="22" fill="#000"/></mask></defs><rect width="100%" height="100%" fill="rgba(0,0,0,.5)" :mask="'url(#bubble-menu-hole-'+uid+')'"/></svg><div class="bubble-menu" :style="gestures.menuStyle.value"><button v-if="bubbleMenu.canCopy" type="button" class="bubble-menu-copy" :aria-label="ct('複製這則訊息')" @click.stop="gestures.copy()"><i class="icon f7-icons">doc_on_doc</i></button><button v-if="bubbleMenu.canReply" type="button" class="bubble-menu-reply" :aria-label="ct('回覆')" @click.stop="gestures.reply()"><i class="icon f7-icons">arrowshape_turn_up_left</i></button></div></div></Teleport>
  </f7-messages>
 </template>
 <script setup>
@@ -21,9 +24,13 @@ import {bubbleTime} from '../js/bubbleTime.js';
 import {renderMarkdown,renderTypedMarkdown} from '../js/markdown.js';
 import {saveFile,sharesFiles} from '../js/saveFile.js';
 import ClaudeLoginCard from './ClaudeLoginCard.vue';
-const props=defineProps({messages:{type:Array,default:()=>[]},conversationId:String,peerTargets:{type:Array,default:()=>[]},hasOlder:Boolean,olderBusy:Boolean,avatar:String,
+import ReplyQuote from './ReplyQuote.vue';
+import {useBubbleGestures} from '../js/bubbleGestures.js';
+// replyable: the reader may reply to a message here (a conversation and a split-view
+// cell; a group room passes its words to several agents and has none).
+const props=defineProps({messages:{type:Array,default:()=>[]},conversationId:String,replyable:Boolean,peerTargets:{type:Array,default:()=>[]},hasOlder:Boolean,olderBusy:Boolean,avatar:String,
  inspectable:Boolean,inspectId:String,foundId:String,backgroundText:String,typing:{type:Boolean,default:undefined},typingText:String,typingNote:String,emptyText:String,interruptible:{type:Boolean,default:undefined},interrupting:{type:Boolean,default:undefined}});
-const emit=defineEmits(['load-older','inspect','preview','interrupt','open-peer','open-group']);
+const emit=defineEmits(['load-older','inspect','preview','interrupt','open-peer','open-group','reply']);
 // Isolate per-second typing/progress updates into a child component so the messages v-for does not re-render on each status tick.
 const TypingBubbles=defineComponent({
  name:'TypingBubbles',
@@ -116,10 +123,18 @@ function senderName(m){
  return ct('你');
 }
 const quoteText=m=>preview(m.schedule?scheduleInstruction(m.text||''):m.text||'')||(m.attachments||[]).map(f=>f.name).join(', ');
+// A message the reader wrote as a reply (replyTo) always shows what it replies to, right
+// above it or not; one not loaded yet shows the words kept with it.
 const quotes=computed(()=>{
  const list=props.messages||[],at=new Map(),covered=new Map(),out=new Map();
  list.forEach((m,i)=>{at.set(m.id,i);if(m.answeredIn){if(!covered.has(m.answeredIn))covered.set(m.answeredIn,[]);covered.get(m.answeredIn).push(m);}});
  list.forEach((m,i)=>{
+  if(m.role==='user'&&m.replyTo&&!cardOf(m)){
+   const t=at.has(m.replyTo)?list[at.get(m.replyTo)]:null;
+   const q=t?{id:t.id,who:senderName(t),text:quoteText(t)}:{id:m.replyTo,who:'',text:m.replyPreview||''};
+   if(q.who||q.text)out.set(m.id,[q]);
+   return;
+  }
   if(m.role!=='assistant'||!m.inReplyTo||cardOf(m))return;
   const answered=[list[at.get(m.inReplyTo)],...(covered.get(m.id)||[])].filter(x=>x&&x.id!==m.id&&at.get(x.id)<i);
   const items=[...new Map(answered.map(x=>[x.id,x])).values()].sort((a,b)=>at.get(a.id)-at.get(b.id));
@@ -141,6 +156,23 @@ function jumpTo(id,event){
  el.classList.remove('message-found');void el.offsetWidth;el.classList.add('message-found');setTimeout(()=>el.classList.remove('message-found'),2000);
 }
 const folded=m=>foldable(m)&&!opened.value.has(m.id)&&props.foundId!==m.id;
+// The reader's own messages sit on the right.
+const isSent=m=>m.role==='user'&&!m.peer;
+// Replying to a message: the button beside copy with a mouse; on a phone a swipe to the
+// left, or the long-press menu (js/bubbleGestures.js). What goes to the composer is who
+// wrote it and its first words.
+function startReply(m){if(props.replyable)emit('reply',{id:m.id,who:senderName(m),text:quoteText(m)});}
+const replyableMessage=m=>!!m&&m.notice!=='login'&&!(m.role==='system'&&!cardOf(m))&&!cardOf(m);
+const listEl=ref(null);
+const gestures=useBubbleGestures({
+ list:()=>listEl.value?.$el||listEl.value,
+ find:id=>(props.messages||[]).find(m=>m.id===id&&replyableMessage(m)),
+ canReply:()=>props.replyable,
+ isSent,
+ reply:startReply,
+ copy:m=>copyText(m.text),
+});
+const bubbleMenu=gestures.menu,uid=Math.random().toString(36).slice(2,8);
 // Pictures show above their capsules, one as it is and several in a grid of four; the capsules stay for the name and download.
 // Only what every browser draws: a HEIC still has its capsule and preview.
 const PICTURE=/\.(png|jpe?g|gif|webp|avif|bmp)$/i;
@@ -327,14 +359,17 @@ function onMarkdownClick(event){
 :deep(.attachment-only .message-bubble) {display:none;}
 
 /* With a mouse over a bubble, a button beside its time copies the message as it was
-   written, markdown and all: selecting the drawn text loses the marks. It keeps its place while hidden, so nothing moves. */
-.bubble-copy {display:none;}
+   written, markdown and all: selecting the drawn text loses the marks. It keeps its place while hidden, so nothing moves.
+   Reply sits beside it, the same size and behaviour. */
+:is(.bubble-copy,.bubble-reply) {display:none;}
 @media (hover:hover) and (pointer:fine) {
- .bubble-copy {display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;width:24px;height:20px;margin-left:4px;padding:0;border:0;border-radius:6px;background:transparent;color:inherit;opacity:0;cursor:pointer;}
- .bubble-copy .icon {font-size:15px;}
- :deep(.message-sent) .bubble-copy {float:left;margin:-3px 4px 0 0;}
- :deep(.message:hover) .bubble-copy,.bubble-copy:focus-visible {opacity:.85;}
- .bubble-copy:hover {opacity:1;background:color-mix(in srgb,currentColor 14%,transparent);}
+ :is(.bubble-copy,.bubble-reply) {display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;width:24px;height:20px;margin-left:4px;padding:0;border:0;border-radius:6px;background:transparent;color:inherit;opacity:0;cursor:pointer;}
+ :is(.bubble-copy,.bubble-reply) .icon {font-size:15px;}
+ .bubble-reply {margin-left:0;}
+ :deep(.message-sent) :is(.bubble-copy,.bubble-reply) {float:left;margin:-3px 4px 0 0;}
+ :deep(.message-sent) .bubble-copy + .bubble-reply {margin-left:-4px;}
+ :deep(.message:hover) :is(.bubble-copy,.bubble-reply),:is(.bubble-copy,.bubble-reply):focus-visible {opacity:.85;}
+ :is(.bubble-copy,.bubble-reply):hover {opacity:1;background:color-mix(in srgb,currentColor 14%,transparent);}
 }
 
 /* A wide code block or table scrolls inside its bubble instead of widening it past
@@ -392,16 +427,17 @@ function onMarkdownClick(event){
 .message-markdown :deep(table) {border-collapse:collapse;font-size:.92em;overflow-wrap:normal;word-break:normal;}
 .message-markdown :deep(:is(th,td)) {min-width:5em;padding:6px 10px;border:1px solid color-mix(in srgb,currentColor 20%,transparent);text-align:left;vertical-align:top;}
 .message-markdown :deep(th) {font-weight:600;white-space:nowrap;background:color-mix(in srgb,currentColor 8%,transparent);}
-/* The line above a reply naming what it answers: a hook from the picture's middle,
-   who wrote it, its first words on one line, and a chip for the others it answers. */
-.reply-quote{display:flex;flex-direction:column;align-self:stretch;gap:2px;min-width:0;margin:0 0 4px calc(var(--f7-message-avatar-size)/-2 - 1px);font-size:12.5px;line-height:18px;color:var(--cc-color-text-secondary)}
-.reply-quote-row{display:flex;align-items:center;gap:6px;min-width:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
-.reply-quote-row::before{content:'';flex:none;align-self:flex-end;width:18px;height:9px;margin-bottom:-1px;border:2px solid var(--cc-color-text-tertiary);border-right:0;border-bottom:0;border-top-left-radius:8px}
-.reply-quote-row:hover .reply-quote-text,.reply-quote-row:focus-visible .reply-quote-text{color:var(--f7-message-received-text-color)}
-.reply-quote-who{flex:none;font-weight:600;color:#0a84ff}
-:global(html.dark) .message-list .reply-quote-who{color:#58a6ff}
-.reply-quote-text{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.reply-quote-more{flex:none;width:auto;margin:0;padding:0 7px;border:0;border-radius:8px;background:rgba(127,127,127,.2);color:inherit;font:inherit;font-size:11px;line-height:18px;cursor:pointer}
+/* The line naming what a message answers (ReplyQuote.vue) sits right over the text
+   bubble, below pictures and files; over the last file of a message with no words it
+   lines up with the files. The header may not grow past its bubble's column for the
+   line's long words: they cut with an ellipsis instead. */
+:deep(.message-content > .message-header){min-width:0;max-width:calc(100% - var(--f7-message-bubble-padding-horizontal))}
+/* The hook's upright over where the words start: the bubble pads its text 6px more than
+   its header, on the tail side. */
+:deep(.message-received .message-header) > .reply-quote{margin-left:6px}
+:deep(.message-sent .message-header) > .reply-quote{margin-right:6px}
+:deep(.message-header) > .reply-quote:not(:first-child){margin-top:6px}
+.message-files > .reply-quote.in-files{flex:1 0 100%;margin:0 0 -4px}
 :deep(.message.relay-message .message-bubble){background:rgba(127,127,127,.12);border:1px dashed rgba(127,127,127,.45)}
 /* Room between bubbles, the thinking bubble included. */
 :deep(.message + .message){margin-top:28px}
@@ -427,4 +463,29 @@ function onMarkdownClick(event){
 .relay-peer small{font-weight:400}
 :deep(.mention-tag) {display:inline-block;padding:0 6px;border-radius:8px;background:rgba(10,132,255,.22);color:#4da3ff;font-weight:600;text-decoration:none;}
 :deep(.message-sent .mention-tag) {background:rgba(255,255,255,.18);color:#fff;}
+</style>
+<style>
+/* A finger on a bubble (js/bubbleGestures.js); unscoped, as the swipe's icon is made there
+   and the menu lives under body. Swiped, the bubble and its picture slide together and
+   the icon waits at their right. */
+.message-list .message.reply-swiping {position:relative;}
+.message-list .message.reply-swiping > :is(.message-avatar,.message-content) {transform:translateX(var(--reply-swipe,0px));}
+.message-list .message.reply-swipe-back > :is(.message-avatar,.message-content) {transition:transform .2s ease;}
+.reply-swipe-icon {position:absolute;top:50%;z-index:0;display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;background:rgba(127,127,127,.28);color:var(--cc-color-text);opacity:0;transform:translateY(-50%) scale(.6);pointer-events:none;transition:background-color .12s ease,opacity .2s ease;}
+.reply-swipe-icon .icon {font-size:18px;}
+.reply-swipe-icon.armed {background:#0a84ff;color:#fff;}
+/* Pressed or with its menu up, that bubble alone gives no callout or selection. */
+.message-list .message.bubble-pressing {-webkit-touch-callout:none;}
+.message-list .message.bubble-menu-on {-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}
+.message-list .message.bubble-menu-on > .message-content {transform:scale(1.03);transition:transform .18s ease;}
+.message-list .message.message-sent.bubble-menu-on > .message-content {transform-origin:right center;}
+.message-list .message.message-received.bubble-menu-on > .message-content {transform-origin:left center;}
+.bubble-menu-backdrop {position:fixed;inset:0;z-index:13000;-webkit-tap-highlight-color:transparent;}
+.bubble-menu-dim {position:fixed;inset:0;width:100%;height:100%;pointer-events:none;animation:bubble-menu-in .16s ease-out;}
+.bubble-menu {position:fixed;display:flex;gap:10px;animation:bubble-menu-in .16s ease-out;}
+.bubble-menu button {display:flex;align-items:center;justify-content:center;width:44px;height:44px;margin:0;padding:0;border:0;border-radius:50%;background:var(--f7-glass-bg-color,rgba(40,40,44,.92));box-shadow:var(--f7-glass-shadow,0 4px 16px rgba(0,0,0,.3));backdrop-filter:saturate(180%) blur(16px);-webkit-backdrop-filter:saturate(180%) blur(16px);color:var(--cc-color-text);cursor:pointer;-webkit-tap-highlight-color:transparent;}
+.bubble-menu button:active {opacity:.6;}
+.bubble-menu button .icon {font-size:20px;}
+@keyframes bubble-menu-in {from {opacity:0;}}
+@media (prefers-reduced-motion:reduce) {.bubble-menu-dim,.bubble-menu {animation:none;}.message-list .message.bubble-menu-on > .message-content {transition:none;}}
 </style>

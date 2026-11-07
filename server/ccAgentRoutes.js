@@ -237,7 +237,7 @@ app.delete('/api/conversations/:id/attachments/:fileId',own,(req,res,next)=>{try
 app.get('/api/conversations/:id/avatar',own,(req,res,next)=>{try{const file=agents.avatarLocation(req.conversation);res.set('Cache-Control','private, max-age=31536000, immutable');res.set('X-Content-Type-Options','nosniff');res.type(file.type);res.sendFile(file.path);}catch(e){next(e);}});
 app.post('/api/conversations/:id/avatar',adminOnly,own,express.raw({type:()=>true,limit:agents.AVATAR_MAX_BYTES}),(req,res,next)=>{try{agents.setAvatar(req.conversation,req.body);res.json(agents.publicView(req.conversation,true));}catch(e){next(e);}});
 app.delete('/api/conversations/:id/avatar',adminOnly,own,(req,res,next)=>{try{agents.clearAvatar(req.conversation);res.json(agents.publicView(req.conversation,true));}catch(e){next(e);}});
-app.post('/api/conversations/:id/messages',(req,res,next)=>{try{const c=agents.get(req.params.id,req.userId);const mentions=agents.mentionsFor(req.userId,req.body.mentions,req.body.text,c);const sent=agents.send(c,req.body.text,req.body.requestId,req.body.attachmentIds,mentions.length?{mentions}:{});
+app.post('/api/conversations/:id/messages',(req,res,next)=>{try{const c=agents.get(req.params.id,req.userId);const mentions=agents.mentionsFor(req.userId,req.body.mentions,req.body.text,c);const sent=agents.send(c,req.body.text,req.body.requestId,req.body.attachmentIds,{...(mentions.length?{mentions}:{}),...(req.body.replyTo!==undefined?{replyTo:req.body.replyTo}:{})});
  res.json(sent);}catch(e){next(e);}});
 app.post('/api/conversations/:id/:action',(req,res,next)=>{try{
  const c=agents.get(req.params.id,req.userId);

@@ -155,6 +155,16 @@ const unreadTotal=computed(()=>conversations.value.reduce((n,a)=>n+unreadOf(a),0
 const attachmentDrafts=useAttachmentDrafts(selected,user,busy,ct);
 const {files,fileInput,pickFiles,dropFiles,pasteFiles,removeFile,chooseFiles,previewDraft}=attachmentDrafts;
 const drafts=new Map();
+// The message the next one replies to: {id,who,text} from the bubble, shown over the box
+// until it is sent, cancelled (X, Escape) or the conversation changes.
+const replyDraft=ref(null);
+watch(selected,()=>{replyDraft.value=null;});
+function startReply(quote){
+ if(!quote?.id)return;
+ replyDraft.value=quote;
+ nextTick(()=>{const editor=document.querySelector('#cc-agent-prompt');if(editor&&!f7.device?.ios&&!f7.device?.android)editor.focus();});
+}
+function cancelReply(){replyDraft.value=null;}
 watch(draft,text=>{if(selected.value)drafts.set(selected.value,text);},{flush:'sync'});
 const wakingId=ref(null),waking=ref(false),wakeError=ref('');let wakeRun=0,disposed=false;
 const newOpen=ref(false),infoOpen=ref(false),newTitle=ref(''),memoryDraft=ref('');
@@ -876,7 +886,7 @@ async function runSlashCommand(id,text){
  busy.value=false;
 }
 function composerKeydown(e){if(slash.onKeydown(e,send))return;if(mention.onKeydown(e,mentionCaret))return;if(e.key==='Enter'&&!e.shiftKey&&!e.altKey&&!e.ctrlKey&&!e.metaKey)enterSend(e);}
-async function send(){if(!canSend.value)return;if(!files.value.length&&user.value?.role==='admin'&&detail.value?.mode==='claude'&&await slash.resolveTerminal(draft.value))return runSlashCommand(selected.value,draft.value);const id=selected.value,text=draft.value,items=[...files.value],requestId=attachmentDrafts.requestId(id,text,items);busy.value=true;await attempt(async()=>{const attachmentIds=await attachmentDrafts.upload(id,items);await api('/conversations/'+id+'/messages',{method:'POST',body:JSON.stringify({text,requestId,attachmentIds,mentions:mention.current.value.map(m=>m.id)})});attachmentDrafts.sent(id,items);if(drafts.get(id)===text)drafts.delete(id);if(selected.value===id&&draft.value===text)draft.value='';await refresh();await bottom();});busy.value=false;}
+async function send(){if(!canSend.value)return;if(!files.value.length&&user.value?.role==='admin'&&detail.value?.mode==='claude'&&await slash.resolveTerminal(draft.value))return runSlashCommand(selected.value,draft.value);const id=selected.value,text=draft.value,items=[...files.value],requestId=attachmentDrafts.requestId(id,text,items),quote=replyDraft.value;busy.value=true;await attempt(async()=>{const attachmentIds=await attachmentDrafts.upload(id,items);await api('/conversations/'+id+'/messages',{method:'POST',body:JSON.stringify({text,requestId,attachmentIds,mentions:mention.current.value.map(m=>m.id),...(quote?{replyTo:quote.id}:{})})});attachmentDrafts.sent(id,items);if(replyDraft.value===quote)replyDraft.value=null;if(drafts.get(id)===text)drafts.delete(id);if(selected.value===id&&draft.value===text)draft.value='';await refresh();await bottom();});busy.value=false;}
 
 function enterSend(e){if(!shouldSendOnEnter(e,f7.device))return;e.preventDefault();send();}
 async function action(name,body={}){
@@ -923,6 +933,8 @@ function onFind(event){
 }
 function onEscape(event){
  if(event.key!=='Escape'||event.isComposing||event.keyCode===229||event.defaultPrevented)return;
+ // A reply being written stops first (its X), before a turn is interrupted.
+ if(replyDraft.value&&document.querySelector('#view-chat .page-current[data-name="conversation"]')&&!document.querySelector(MODAL_OPEN)&&!event.target?.closest?.('.terminal-pane,.split-cell')){event.preventDefault();replyDraft.value=null;return;}
  if(!canInterrupt.value||interrupting.value)return;
  if(!document.querySelector('#view-chat .page-current[data-name="conversation"]')||document.querySelector(MODAL_OPEN))return;
  if(event.target?.closest?.('.terminal-pane'))return;
@@ -1102,6 +1114,6 @@ onMounted(()=>{
  poll=setInterval(tick,1200);});
 onUnmounted(()=>{boxWatch?.disconnect();document.removeEventListener('keydown',onEscape);document.removeEventListener('keydown',onFind);window.removeEventListener('popstate',restoreUrl);notifications.stop();document.removeEventListener('visibilitychange',onAppVisible);window.removeEventListener('focus',onAppFocus);unwatchWidth?.();disposed=true;cancelHistoryPaging();operations.value={};clearInterval(poll);live?.close();live=null;wakeRun++;});
 
-return {unreadOf,unreadLabel,unreadTotal,mixedList:computed(mixed),chosenByPresence,chooseByPresence,atStart,directOpening,toGroups,openingId,toList,cancelOpening,toggleGroupCollapse,openGroup,mention,pickMention,checklistOpen,checklistPanelVisible,checklistPopupOpen,toggleChecklist,usageOpen,usagePanelVisible,usagePopupOpen,toggleUsage,usageRefreshing,refreshUsage,openAutoCompactChoice,typingBubble,searchPanelVisible,searchPopupOpen,toggleSearch,enterConversation,searchOpen,searchText,foundMessage,searchMessages,showMessage,noteInBubble,pauseAgent,startAgent,allChosen,toggleAllChosen,slash,composerKeydown,chosenList,isChosen,toggleChosen,groupChosen,toggleGroupChosen,terminalSide,chatHidden,terminalWidthCss,startTerminalResize,moveGroups,listRows,sections,listGroups,listSources,listSource,chooseSource,addGroup,editingGroup,startGroupRename,cancelGroupRename,finishGroupRename,deleteGroup,uploadAvatar,resetAvatar,autoSort:agentPreferences.autoSort,backgroundProgress,agentAvatar,presence,embedded,recoverOrphanedConversation,activity,progressInBubble,progressInBar,showViewSwitch,showTerminalSwitch,showSubnavbar,olderBusy,pagingBack,atBottom,loadOlder,onMessagesScroll,onHistoryWheel,onHistoryTouchStart,onHistoryTouchMove,onHistoryTouchEnd,onHistoryTouchCancel,toLatest,
+return {replyDraft,startReply,cancelReply,unreadOf,unreadLabel,unreadTotal,mixedList:computed(mixed),chosenByPresence,chooseByPresence,atStart,directOpening,toGroups,openingId,toList,cancelOpening,toggleGroupCollapse,openGroup,mention,pickMention,checklistOpen,checklistPanelVisible,checklistPopupOpen,toggleChecklist,usageOpen,usagePanelVisible,usagePopupOpen,toggleUsage,usageRefreshing,refreshUsage,openAutoCompactChoice,typingBubble,searchPanelVisible,searchPopupOpen,toggleSearch,enterConversation,searchOpen,searchText,foundMessage,searchMessages,showMessage,noteInBubble,pauseAgent,startAgent,allChosen,toggleAllChosen,slash,composerKeydown,chosenList,isChosen,toggleChosen,groupChosen,toggleGroupChosen,terminalSide,chatHidden,terminalWidthCss,startTerminalResize,moveGroups,listRows,sections,listGroups,listSources,listSource,chooseSource,addGroup,editingGroup,startGroupRename,cancelGroupRename,finishGroupRename,deleteGroup,uploadAvatar,resetAvatar,autoSort:agentPreferences.autoSort,backgroundProgress,agentAvatar,presence,embedded,recoverOrphanedConversation,activity,progressInBubble,progressInBar,showViewSwitch,showTerminalSwitch,showSubnavbar,olderBusy,pagingBack,atBottom,loadOlder,onMessagesScroll,onHistoryWheel,onHistoryTouchStart,onHistoryTouchMove,onHistoryTouchEnd,onHistoryTouchCancel,toLatest,
  inspectorOpen,inspectorVisible,showInspectorButton,profilePanelOpen,profilePanelVisible,openProfile,wideScreen,inspectId,inspectData,inspectBusy,inspectError,inspect,toggleInspector,clearInspection,agentLocked,agentOperationTitle,agentOperationSteps,agentOperationPercent,agentOperationError,newProfile,profileDraft,profileSaving,saveProfile,profileDirty,closeProfile,guardOperation,syncProfileVersion,profileConflicts,files,fileInput,pickFiles,dropFiles,pasteFiles,removeFile,chooseFiles,previewDraft,ct,generation,user,busy,error,theme,menuConversation,menuPoint,preferenceThreshold,editMode,orderBusy,toggleEdit,bulkBusy,pauseEveryAgent,startEveryAgent,restartEveryAgent,reorderChats,onChatsIn,terminalOpen,conversations,selected,detail,search,draft,scroll,newOpen,infoOpen,newTitle,memoryDraft,filtered,statusLabel,awaitingReply,canSend,conversationMenu,renameConversation,deleteConversation,savePreferences,wakingId,waking,wakeError,closeNew,openNewChat,create,select,bottom,send,enterSend,action,interrupting,canInterrupt,interruptTurn,pause,restart,handoff,importHistory,saveMemory,time,renderMarkdown,renderTypedMarkdown};
 }

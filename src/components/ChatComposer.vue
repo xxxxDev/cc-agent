@@ -1,6 +1,9 @@
 <template>
  <div class="toolbar messagebar">
   <slot name="before-inner"/>
+  <!-- The message being replied to: who wrote it and its first words on one line, an X
+       or Escape to stop replying. -->
+  <div v-if="reply" class="reply-draft" role="status"><i class="icon f7-icons reply-draft-icon" aria-hidden="true">arrowshape_turn_up_left</i><span class="reply-draft-line"><b class="reply-draft-label">{{ct('回覆：')}}</b><span v-if="reply.who" class="reply-draft-who">{{reply.who}}</span> <span class="reply-draft-text">{{reply.text}}</span></span><button type="button" class="reply-draft-cancel" :aria-label="ct('取消回覆')" @click="$emit('cancel-reply')"><i class="icon f7-icons">xmark</i></button></div>
   <div ref="pill" class="toolbar-inner composer-pill" :class="{'composer-tall':tall}">
    <div class="toolbar-pane composer-start" :class="{'composer-empty':!$slots['inner-start']}"><slot name="inner-start"/></div>
    <div ref="area" class="messagebar-area">
@@ -22,10 +25,12 @@
 <script setup>
 import {ref,watch,onMounted,onBeforeUnmount,nextTick} from 'vue';
 import {paintMentions} from '../js/mentionHighlight.js';
+import {ct} from '../js/agent-i18n.js';
 // editorId: the conversation page's own box is #cc-agent-prompt; a split-view cell's
 // boxes, several on one page, have none.
-const props=defineProps({value:{type:String,default:''},placeholder:String,highlights:{type:Array,default:()=>[]},editorId:{type:String,default:'cc-agent-prompt'}});
-const emit=defineEmits(['update:value','keydown']);
+// reply: {who,text} of the message being replied to, shown over the box; null for none.
+const props=defineProps({value:{type:String,default:''},placeholder:String,highlights:{type:Array,default:()=>[]},editorId:{type:String,default:'cc-agent-prompt'},reply:{type:Object,default:null}});
+const emit=defineEmits(['update:value','keydown','cancel-reply']);
 const editor=ref(null),area=ref(null),empty=ref(!props.value);
 let composing=false;
 // Deleting the last character leaves the browser's placeholder BR, which innerText
@@ -37,7 +42,7 @@ function input(){if(composing)return;const value=text();empty.value=!value;emit(
 // decides again when it ends (issue #7).
 function compositionStart(){composing=true;empty.value=false;}
 function compositionEnd(){composing=false;input();}
-function keydown(event){if(composing||event.isComposing||event.keyCode===229)return;emit('keydown',event);}
+function keydown(event){if(composing||event.isComposing||event.keyCode===229)return;if(event.key==='Escape'&&props.reply){event.preventDefault();emit('cancel-reply');return;}emit('keydown',event);}
 function guardComposition(event){if(composing){event.preventDefault();event.stopPropagation();}}
 function sync(value){
  if(!editor.value||composing)return;
@@ -123,6 +128,18 @@ onBeforeUnmount(()=>{paintMentions(own,[]);resized?.disconnect();widened?.discon
  font-size:var(--f7-messagebar-textarea-font-size);line-height:var(--f7-messagebar-textarea-line-height);
  white-space:pre-wrap;overflow-wrap:anywhere;outline:none;user-select:text;-webkit-user-select:text;
 }
+/* As the attachments waiting above the box: a line in the box's column, the glass chip's
+   tint, the quoted words cut to one line. */
+.reply-draft {position:relative;z-index:2;display:flex;align-items:center;gap:8px;box-sizing:border-box;min-width:0;margin:0 calc(12px + var(--f7-safe-area-right,0px)) 8px calc(12px + var(--f7-safe-area-left,0px));padding:6px 6px 6px 12px;border-radius:var(--cc-radius-card,16px);background:var(--f7-glass-bg-color,var(--cc-glass-fill-subtle));box-shadow:var(--f7-glass-shadow,none);backdrop-filter:saturate(180%) blur(16px);-webkit-backdrop-filter:saturate(180%) blur(16px);color:var(--cc-color-text);font-size:14px;line-height:20px;}
+.reply-draft-icon {flex:none;font-size:16px;color:#0a84ff;}
+.reply-draft-line {flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.reply-draft-label {font-weight:600;color:#0a84ff;}
+.reply-draft-who {font-weight:600;}
+.reply-draft-text {color:var(--cc-color-text-secondary);}
+.reply-draft-cancel {flex:none;display:flex;align-items:center;justify-content:center;width:28px;height:28px;margin:0;padding:0;border:0;border-radius:50%;background:transparent;color:var(--cc-color-text-secondary);cursor:pointer;}
+.reply-draft-cancel .icon {font-size:16px;}
+@media (hover:hover) and (pointer:fine) {.reply-draft-cancel:hover {background:color-mix(in srgb,currentColor 14%,transparent);}}
+@media (min-width:768px) {.reply-draft {margin:0 calc(16px + var(--f7-safe-area-right,0px)) 8px calc(16px + var(--f7-safe-area-left,0px));}}
 .chat-editor[data-empty="true"]::before {content:attr(data-placeholder);color:var(--f7-messagebar-textarea-placeholder-color);pointer-events:none;position:absolute;}
 </style>
 <style>
