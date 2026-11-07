@@ -1897,8 +1897,10 @@ function sweepFinishedChecklists(now,days=checklistRetentionDays()){
   if(c.archived||!Array.isArray(c.checklists)||!c.checklists.length)continue;
   const gone=c.checklists.filter(l=>checklistFinished(l,now,days));
   if(!gone.length)continue;
-  c.checklists=c.checklists.filter(l=>!gone.includes(l));
-  save(c);
+  // One conversation that cannot be saved keeps its lists and stops nothing else of the sweep.
+  const before=c.checklists;
+  c.checklists=before.filter(l=>!gone.includes(l));
+  try{save(c);}catch(e){c.checklists=before;console.error('[checklist retention]',c.id,e.message);continue;}
   for(const l of gone){removed+=1;try{require('./services/audit').audit({action:'checklist-expired',by:'retention',owner:c.owner,conversationId:c.id,listId:l.id,title:l.title||'',days});}catch{}}
  }
  return removed;
@@ -2454,7 +2456,7 @@ function setPreferences(owner,{compactThreshold,handoff,subagents,autoCompact,te
  if(autoCompact!==undefined){const settings={...state.agentSettings};if(autoCompact===null)delete settings.autoCompact;else settings.autoCompact=autoCompact;state.agentSettings=settings;}
  if(handoff!==undefined){const now=handoffSetting();state.agentSettings={...state.agentSettings,handoff:{recent:handoff.recent??now.recent,ask:handoff.ask??now.ask,lazy:handoff.lazy??now.lazy}};}
  if(retention!==undefined){const settings={...state.agentSettings};if(retention===null)delete settings.archiveRetentionDays;else settings.archiveRetentionDays=retention;state.agentSettings=settings;}
- if(listRetention!==undefined){const settings={...state.agentSettings};if(listRetention===null)delete settings.checklistRetentionDays;else settings.checklistRetentionDays=listRetention;state.agentSettings=settings;}
+ if(listRetention!==undefined){const was=checklistRetentionDays();if(was!==listRetention){try{require('./services/audit').audit({action:'checklist-retention',by:owner,from:was,to:listRetention});}catch{}}const settings={...state.agentSettings};if(listRetention===null)delete settings.checklistRetentionDays;else settings.checklistRetentionDays=listRetention;state.agentSettings=settings;}
  if(wrapUp!==undefined){
   const next={...state.agentSettings?.wrapUp};
   if(wrapUp.enabled!==undefined)next.enabled=wrapUp.enabled;
