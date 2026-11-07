@@ -72,7 +72,7 @@
    </div>
   </aside>
   <aside v-else-if="sidePanel==='profile'" class="split-side" aria-label="Agent Profile">
-   <header class="pp-head"><f7-link icon-only icon-f7="xmark" :aria-label="ct('關閉 Agent Profile')" @click="$emit('close-panel')"/><div class="pp-title">Agent Profile</div><f7-link v-if="isAdmin" icon-only icon-f7="floppy_disk" class="profile-save" :class="{disabled:agent.cell.profileSaving.value||!agent.cell.profileDraft.value?.title?.trim()}" :aria-label="ct('保存 Agent Profile')" @click="!agent.cell.profileSaving.value&&agent.cell.profileDraft.value?.title?.trim()&&agent.cell.saveProfile()"/><span v-else class="pp-spacer"/></header>
+   <header class="pp-head"><f7-link icon-only icon-f7="xmark" :aria-label="ct('關閉 Agent Profile')" @click="agent.cell.closeProfile()"/><div class="pp-title">Agent Profile</div><f7-link v-if="isAdmin" icon-only icon-f7="floppy_disk" class="profile-save" :class="{disabled:agent.cell.profileSaving.value||!agent.cell.profileDirty.value||!agent.cell.profileDraft.value?.title?.trim()}" :aria-label="ct('保存 Agent Profile')" @click="!agent.cell.profileSaving.value&&agent.cell.profileDirty.value&&agent.cell.profileDraft.value?.title?.trim()&&agent.cell.saveProfile()"/><span v-else class="pp-spacer"/></header>
    <div class="pp-body"><AgentProfilePanel v-if="agent.cell.profileDraft.value" :key="conversationId" @trace-start="$emit('close-panel')"/></div>
   </aside>
   <div v-else-if="sidePanel==='inspector'" class="split-side split-side-inspector">
@@ -149,6 +149,8 @@ const profileOpen=computed({get:()=>sidePanel.value==='profile',set:open=>{if(!o
 const agent=useCellAgent({workspace,conversationId:computed(()=>props.conversationId),detail,refresh,profileOpen});
 provide('workspace',agent.cell);
 const {locked,action,operationTitle,operationSteps,operationPercent}=agent;
+// The split view asks before its profile's unsaved changes go with another agent or panel.
+defineExpose({mayCloseProfile:agent.mayCloseProfile});
 const cellError=agent.error,operationError=agent.operationError;
 // The light by the agent's name above the cell, as in the conversation's navbar.
 const presence=computed(()=>{const d=detail.value;if(!d)return 'offline';return agent.activity.value?'working':d.connected?'online':'offline';});

@@ -15,8 +15,9 @@ export function subagentLabel(s){
  return [s.model?modelLabel(s.model)+(s.lock?ct('（鎖定）'):''):ct('模型不指定'),s.effort?effortLabel(s.effort):ct('Effort 不指定')].join(' · ');
 }
 
-// own: undefined for the admin page; {follow:boolean} for one agent.
-export function editSubagents({title,text,value,own,save}){
+// own: undefined for the admin page; {follow:boolean} for one agent. okText names the
+// button that hands the choice to save: in Agent Profile it only goes into the draft.
+export function editSubagents({title,text,value,own,save,okText}){
  const v={model:'',lock:false,effort:'',...(value||{})};
  const option=(id,label,sel)=>`<option value="${esc(id)}"${id===sel?' selected':''}>${esc(label)}</option>`;
  const models=option('',ct('不指定'),v.model)+MODELS.map(m=>option(m,modelLabel(m),v.model)).join('');
@@ -31,7 +32,7 @@ export function editSubagents({title,text,value,own,save}){
    <div class="sub-note">${ct('agent 仍可能為某一次另外調整 Effort。')}</div>
    <div class="handoff-error" role="alert"></div>
   </div>`,
-  buttons:[{text:ct('取消')},{text:ct('保存'),strong:true,close:false,onClick:async d=>{
+  buttons:[{text:ct('取消')},{text:okText||ct('保存'),strong:true,close:false,onClick:async d=>{
    const $=sel=>d.$el.find(sel),follow=own&&$('.sub-follow').val()==='follow';
    const model=String($('.sub-model').val()||''),next={model,lock:!!model&&$('.sub-lock').prop('checked'),effort:String($('.sub-effort').val()||'')};
    // Said inside this dialog: Framework7 holds another one back until this closes.

@@ -55,7 +55,7 @@
   </aside>
   <aside v-if="profilePanelVisible" class="profile-panel" aria-label="Agent Profile">
    <!-- Laid out as the popup's navbar: close at the left, the title, save at the right. It stays put; only the fields below scroll. -->
-   <header class="pp-head"><f7-link icon-only icon-f7="xmark" :aria-label="ct('關閉 Agent Profile')" @click="profilePanelOpen=false"/><div class="pp-title">Agent Profile</div><f7-link v-if="user?.role==='admin'" icon-only icon-f7="floppy_disk" class="profile-save" :class="{disabled:profileSaving||!profileDraft?.title?.trim()}" :aria-label="ct('保存 Agent Profile')" @click="!profileSaving&&profileDraft?.title?.trim()&&saveProfile()"/><span v-else class="pp-spacer"/></header>
+   <header class="pp-head"><f7-link icon-only icon-f7="xmark" :aria-label="ct('關閉 Agent Profile')" @click="closeProfile()"/><div class="pp-title">Agent Profile</div><f7-link v-if="user?.role==='admin'" icon-only icon-f7="floppy_disk" class="profile-save" :class="{disabled:profileSaving||!profileDirty||!profileDraft?.title?.trim()}" :aria-label="ct('保存 Agent Profile')" @click="!profileSaving&&profileDirty&&profileDraft?.title?.trim()&&saveProfile()"/><span v-else class="pp-spacer"/></header>
    <div class="pp-body"><AgentProfilePanel :key="detail.id"/></div>
   </aside>
   <!-- Teleported out of the page: this popup carries its own f7-view and f7-page,

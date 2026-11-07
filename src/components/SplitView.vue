@@ -27,7 +27,7 @@
    <section v-for="(id,index) in cells" :key="index+':'+(id||'')" class="split-cell">
     <div class="split-cell-bar">
      <span v-if="id" class="split-presence" :class="presence[id]||'offline'" role="img" :aria-label="ct(presence[id]==='working'?'Agent 正在處理':presence[id]==='online'?'Agent 在線':'Agent 離線')" :title="ct(presence[id]==='working'?'Agent 正在處理':presence[id]==='online'?'Agent 在線':'Agent 離線')"/>
-     <select :value="id||''" :aria-label="ct('這一格顯示的 Agent')" @change="assign(index,$event.target.value)">
+     <select :value="id||''" :aria-label="ct('這一格顯示的 Agent')" @change="assign(index,$event.target.value,$event.target)">
       <option value="">{{ct('選擇 Agent')}}</option>
       <optgroup v-for="section in sections" :key="section.label" :label="section.label"><option v-for="a in section.agents" :key="a.id" :value="a.id">{{a.title}}</option></optgroup>
      </select>
@@ -39,7 +39,7 @@
      <button v-if="id" type="button" class="split-cell-more" :class="{on:!!panels[index]}" :aria-label="ct('更多')" :title="ct('更多')" @click="openMore(index,$event)"><i class="icon f7-icons">ellipsis</i></button>
      <a v-if="id" class="split-cell-open external" :href="'/?conversation='+id" @click.prevent="leave('/?conversation='+encodeURIComponent(id))" :title="ct('單獨打開這個 Agent')" :aria-label="ct('單獨打開這個 Agent')"><i class="icon f7-icons">arrow_up_right_square</i></a>
     </div>
-    <SplitCell v-if="id" :key="id" :conversation-id="id" :terminal="terminalSwitch&&terminalCells.has(index)" :panel="panels[index]||null"
+    <SplitCell v-if="id" :key="id" :ref="el=>{cellViews[index]=el;}" :conversation-id="id" :terminal="terminalSwitch&&terminalCells.has(index)" :panel="panels[index]||null"
      @close-panel="setPanel(index,null)" @open-terminal="terminalSwitch&&!terminalCells.has(index)&&toggleTerminal(index)" @presence="presence={...presence,[id]:$event}"
      @open-peer="leave('/?conversation='+encodeURIComponent($event))" @open-group="leave('/?group='+encodeURIComponent($event))"/>
     <p v-else class="split-empty">{{ct('從上方選一個 Agent')}}</p>
@@ -107,7 +107,10 @@ const moreItems=computed(()=>{
  return [{value:'checklist',f7:'checkmark_square',label:ct('清單')},{value:'search',f7:'search',label:ct('搜尋這個對話')},{value:'profile',f7:'info',label:'Agent Profile'},
   ...(transcriptSwitch.value&&agent?.mode==='claude'?[{value:'inspector',f7:'ant',label:ct('Transcript 檢視')}]:[])];
 });
-function pickMore(value){const index=moreFor.value;moreFor.value=null;if(index!==null)setPanel(index,panels.value[index]===value?null:value);}
+async function pickMore(value){const index=moreFor.value;moreFor.value=null;if(index===null)return;const next=panels.value[index]===value?null:value;if(panels.value[index]==='profile'&&next!=='profile'&&!(await mayClose(index)))return;setPanel(index,next);}
+// A cell's Agent Profile with unsaved changes asks before it goes.
+const cellViews={};
+const mayClose=async index=>!cellViews[index]?.mayCloseProfile||await cellViews[index].mayCloseProfile();
 function evenOut(kind,i){const list=kind==='col'?colSizes:rowSizes;const next=[...list.value],half=(next[i]+next[i+1])/2;next[i]=half;next[i+1]=half;list.value=next;persist();}
 const ids=ref(Array.isArray(start.cells)?start.cells.map(v=>typeof v==='string'&&v?v:null):[]);
 const cells=computed(()=>Array.from({length:rows.value*cols.value},(_,i)=>ids.value[i]||null));
@@ -118,8 +121,8 @@ const wide=ref(typeof matchMedia==='function'?matchMedia('(min-width: 1024px)').
 const allowed=computed(()=>currentUser.value?.role==='admin'&&wide.value);
 
 function persist(){try{localStorage.setItem(KEY,JSON.stringify({rows:rows.value,cols:cols.value,cells:cells.value,colSizes:colSizes.value,rowSizes:rowSizes.value}));}catch{}}
-function choose(r,c){panels.value={};rows.value=r;cols.value=c;colSizes.value=even(c);rowSizes.value=even(r);picking.value=false;hover.value=null;persist();}
-function assign(index,id){setPanel(index,null);const next=[...cells.value];next[index]=id||null;ids.value=next;persist();}
+async function choose(r,c){for(const index of Object.keys(panels.value))if(panels.value[index]==='profile'&&!(await mayClose(index)))return;panels.value={};rows.value=r;cols.value=c;colSizes.value=even(c);rowSizes.value=even(r);picking.value=false;hover.value=null;persist();}
+async function assign(index,id,select){if(id!==cells.value[index]&&!(await mayClose(index))){if(select)select.value=cells.value[index]||'';return;}setPanel(index,null);const next=[...cells.value];next[index]=id||null;ids.value=next;persist();}
 // A real page load: F7 routes an ordinary link inside the app, which kept the split
 // view on screen.
 function leave(to){location.assign(to);}

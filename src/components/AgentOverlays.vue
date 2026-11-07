@@ -22,7 +22,7 @@
   </div>
  </f7-page></f7-view></f7-popup>
 
-  <f7-popup :opened="infoOpen" @popup:closed="infoOpen=false" class="conversation-info"><f7-view><f7-page><f7-navbar><f7-nav-left><f7-link popup-close icon-only icon-f7="xmark" :aria-label="ct('關閉對話資訊')"/></f7-nav-left><f7-nav-title>{{'Agent Profile'}}</f7-nav-title><f7-nav-right><!-- Save without scrolling to the button at the end. --><f7-link v-if="user?.role==='admin'" icon-only icon-f7="floppy_disk" class="profile-save" :class="{disabled:profileSaving||!profileDraft?.title?.trim()}" :aria-label="ct('保存 Agent Profile')" @click="!profileSaving&&profileDraft?.title?.trim()&&saveProfile()"/></f7-nav-right></f7-navbar>
+  <f7-popup :opened="infoOpen" :close-by-backdrop-click="false" @popup:closed="infoOpen=false" class="conversation-info"><f7-view><f7-page><f7-navbar><f7-nav-left><f7-link icon-only icon-f7="xmark" :aria-label="ct('關閉對話資訊')" @click="closeProfile()"/></f7-nav-left><f7-nav-title>{{'Agent Profile'}}</f7-nav-title><f7-nav-right><!-- Save without scrolling to the button at the end. --><f7-link v-if="user?.role==='admin'" icon-only icon-f7="floppy_disk" class="profile-save" :class="{disabled:profileSaving||!profileDirty||!profileDraft?.title?.trim()}" :aria-label="ct('保存 Agent Profile')" @click="!profileSaving&&profileDirty&&profileDraft?.title?.trim()&&saveProfile()"/></f7-nav-right></f7-navbar>
    <AgentProfilePanel v-if="infoOpen" @trace-start="infoOpen=false"/>
   </f7-page></f7-view></f7-popup>
 <!-- Searching this conversation, from the search
@@ -65,6 +65,11 @@ export default {components:{GlassDropdown,AgentProfileFields,AgentProfilePanel,M
  function stopSheetWatch(){bodyWatch?.disconnect();bodyWatch=null;newBody.value?.closest('.popup')?.style.removeProperty('--f7-popup-tablet-height');}
  watch([newBody,()=>w.newOpen.value],([el,open])=>{stopSheetWatch();if(el&&open){fitSheet();if(typeof ResizeObserver!=='undefined'){bodyWatch=new ResizeObserver(fitSheet);bodyWatch.observe(el);}}},{flush:'post'});
  onBeforeUnmount(stopSheetWatch);
+ // Agent Profile's popup: framework7-vue reads closeByBackdropClick only when it mounts,
+ // so the popup never closes by its backdrop itself; a tap there goes through
+ // closeProfile, which asks first about unsaved changes.
+ const onBackdrop=e=>{if(w.infoOpen.value&&e.target?.classList?.contains('popup-backdrop')&&document.querySelector('.popup.conversation-info.modal-in'))w.closeProfile();};
+ document.addEventListener('click',onBackdrop);onBeforeUnmount(()=>document.removeEventListener('click',onBackdrop));
  // Only what the JSON names is replaced. Folders are left out while full access is on:
  // the lists are hidden then, so a folder the server refuses could not be fixed.
  function applyImport(text){

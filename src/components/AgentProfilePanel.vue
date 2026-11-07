@@ -6,9 +6,10 @@
        in a navbar. Start brings up an agent that is
        not running; restart pauses and starts one that is, a turn in progress included. -->
   <div class="profile-actions" role="toolbar" :aria-label="ct('對話操作')">
-   <a v-for="b in actionButtons" :key="b.key" href="#" class="profile-action" :class="[b.cls,{disabled:b.off}]" :title="b.label" :aria-label="b.label" :aria-disabled="b.off?'true':null" @click.prevent="!b.off&&b.run()"><f7-icon :f7="b.icon"/><span>{{b.short}}</span></a>
+   <a v-for="b in actionButtons" :key="b.key" href="#" class="profile-action" :class="[b.cls,{disabled:b.off}]" :title="b.label" :aria-label="b.label" :aria-disabled="b.off?'true':null" @click.prevent="!b.off&&runAction(b)"><f7-icon :f7="b.icon"/><span>{{b.short}}</span></a>
   </div>
-  <!-- The agent's own picture, an admin's choice. -->
+  <!-- The agent's own picture, an admin's choice. An upload is a file sent by its own
+       button, so it is not part of the profile draft. -->
   <template v-if="user?.role==='admin'">
    <!-- One row: the picture with its two actions as pills on the right, like the
         notification row in Settings. -->
@@ -23,15 +24,17 @@
    <GlassDropdown :open="autoCompactOpen" :point="autoCompactPoint" :items="autoCompactItems" :selected="autoCompactSelected" @close="autoCompactOpen=false" @select="chooseAutoCompact"/>
   </template>
   <AgentProfileFields :key="detail.id" v-model="profileDraft" :collapsed="false" :fold-text="true" :admin="user?.role==='admin'" :readonly="user?.role!=='admin'" :show-access="true" @engine-change="engineNote" :allow-full="user?.role==='admin'">
-   <!-- This agent's own compact policy, or the one on the Admin tab, above the access scope. Applies at once. -->
+   <!-- This agent's own compact policy, or the one on the Admin tab, above the access scope.
+        Every row here is part of the draft, saved with the profile. -->
    <template v-if="user?.role==='admin'" #before-access><f7-list inset class="cc-settings-list agent-compact">
-    <!-- Its subagents' model and effort, or the admin page's; asked before it starts again. -->
-    <f7-list-item v-if="detail.subagentsApply" link no-chevron class="agent-subagents" :title="ct('子代理模型與 Effort')" :after="subagentRowLabel" :footer="subagentHint" @click.prevent="editAgentSubagents"></f7-list-item>
-    <!-- When its Claude Code compacts, or the admin page's; asked before it starts again (issue #12). -->
-    <f7-list-item v-if="detail.autoCompactApply" link no-chevron class="agent-auto-compact" :title="ct('自動壓縮時機')" :after="autoCompactRowLabel" :footer="autoCompactHint" @click.prevent="openAutoCompact($event)"></f7-list-item>
+    <!-- Its subagents' model and effort, or the admin page's, and when its Claude Code
+         compacts (issue #12): part of the draft, saved with the rest of the profile, in
+         effect at its next start. -->
+    <f7-list-item v-if="detail.subagentsApply&&profileDraft.subagents!==undefined" link no-chevron class="agent-subagents" :title="ct('子代理模型與 Effort')" :after="subagentRowLabel" :footer="subagentHint" @click.prevent="editAgentSubagents"></f7-list-item>
+    <f7-list-item v-if="detail.autoCompactApply&&profileDraft.autoCompact!==undefined" link no-chevron class="agent-auto-compact" :title="ct('自動壓縮時機')" :after="autoCompactRowLabel" :footer="autoCompactHint" @click.prevent="openAutoCompact($event)"></f7-list-item>
     <f7-list-item link no-chevron :title="ct('Compact 後自動接續')" :after="thresholdLabel" @click.prevent="openThreshold($event)"></f7-list-item>
     <!-- The wrap-up check after a finished task, for this agent. -->
-    <f7-list-item class="agent-wrap-up" :title="ct('自動收尾檢查')" :footer="wrapUpGlobal?undefined:ct('管理頁的總開關目前是關的，不會送出。')"><template #after><f7-toggle :checked="detail.wrapUp!==false" @toggle:change="setWrapUp"/></template></f7-list-item>
+    <f7-list-item class="agent-wrap-up" :title="ct('自動收尾檢查')" :footer="wrapUpGlobal?undefined:ct('管理頁的總開關目前是關的，不會送出。')"><template #after><f7-toggle :checked="profileDraft.wrapUp!==false" @toggle:change="setWrapUp"/></template></f7-list-item>
    </f7-list></template>
   </AgentProfileFields>
   <template v-if="user?.role==='admin'">
@@ -49,7 +52,8 @@
   </template>
   <AgentDiagnostics :admin="user?.role==='admin'" @trace-start="$emit('trace-start')" :detail="detail" :status="statusLabel"/>
   <!-- Messages with agents of a paired machine: an admin opens the agent, ticks which agents there it may hear from and write to,
-       and may let its replies go back without being read first. Saved together. -->
+       and may let its replies go back without being read first. Saved together, by its
+       own save button, not the profile's: widening it asks for the admin's password again. -->
   <f7-list v-if="user?.role==='admin'&&detail.mode!=='command'&&peerDraft" inset class="cc-settings-list agent-peer-link" :class="{'peer-ineligible':!peerEligible}">
    <f7-list-item class="agent-peer-on" :class="{disabled:!peerEligible&&!peerDraft.on}" :title="ct('跨機傳訊')" :footer="peerEligible?ct('和已配對電腦上勾選的 agent 互傳訊息。'):peerWhy"><template #media><f7-icon f7="link"/></template><template #after><f7-toggle :checked="peerDraft.on" :disabled="!peerEligible&&!peerDraft.on" @toggle:change="peerDraft={...peerDraft,on:$event}"/></template></f7-list-item>
    <template v-if="peerDraft.on||peerDraft.allow.length">
@@ -60,6 +64,9 @@
    <f7-list-item v-if="peerDirty" link no-chevron class="agent-peer-save" :title="ct('保存跨機傳訊設定')" @click.prevent="savePeer"><template #media><f7-icon f7="checkmark_circle"/></template></f7-list-item>
   </f7-list>
 
+  <!-- Fields changed elsewhere while being edited here: the values typed here are kept in
+       the draft; this says which to check before saving. -->
+  <f7-block v-if="profileConflicts?.length" class="profile-conflict" role="alert">{{conflictText(profileConflicts)}}</f7-block>
   <f7-block v-if="error" role="alert">{{error}}</f7-block>
  </template>
 </template>
@@ -69,12 +76,12 @@ import AgentProfileFields from "./AgentProfileFields.vue";
 import GlassDropdown from "./GlassDropdown.vue";
 import {inject,computed,ref,watch,onBeforeUnmount} from "vue";
 import {api} from "../js/api.js";
-import {escapeHtml} from "../js/safeDialog.js";
 import {adminProblem,withAdminAgain} from "../js/adminAgain.js";
 import {f7} from "framework7-vue";
 import {compactCount,compactPolicy,autoCompactLabel,autoCompactFollow} from "../js/agent-i18n.js";
 import {compactThreshold,wrapUp,autoCompactPresets} from "../js/agentPreferences.js";
 import {editSubagents,subagentLabel} from "../js/subagentDialog.js";
+import {conflictText} from "../js/profileSave.js";
 import {defaultAvatar,avatarShape} from "../js/avatarShape.js";
 // Why an agent cannot be opened to the peer link (server peerWhyNot).
 const PEER_WHY={scoped:'受限的 agent 不能開通',"watch-open":'開放給外部聊天的 agent 不能開通',"owner-not-admin":'擁有者不是在職的管理員，不能開通',archived:'已刪除的 agent 不能開通',"not-claude":'只有 Claude agent 能開通'};
@@ -86,21 +93,14 @@ export default {components:{AgentProfileFields,AgentDiagnostics,GlassDropdown},d
  let engineToast=null;
  const thresholdOpen=ref(false),thresholdPoint=ref({clientX:0,clientY:0});
  const autoCompactOpen=ref(false),autoCompactPoint=ref({clientX:0,clientY:0});
- const toast=text=>f7.toast.create({text:w.ct(text),closeTimeout:3000}).open();
- const merge=r=>{if(r&&r.id===w.detail.value?.id)w.detail.value={...w.detail.value,...r,messages:w.detail.value?.messages||r.messages,hasOlder:w.detail.value?.hasOlder};};
- // A setting saved but not in effect until the agent starts again (subagents, auto-compact):
- // starting it again is asked first, and only on yes is it applied.
- function askRestart(d,needs,title,applyAction,applyKey){
-  if(needs==='next-start'){toast('已保存，下次啟動時套用。');return;}
-  if(needs!=='idle'&&needs!=='busy'){toast('設定已保存');return;}
-  toast('設定已保存');
-  const apply=async()=>{try{const a=await api('/conversations/'+d.id+'/'+applyAction,{method:'POST',body:'{}'});merge(a);
-    toast({now:'agent 已重新啟動並套用。','after-reply':'會在 agent 這次完成後自動重新啟動套用。','next-start':'下次啟動時套用。'}[a?.[applyKey]]||'設定已保存');}catch(e){f7.dialog.alert(e.message);}};
-  setTimeout(()=>f7.dialog.create({title,
-    text:escapeHtml(d.title)+' '+w.ct(needs==='idle'?'要重新啟動才會套用，現在重新啟動嗎？聊天內容不會不見。':'正在工作，要在它這次完成後自動重新啟動套用嗎？'),
-    buttons:[{text:w.ct('稍後')},{text:w.ct(needs==='idle'?'重新啟動':'好'),strong:true,onClick:apply}],destroyOnClose:true}).open(),350);
- }
+ // The hint under a row says what its saved value still needs; a drafted value not saved
+ // yet has none.
  const pendingHint=(pending,waiting)=>pending?w.ct(waiting?'等 agent 閒下來會自動重新啟動；要立即套用，請按上方的「重啟」。':'還沒套用，按上方的「重啟」才會生效。'):undefined;
+ // Whether a row's draft is still what is saved, so its pending hint is about what it shows.
+ const subagentsSaved=()=>{const d=w.detail.value,v=w.profileDraft.value?.subagents;return JSON.stringify(v||null)===JSON.stringify(d?.subagents||null);};
+ const autoCompactSaved=()=>{const d=w.detail.value;return w.profileDraft.value?.autoCompact===(d?.autoCompactOwn?(d.autoCompact??null):'follow');};
+ // Rows only change the draft; the profile's save button sends it.
+ const draft=patch=>{if(w.profileDraft.value)w.profileDraft.value={...w.profileDraft.value,...patch};};
  const following=()=>w.ct('跟隨管理設定')+'（'+compactPolicy(compactThreshold.value)+'）';
  // The peer link section: a draft of on, ticks and auto-reply, saved together; the
  // paired machines' directories to tick from, read when the panel shows an agent.
@@ -135,40 +135,32 @@ export default {components:{AgentProfileFields,AgentDiagnostics,GlassDropdown},d
  }
  const canStart=computed(()=>["stopped","error"].includes(w.detail.value?.phase)||!w.detail.value?.connected&&!["starting","busy","handing-off"].includes(w.detail.value?.phase));
  const canRestart=computed(()=>!!w.detail.value&&!["stopped","error","starting","handing-off"].includes(w.detail.value.phase));
- return {...w,defaultAvatar,avatarShape,
+ return {...w,defaultAvatar,avatarShape,conflictText,
   peerDraft,peerDirty,peerChoices,peerTicked,peerTick,savePeer,
   peerEligible:computed(()=>w.detail.value?.peerLink?.eligible!==false),
   peerWhy:computed(()=>{const why=w.detail.value?.peerLink?.why;return why?w.ct(PEER_WHY[why]||why):'';}),
   thresholdOpen,thresholdPoint,
-  thresholdLabel:computed(()=>w.detail.value?.thresholdOwn?compactPolicy(w.detail.value.threshold):following()),
+  thresholdLabel:computed(()=>{const v=w.profileDraft.value?.threshold;return v!==null&&v!==undefined?compactPolicy(v):following();}),
   thresholdItems:computed(()=>[{value:'follow',label:following()},...Array.from({length:10},(_,i)=>({value:String(i+1),label:compactCount(i+1)})),{value:'0',label:compactPolicy(0)}]),
-  thresholdSelected:computed(()=>w.detail.value?.thresholdOwn?String(w.detail.value.threshold):'follow'),
+  thresholdSelected:computed(()=>{const v=w.profileDraft.value?.threshold;return v!==null&&v!==undefined?String(v):'follow';}),
   openThreshold:event=>{thresholdPoint.value={clientX:event?.clientX??0,clientY:event?.clientY??0};thresholdOpen.value=true;},
   wrapUpGlobal:computed(()=>wrapUp.value.enabled===true),
-  setWrapUp:async on=>{if((w.detail.value?.wrapUp!==false)===!!on)return;if(await w.action('wrap-up',{wrapUp:!!on}))f7.toast.create({text:w.ct('設定已保存'),closeTimeout:1800}).open();},
-  subagentRowLabel:computed(()=>{const d=w.detail.value;return (d?.subagents?subagentLabel(d.subagents):w.ct('跟隨管理設定')+'（'+subagentLabel(d?.subagentDefault)+'）')+(d?.subagentPending?w.ct('（重新啟動後套用）'):'');}),
-  editAgentSubagents:()=>{const d=w.detail.value;if(!d)return;editSubagents({title:d.title+' '+w.ct('的子代理模型與 Effort'),text:w.ct('只套用在這個 agent。選「跟隨管理設定」就照管理頁的設定。改了要等 agent 重新啟動才生效。'),value:d.subagents||d.subagentDefault,own:{follow:!d.subagents},
-   save:async next=>{const r=await api('/conversations/'+d.id+'/subagents',{method:'POST',body:JSON.stringify({subagents:next})});merge(r);
-   // Saved only: starting it again is asked first.
-   askRestart(d,r?.subagentNeeds,w.ct('子代理模型與 Effort'),'subagents-apply','subagentApply');
-  }});},
+  setWrapUp:on=>draft({wrapUp:!!on}),
+  // Both rows show the draft; picking only changes it, which lights the save button.
+  subagentRowLabel:computed(()=>{const d=w.detail.value,v=w.profileDraft.value?.subagents;return (v?subagentLabel(v):w.ct('跟隨管理設定')+'（'+subagentLabel(d?.subagentDefault)+'）')+(d?.subagentPending&&subagentsSaved()?w.ct('（重新啟動後套用）'):'');}),
+  editAgentSubagents:()=>{const d=w.detail.value,v=w.profileDraft.value?.subagents;if(!d||v===undefined)return;editSubagents({title:d.title+' '+w.ct('的子代理模型與 Effort'),text:w.ct('只套用在這個 agent。選「跟隨管理設定」就照管理頁的設定。改了要等 agent 重新啟動才生效。'),value:v||d.subagentDefault,own:{follow:!v},okText:w.ct('好'),
+   save:next=>{w.profileDraft.value={...w.profileDraft.value,subagents:next};}});},
   // Not in effect yet: what still has to happen.
-  subagentHint:computed(()=>pendingHint(w.detail.value?.subagentPending,w.detail.value?.subagentWaiting)),
+  subagentHint:computed(()=>subagentsSaved()?pendingHint(w.detail.value?.subagentPending,w.detail.value?.subagentWaiting):undefined),
   // When its Claude Code compacts: its own, or following the admin page (issue #12).
   autoCompactOpen,autoCompactPoint,
-  autoCompactRowLabel:computed(()=>{const d=w.detail.value;return (d?.autoCompactOwn?autoCompactLabel(d.autoCompact):autoCompactFollow(d?.autoCompactDefault))+(d?.autoCompactPending?w.ct('（重新啟動後套用）'):'');}),
+  autoCompactRowLabel:computed(()=>{const d=w.detail.value,v=w.profileDraft.value?.autoCompact;return (v==='follow'?autoCompactFollow(d?.autoCompactDefault):autoCompactLabel(v))+(d?.autoCompactPending&&autoCompactSaved()?w.ct('（重新啟動後套用）'):'');}),
   autoCompactItems:computed(()=>[{value:'follow',label:autoCompactFollow(w.detail.value?.autoCompactDefault)},{value:'default',label:autoCompactLabel(null)},...autoCompactPresets.value.map(n=>({value:String(n),label:autoCompactLabel(n)}))]),
-  autoCompactSelected:computed(()=>{const d=w.detail.value;return !d?.autoCompactOwn?'follow':d.autoCompact?String(d.autoCompact):'default';}),
-  autoCompactHint:computed(()=>pendingHint(w.detail.value?.autoCompactPending,w.detail.value?.autoCompactWaiting)),
+  autoCompactSelected:computed(()=>{const v=w.profileDraft.value?.autoCompact;return v==='follow'?'follow':v?String(v):'default';}),
+  autoCompactHint:computed(()=>autoCompactSaved()?pendingHint(w.detail.value?.autoCompactPending,w.detail.value?.autoCompactWaiting):undefined),
   openAutoCompact:event=>{autoCompactPoint.value={clientX:event?.clientX??0,clientY:event?.clientY??0};autoCompactOpen.value=true;},
-  chooseAutoCompact:async value=>{
-   autoCompactOpen.value=false;const d=w.detail.value;if(!d)return;
-   const next=value==='follow'?'follow':value==='default'?null:Number(value);
-   try{const r=await api('/conversations/'+d.id+'/auto-compact',{method:'POST',body:JSON.stringify({autoCompact:next})});merge(r);
-    askRestart(d,r?.autoCompactNeeds,w.ct('自動壓縮時機'),'auto-compact-apply','autoCompactApply');}
-   catch(e){f7.dialog.alert(e.message);}
-  },
-  chooseThreshold:async value=>{thresholdOpen.value=false;if(await w.action('threshold',{threshold:value==='follow'?null:Number(value)}))f7.toast.create({text:w.ct('設定已保存'),closeTimeout:1800}).open();},
+  chooseAutoCompact:value=>{autoCompactOpen.value=false;if(!w.profileDraft.value)return;w.profileDraft.value={...w.profileDraft.value,autoCompact:value==='follow'?'follow':value==='default'?null:Number(value)};},
+  chooseThreshold:value=>{thresholdOpen.value=false;draft({threshold:value==='follow'?null:Number(value)});},
   avatarInput,
   // What changing the model or effort does is said when one is changed, not all the
   // time; one toast at a time.
@@ -181,10 +173,12 @@ export default {components:{AgentProfileFields,AgentDiagnostics,GlassDropdown},d
   stopped:computed(()=>["stopped","error"].includes(w.detail.value?.phase)),
   canStart,
   canRestart,
+  // Unsaved changes are asked about first: saved, dropped, or the operation not run.
+  runAction:async b=>{const go=w.guardOperation?await w.guardOperation(b.key):{later:()=>{}};if(go)b.run(go);},
   // F7's `disabled` class only styles; `off` keeps a greyed-out button inert.
   actionButtons:computed(()=>{const d=w.detail.value;if(!d)return [];const stopped=["stopped","error"].includes(d.phase);return [
    {key:'start',short:w.ct('啟動'),cls:'agent-start',icon:'play_circle',label:w.ct('啟動'),off:!canStart.value,run:()=>w.action('start')},
-   {key:'restart',short:w.ct('重啟'),cls:'agent-restart',icon:'arrow_clockwise_circle',label:w.ct('重啟'),off:!canRestart.value,run:()=>w.restart()},
+   {key:'restart',short:w.ct('重啟'),cls:'agent-restart',icon:'arrow_clockwise_circle',label:w.ct('重啟'),off:!canRestart.value,run:go=>w.restart(go?.later)},
    {key:'pause',short:w.ct('暫停'),icon:'pause_circle',label:w.ct('暫停執行'),off:stopped,run:()=>w.pause()},
    {key:'handoff',short:w.ct('接續'),icon:'arrow_2_circlepath',label:w.ct('接續到新 session'),off:d.phase==='busy',run:()=>w.handoff()},
    ...(d.mode==='claude'?[{key:'import',short:w.ct('讀取'),icon:'arrow_down_doc',label:w.ct('讀取 session 既有對話'),off:false,run:()=>w.importHistory()},

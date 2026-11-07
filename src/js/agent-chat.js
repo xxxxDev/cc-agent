@@ -11,6 +11,7 @@ import {shouldSendOnEnter} from './chatKeyboard.js';
 import {ct,generation} from './agent-i18n.js';
 import {timeLocale} from './i18n.js';
 import * as agentOperation from './agentOperation.js';
+import {afterProfileSave,askDiscard,guardOperation as guardProfile,staleProfile,resolveStale,busyNotice} from './profileSave.js';
 import * as status from './conversationStatus.js';
 import {useSlashMenu} from './slashMenu.js';
 import {useMentionMenu,caretToEnd} from './mentionMenu.js';
@@ -75,6 +76,9 @@ const preferenceTerminalSwitch=agentPreferences.terminalSwitch;
 // high; every new agent starts scoped, and full access is switched on by an admin.
 const blankProfile=(forNew)=>{const admin=forNew&&user.value?.role==='admin';return {title:'',description:'',memory:'',model:admin?'claude-opus-5-5':'claude-sonnet-5-5',effort:admin?'medium':'high',...(admin?{access:{allow:[],exclude:[],domains:[]}}:{})};};
 const newProfile=ref(blankProfile()),profileDraft=ref(blankProfile()),profileSaving=ref(false);
+// The draft as it was taken or last saved: changed from it, the save button lights and
+// closing asks first.
+const profileBase=ref(null),profileDraftId=ref(null),profileConflicts=ref([]);
 const editMode=ref(false),orderBusy=ref(false);
 function toggleEdit(){editMode.value=!editMode.value;if(!editMode.value){chosenAgents.value=new Set();attempt(refresh);}}
 // Every agent at once, from the edit mode of the list. Sequential, because each start launches a process; a failure is
@@ -192,7 +196,9 @@ function clearInspection(){inspectRun++;inspectId.value='';inspectData.value=nul
 // agent carries into every turn — its profile, memory, model and usage — and a
 // bubble is only read when one is actually asked for. Clicking the chosen bubble
 // again goes back to that view.
-function toggleInspector(){
+async function toggleInspector(){
+ // Taking the profile's place in the column, it asks first about unsaved changes.
+ if(!inspectorOpen.value&&profilePanelVisible.value&&!(await mayCloseProfile()))return;
  inspectorOpen.value=!inspectorOpen.value;
  if(!inspectorOpen.value)clearInspection();
  else{profilePanelOpen.value=false;if(wideScreen.value)searchOpen.value=false;}
@@ -202,8 +208,9 @@ function toggleInspector(){
 // terminal view, keeps the popup. The column holds one panel at a time.
 const profilePanelOpen=ref(false);
 const profilePanelVisible=computed(()=>profilePanelOpen.value&&wideScreen.value&&!terminalOpen.value&&!!detail.value);
-function openProfile(){
+async function openProfile(){
  if(!wideScreen.value||terminalOpen.value){infoOpen.value=true;return;}
+ if(profilePanelOpen.value&&!(await mayCloseProfile()))return;
  profilePanelOpen.value=!profilePanelOpen.value;
  if(profilePanelOpen.value&&inspectorOpen.value){inspectorOpen.value=false;clearInspection();}
  if(profilePanelOpen.value)searchOpen.value=false;
@@ -212,7 +219,7 @@ function openProfile(){
 const searchPanelVisible=computed(()=>searchOpen.value&&wideScreen.value&&!terminalOpen.value&&!!detail.value);
 const searchPopupOpen=computed(()=>searchOpen.value&&!searchPanelVisible.value);
 watch(searchPanelVisible,open=>{if(!open)return;profilePanelOpen.value=false;if(inspectorOpen.value){inspectorOpen.value=false;clearInspection();}nextTick(()=>document.querySelector('.search-panel .message-search-input input')?.focus());});
-function toggleSearch(){searchOpen.value=!(searchOpen.value&&searchPanelVisible.value);}
+async function toggleSearch(){if(!(searchOpen.value&&searchPanelVisible.value)&&profilePanelVisible.value&&wideScreen.value&&!(await mayCloseProfile()))return;searchOpen.value=!(searchOpen.value&&searchPanelVisible.value);}
 // The agent's checklists: the same right column on a desktop width, a popup on a
 // phone or beside the terminal.
 const checklistOpen=ref(false);
@@ -220,7 +227,7 @@ const checklistPanelVisible=computed(()=>checklistOpen.value&&wideScreen.value&&
 const checklistPopupOpen=computed(()=>checklistOpen.value&&!checklistPanelVisible.value&&!!detail.value);
 watch(checklistPanelVisible,open=>{if(!open)return;profilePanelOpen.value=false;searchOpen.value=false;if(inspectorOpen.value){inspectorOpen.value=false;clearInspection();}});
 watch(()=>[profilePanelOpen.value,searchPanelVisible.value,inspectorOpen.value],([p,s,i])=>{if((p||s||i)&&wideScreen.value)checklistOpen.value=false;});
-function toggleChecklist(){checklistOpen.value=!checklistOpen.value;}
+async function toggleChecklist(){if(!checklistOpen.value&&profilePanelVisible.value&&!(await mayCloseProfile()))return;checklistOpen.value=!checklistOpen.value;}
 const usageRows=computed(()=>agentOperation.usageRows(detail.value?.usage));
 const agentOperationTitle=computed(()=>agentOperation.operationTitle(activity(detail.value)));
 const agentOperationSteps=computed(()=>{secondClock.value;const d=detail.value;return d?agentOperation.operationSteps(d,activity(d),operations.value[selected.value]):[];});
@@ -228,6 +235,8 @@ const agentOperationPercent=computed(()=>agentOperation.operationPercent(detail.
 function updateAgent(d){conversations.value=conversations.value.map(c=>c.id===d.id?{...c,...d}:c);if(selected.value===d.id)detail.value=d;}
 async function runAgentOperation(id,kind,body={}){
  if(operations.value[id])return;
+ // From anywhere (the error card's 「重新連線」 too): unsaved profile changes are asked about first.
+ if(selected.value===id&&!(await guardOperation(kind==='rotate'?'handoff':kind)))return;
  const owner=user.value?.id,op={kind,generation:(detail.value?.id===id?detail.value:conversations.value.find(c=>c.id===id))?.generation};
  operations.value[id]=op;delete operationErrors.value[id];if(selected.value===id){infoOpen.value=false;profilePanelOpen.value=false;terminalOpen.value=false;}
  // Identify the operation across Vue reactive proxy reads.
@@ -745,6 +754,8 @@ async function toConversation(router,run,animate){
 }
 async function select(id,{direct=false}={}){
  if(id&&id===openingId.value)return;
+ // Another agent in the open profile would take its draft's place: asked first.
+ if(id!==profileDraftId.value&&!(await mayCloseProfile()))return;
  const run=++opening,owner=user.value?.id;if(!owner)return;
  openingId.value=id;
  // Its unread count goes the moment it is tapped, not once the page is on screen a
@@ -880,7 +891,7 @@ function onEscape(event){
 // Copying code from the bubbles lives with the bubbles, in components/MessageList.vue.
 function pause(){f7.dialog.confirm(ct("暫停會中斷執行中的回覆。聊天紀錄仍會保留。"),ct("暫停執行"),()=>action('stop'));}
 // A pause and a start, so it also ends a turn still running; the session and chat are kept.
-function restart(){f7.dialog.confirm(ct("重啟會中斷執行中的回覆，並接回同一個 session。聊天紀錄仍會保留。"),ct("重啟"),async()=>{if(await action('stop'))await action('start');});}
+function restart(onCancel){f7.dialog.confirm(ct("重啟會中斷執行中的回覆，並接回同一個 session。聊天紀錄仍會保留。"),ct("重啟"),async()=>{if(await action('stop'))await action('start');},onCancel);}
 // From a row's swipe on the Agents list, for that agent rather than the open one.
 // Pausing one that is answering asks first, as the pause in its profile does.
 async function listAgentAction(c,kind){await attempt(async()=>{await api('/conversations/'+c.id+'/'+kind,{method:'POST',body:'{}'});await refresh();});}
@@ -909,12 +920,51 @@ function resetAvatar(){
  const id=detail.value?.id;if(!id)return;
  f7.dialog.confirm(ct('改回預設的 Agent 圖示？'),ct('還原預設圖像'),async()=>{const d=await attempt(()=>api('/conversations/'+id+'/avatar',{method:'DELETE'}));if(d)updateAgent(d);});
 }
-async function saveMemory(){if(await action('memory',{text:memoryDraft.value}))f7.toast.create({text:ct("記憶已保存"),closeTimeout:1800}).open();}
-const profileForSave=()=>agentOperation.followSetting(profileDraft.value);
-async function saveProfile(){if(profileSaving.value)return;profileSaving.value=true;const r=await action('profile',profileForSave());profileSaving.value=false;if(r){profileDraft.value={...profileDraft.value,profileVersion:r.profileVersion};infoOpen.value=false;f7.toast.create({text:ct('設定已保存'),closeTimeout:1800}).open();}}
+async function saveMemory(){const d=await action('memory',{text:memoryDraft.value});if(d){syncProfileVersion(d);f7.toast.create({text:ct("記憶已保存"),closeTimeout:1800}).open();}}
+// Something else saved from the profile moved its version on: the draft follows, or its next save is refused.
+// Only its own step: a version further on means another change came in between, left
+// for the next save to merge.
+function syncProfileVersion(d){if(d?.id!==profileDraftId.value||d.profileVersion!==(profileDraft.value?.profileVersion??-2)+1)return;if(profileBase.value)profileBase.value={...profileBase.value,profileVersion:d.profileVersion};profileDraft.value={...profileDraft.value,profileVersion:d.profileVersion};}
+const profileDirty=computed(()=>user.value?.role==='admin'&&!!profileBase.value&&agentOperation.profileKey(profileDraft.value)!==agentOperation.profileKey(profileBase.value));
+// Everything in one request, the subagents' setting and the auto-compact timing with
+// it; then one question if any of it waits for a restart (js/profileSave.js).
+// Only what changed is sent (agentOperation.profileChanges). Refused as out of date, it
+// is merged onto the agent as it is now; while an operation runs, it waits.
+async function saveProfile({ask=true,retried=false}={}){
+ const id=selected.value;if(profileSaving.value||!id)return;
+ if(operations.value[id]){busyNotice();return;}
+ profileSaving.value=true;error.value='';
+ const owner=user.value?.id;let r;
+ try{r=await api('/conversations/'+id+'/profile',{method:'POST',body:JSON.stringify(agentOperation.profileChanges(profileDraft.value,profileBase.value))});}
+ catch(e){profileSaving.value=false;if(!staleProfile(e)){error.value=e.message;return;}
+  return resolveStale({latest:()=>latestProfile(id),draft:profileDraft.value,base:profileBase.value,retried,again:()=>saveProfile({ask,retried:true}),
+   take:(fresh,draft,conflicts)=>{profileBase.value=fresh;profileDraft.value=draft;profileConflicts.value=conflicts;}});}
+ profileSaving.value=false;
+ if(user.value?.id!==owner||!r)return;
+ updateAgent(r);refresh().catch(()=>{});
+ profileDraft.value={...profileDraft.value,profileVersion:r.profileVersion};profileBase.value=profileDraft.value;profileConflicts.value=[];infoOpen.value=false;
+ afterProfileSave(r,{update:updateAgent,ask});
+ return r;
+}
+// The agent as it is now, for a refused save to merge onto (resolveStale).
+async function latestProfile(id){
+ const d=await attempt(()=>api('/conversations/'+encodeURIComponent(id)));
+ if(!d||selected.value!==id)return null;
+ detail.value={...detail.value,...d,messages:detail.value?.messages||d.messages,hasOlder:detail.value?.hasOlder};
+ return agentOperation.profileDraftOf(detail.value);
+}
+// An operation with unsaved profile changes: save first, drop them, or not go on.
+const guardOperation=kind=>guardProfile(kind,{dirty:()=>(infoOpen.value||profilePanelVisible.value)&&profileDirty.value,save:saveProfile,discard:()=>{profileDraft.value=profileBase.value;},ask:r=>afterProfileSave(r,{update:updateAgent})});
+// Unsaved changes going (closed, another agent, another panel) are asked about first;
+// dropped, the draft is what was saved again.
+async function mayCloseProfile(){if(!profileDirty.value)return true;if(!(await askDiscard()))return false;profileDraft.value=profileBase.value;profileConflicts.value=[];return true;}
+async function closeProfile(){if(!(await mayCloseProfile()))return;infoOpen.value=false;profilePanelOpen.value=false;}
 // The draft is taken when Agent Profile opens, in either form, and again when the
 // open panel moves to another agent — never on the 1.2 s refresh, which would undo typing.
-watch(()=>[infoOpen.value||profilePanelVisible.value,detail.value?.id],([open,id],[wasOpen,wasId]=[])=>{if(open&&detail.value&&(!wasOpen||id!==wasId)){profileDraft.value=agentOperation.profileDraftOf(detail.value);memoryDraft.value=detail.value.memory||'';error.value='';}},{immediate:true});
+// Hidden and shown again for the same agent (an operation, the terminal, another panel,
+// a narrower window, back to the list), a draft with unsaved changes is kept.
+function takeProfileDraft(){profileConflicts.value=[];profileDraft.value=profileBase.value=agentOperation.profileDraftOf(detail.value);profileDraftId.value=detail.value.id;memoryDraft.value=detail.value.memory||'';error.value='';}
+watch(()=>[infoOpen.value||profilePanelVisible.value,detail.value?.id],([open,id],[wasOpen,wasId]=[])=>{if(open&&detail.value&&(!wasOpen||id!==wasId)&&(id!==profileDraftId.value||!profileDirty.value))takeProfileDraft();},{immediate:true});
 const time=s=>new Date(s).toLocaleTimeString(timeLocale(),{hour:'2-digit',minute:'2-digit'});
 // The conversation the page was opened on — a notification, or an address someone
 // kept — read once at load: the address is rewritten as the user moves around, so
@@ -1013,5 +1063,5 @@ onMounted(()=>{
 onUnmounted(()=>{boxWatch?.disconnect();document.removeEventListener('keydown',onEscape);document.removeEventListener('keydown',onFind);window.removeEventListener('popstate',restoreUrl);notifications.stop();document.removeEventListener('visibilitychange',onAppVisible);window.removeEventListener('focus',onAppFocus);unwatchWidth?.();disposed=true;cancelHistoryPaging();operations.value={};clearInterval(poll);live?.close();live=null;wakeRun++;});
 
 return {unreadOf,unreadLabel,unreadTotal,mixedList:computed(mixed),chosenByPresence,chooseByPresence,atStart,directOpening,toGroups,openingId,toList,cancelOpening,toggleGroupCollapse,openGroup,mention,pickMention,checklistOpen,checklistPanelVisible,checklistPopupOpen,toggleChecklist,typingBubble,searchPanelVisible,searchPopupOpen,toggleSearch,enterConversation,searchOpen,searchText,foundMessage,searchMessages,showMessage,noteInBubble,pauseAgent,startAgent,allChosen,toggleAllChosen,slash,composerKeydown,chosenList,isChosen,toggleChosen,groupChosen,toggleGroupChosen,terminalSide,chatHidden,terminalWidthCss,startTerminalResize,moveGroups,listRows,sections,listGroups,listSources,listSource,chooseSource,addGroup,editingGroup,startGroupRename,cancelGroupRename,finishGroupRename,deleteGroup,uploadAvatar,resetAvatar,autoSort:agentPreferences.autoSort,backgroundProgress,agentAvatar,presence,embedded,recoverOrphanedConversation,activity,progressInBubble,progressInBar,showViewSwitch,showTerminalSwitch,showSubnavbar,usageRows,olderBusy,pagingBack,atBottom,loadOlder,onMessagesScroll,onHistoryWheel,onHistoryTouchStart,onHistoryTouchMove,onHistoryTouchEnd,onHistoryTouchCancel,toLatest,
- inspectorOpen,inspectorVisible,showInspectorButton,profilePanelOpen,profilePanelVisible,openProfile,wideScreen,inspectId,inspectData,inspectBusy,inspectError,inspect,toggleInspector,clearInspection,agentLocked,agentOperationTitle,agentOperationSteps,agentOperationPercent,agentOperationError,newProfile,profileDraft,profileSaving,saveProfile,files,fileInput,pickFiles,dropFiles,pasteFiles,removeFile,chooseFiles,previewDraft,ct,generation,user,busy,error,theme,menuConversation,menuPoint,preferenceThreshold,editMode,orderBusy,toggleEdit,bulkBusy,pauseEveryAgent,startEveryAgent,restartEveryAgent,reorderChats,onChatsIn,terminalOpen,conversations,selected,detail,search,draft,scroll,newOpen,infoOpen,newTitle,memoryDraft,filtered,statusLabel,awaitingReply,canSend,conversationMenu,renameConversation,deleteConversation,savePreferences,wakingId,waking,wakeError,closeNew,openNewChat,create,select,bottom,send,enterSend,action,interrupting,canInterrupt,interruptTurn,pause,restart,handoff,importHistory,saveMemory,time,renderMarkdown,renderTypedMarkdown};
+ inspectorOpen,inspectorVisible,showInspectorButton,profilePanelOpen,profilePanelVisible,openProfile,wideScreen,inspectId,inspectData,inspectBusy,inspectError,inspect,toggleInspector,clearInspection,agentLocked,agentOperationTitle,agentOperationSteps,agentOperationPercent,agentOperationError,newProfile,profileDraft,profileSaving,saveProfile,profileDirty,closeProfile,guardOperation,syncProfileVersion,profileConflicts,files,fileInput,pickFiles,dropFiles,pasteFiles,removeFile,chooseFiles,previewDraft,ct,generation,user,busy,error,theme,menuConversation,menuPoint,preferenceThreshold,editMode,orderBusy,toggleEdit,bulkBusy,pauseEveryAgent,startEveryAgent,restartEveryAgent,reorderChats,onChatsIn,terminalOpen,conversations,selected,detail,search,draft,scroll,newOpen,infoOpen,newTitle,memoryDraft,filtered,statusLabel,awaitingReply,canSend,conversationMenu,renameConversation,deleteConversation,savePreferences,wakingId,waking,wakeError,closeNew,openNewChat,create,select,bottom,send,enterSend,action,interrupting,canInterrupt,interruptTurn,pause,restart,handoff,importHistory,saveMemory,time,renderMarkdown,renderTypedMarkdown};
 }

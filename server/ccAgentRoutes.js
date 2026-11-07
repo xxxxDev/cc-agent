@@ -250,19 +250,17 @@ app.post('/api/conversations/:id/:action',(req,res,next)=>{try{
  // workspace or channel prompt too, or it would keep the old scope and mcp.json, as a scope set from the admin pages does.
  // Not running is not stopped: a run in the error phase may still have Claude alive under
  // the old scope, so it is stopped too and started again only if it was live.
- case 'profile':{const changed=agents.updateProfile(c,req.body,req.role),phase=agents.active(c).phase;if(changed&&c.mode==='claude'&&phase!=='stopped'){agents.stop(c);if(['ready','awaiting-workspace','awaiting-confirmation'].includes(phase))agents.launch(c);}break;}
+ // The subagents' setting, the auto-compact timing, the threshold and the wrap-up switch
+ // are saved with it; what they still need is answered once, after any relaunch here.
+ case 'profile':{const {changedModel,settings,rotated,warning}=agents.updateProfile(c,req.body,req.role),phase=agents.active(c).phase;if(changedModel&&!rotated&&c.mode==='claude'&&phase!=='stopped'){agents.stop(c);if(['ready','awaiting-workspace','awaiting-confirmation'].includes(phase))agents.launch(c);}extra.restartNeeds=agents.profileRestartNeeds(c,settings);if(warning)extra.warning=warning;break;}
+ // The yes to the one question asked after saving: the same restart for whatever is pending.
+ case 'profile-apply':{if(req.role!=='admin')throw agents.error('Admin only',403);extra.profileApply=agents.applyAgentRestart(c);break;}
  case 'permission':agents.decidePermission(c,req.body);break;
  case 'confirm-workspace':agents.confirmWorkspace(c);break;
  case 'confirm-channel':agents.confirmChannel(c);break;
  case 'compact':agents.compact(c);break;
  case 'wrap-up':{if(req.role!=='admin')throw agents.error('Admin only',403);agents.setWrapUp(c,req.body.wrapUp);break;}
  case 'threshold':{if(req.role!=='admin')throw agents.error('Admin only',403);agents.setThreshold(c,req.body.threshold===null?null:req.body.threshold);break;}
- // An agent's own subagent model and effort, or null to follow the admin page: an admin's, like the threshold.
- case 'subagents':{if(req.role!=='admin')throw agents.error('Admin only',403);extra.subagentNeeds=agents.setSubagents(c,req.body?.subagents===null?null:req.body?.subagents);break;}
- case 'subagents-apply':{if(req.role!=='admin')throw agents.error('Admin only',403);extra.subagentApply=agents.applyAgentSubagents(c);break;}
- // When its Claude Code compacts: 'follow', null (Claude Code's default) or a preset; an admin's, like subagents.
- case 'auto-compact':{if(req.role!=='admin')throw agents.error('Admin only',403);extra.autoCompactNeeds=agents.setAutoCompact(c,req.body?.autoCompact);break;}
- case 'auto-compact-apply':{if(req.role!=='admin')throw agents.error('Admin only',403);extra.autoCompactApply=agents.applyAgentAutoCompact(c);break;}
  case 'rename':if(typeof req.body.title!=='string'||!req.body.title.trim()||req.body.title.trim().length>80)throw agents.error('主題需為 1–80 字');c.title=req.body.title.trim();c.profileVersion=(c.profileVersion||0)+1;c.updatedAt=new Date().toISOString();agents.save();break;
  case 'archive':if(req.role!=='admin')throw agents.error('Agent 由管理員刪除。',403);agents.stop(c);c.archived=true;c.archivedAt=new Date().toISOString();agents.save(c);break;
  case 'interrupt':agents.interrupt(c);break;

@@ -12,6 +12,7 @@ import {ct} from './agent-i18n.js';
 import {agentActivity} from './agentActivity.js';
 import * as agentOperation from './agentOperation.js';
 import {askHandoff} from './handoffAsk.js';
+import {afterProfileSave,askDiscard,guardOperation as guardProfile,staleProfile,resolveStale,busyNotice} from './profileSave.js';
 
 export function useCellAgent({workspace, conversationId, detail, refresh, profileOpen}) {
  const error=ref(''),operation=ref(null),operationError=ref('');
@@ -36,12 +37,12 @@ export function useCellAgent({workspace, conversationId, detail, refresh, profil
  }
  async function action(name,body={}){
   const id=conversationId.value;
-  if(['compact','rotate','start'].includes(name))return run(name,body);
+  if(['compact','rotate','start'].includes(name)){if(!(await guardOperation(name==='rotate'?'handoff':name)))return;return run(name,body);}
   if(operation.value)return;
   return attempt(async()=>{const d=await api('/conversations/'+id+'/'+name,{method:'POST',body:JSON.stringify(body)});await refresh();return d;});
  }
  const pause=()=>f7.dialog.confirm(ct("暫停會中斷執行中的回覆。聊天紀錄仍會保留。"),ct("暫停執行"),()=>action('stop'));
- const restart=()=>f7.dialog.confirm(ct("重啟會中斷執行中的回覆，並接回同一個 session。聊天紀錄仍會保留。"),ct("重啟"),async()=>{if(await action('stop'))await action('start');});
+ const restart=onCancel=>f7.dialog.confirm(ct("重啟會中斷執行中的回覆，並接回同一個 session。聊天紀錄仍會保留。"),ct("重啟"),async()=>{if(await action('stop'))await action('start');},onCancel);
  const handoff=()=>askHandoff(detail.value?.handoffSetting,body=>action('rotate',body));
  async function importHistory(){
   const d=await action('import-history');
@@ -59,17 +60,38 @@ export function useCellAgent({workspace, conversationId, detail, refresh, profil
   f7.dialog.confirm(ct('改回預設的 Agent 圖示？'),ct('還原預設圖像'),async()=>{if(await attempt(()=>api('/conversations/'+id+'/avatar',{method:'DELETE'})))await refresh();});
  }
  // Agent Profile's draft: taken when it opens, never on a refresh, which would undo typing.
- const profileDraft=ref(null),profileSaving=ref(false);
- watch(()=>[profileOpen.value,detail.value?.id],([open,id],[wasOpen,wasId]=[])=>{if(open&&detail.value&&(!wasOpen||id!==wasId)){profileDraft.value=agentOperation.profileDraftOf(detail.value);error.value='';}},{immediate:true});
- async function saveProfile(){
-  if(profileSaving.value)return;profileSaving.value=true;
-  const r=await action('profile',agentOperation.followSetting(profileDraft.value));
+ // Changed from what was taken or last saved, the save button lights and closing asks
+ // first; saving sends everything at once, then asks once about a restart (js/profileSave.js).
+ // Closed and opened again with unsaved changes, the draft is kept.
+ const profileDraft=ref(null),profileBase=ref(null),profileSaving=ref(false),profileConflicts=ref([]);
+ const takeProfileDraft=()=>{profileConflicts.value=[];profileDraft.value=profileBase.value=agentOperation.profileDraftOf(detail.value);error.value='';};
+ const profileDirty=computed(()=>workspace.user?.value?.role==='admin'&&!!profileBase.value&&agentOperation.profileKey(profileDraft.value)!==agentOperation.profileKey(profileBase.value));
+ watch(()=>[profileOpen.value,detail.value?.id],([open,id],[wasOpen,wasId]=[])=>{if(open&&detail.value&&(!wasOpen||id!==wasId)&&!profileDirty.value)takeProfileDraft();},{immediate:true});
+ const merge=d=>{if(d?.id===conversationId.value)detail.value={...detail.value,...d,messages:detail.value?.messages||d.messages};};
+ // Only what changed is sent; refused as out of date, it is merged onto the agent as it is now.
+ async function saveProfile({ask=true,retried=false}={}){
+  if(profileSaving.value)return;
+  if(operation.value){busyNotice();return;}
+  profileSaving.value=true;error.value='';
+  let r;
+  try{r=await api('/conversations/'+conversationId.value+'/profile',{method:'POST',body:JSON.stringify(agentOperation.profileChanges(profileDraft.value,profileBase.value))});}
+  catch(e){profileSaving.value=false;if(!staleProfile(e)){error.value=e.message;return;}
+   return resolveStale({latest:async()=>{await refresh();return detail.value?agentOperation.profileDraftOf(detail.value):null;},draft:profileDraft.value,base:profileBase.value,retried,again:()=>saveProfile({ask,retried:true}),
+    take:(fresh,draft,conflicts)=>{profileBase.value=fresh;profileDraft.value=draft;profileConflicts.value=conflicts;}});}
+  await refresh();
   profileSaving.value=false;
-  if(r){profileDraft.value={...profileDraft.value,profileVersion:r.profileVersion};f7.toast.create({text:ct('設定已保存'),closeTimeout:1800}).open();}
+  if(r){profileDraft.value={...profileDraft.value,profileVersion:r.profileVersion};profileBase.value=profileDraft.value;profileConflicts.value=[];afterProfileSave(r,{update:merge,ask});}
+  return r;
  }
+ const mayCloseProfile=async()=>{if(!profileDirty.value)return true;if(!(await askDiscard()))return false;profileDraft.value=profileBase.value;profileConflicts.value=[];return true;};
+ // Only its own step, as on the conversation page: a change made elsewhere in between
+ // still goes through the merge.
+ const syncProfileVersion=d=>{if(d?.profileVersion!==(profileDraft.value?.profileVersion??-2)+1)return;if(profileBase.value)profileBase.value={...profileBase.value,profileVersion:d.profileVersion};if(profileDraft.value)profileDraft.value={...profileDraft.value,profileVersion:d.profileVersion};};
+ async function closeProfile(){if(!(await mayCloseProfile()))return;profileOpen.value=false;}
+ const guardOperation=kind=>guardProfile(kind,{dirty:()=>profileOpen.value&&profileDirty.value,save:saveProfile,discard:()=>{profileDraft.value=profileBase.value;},ask:r=>afterProfileSave(r,{update:merge})});
  const cell={...workspace,
   selected:conversationId,detail,error,action,pause,restart,handoff,importHistory,uploadAvatar,resetAvatar,
-  profileDraft,profileSaving,saveProfile,
+  profileDraft,profileSaving,saveProfile,profileDirty,closeProfile,guardOperation,syncProfileVersion,profileConflicts,
   statusLabel:computed(()=>agentOperation.statusLabel(detail.value)),
   usageRows:computed(()=>agentOperation.usageRows(detail.value?.usage)),
  };
@@ -77,5 +99,6 @@ export function useCellAgent({workspace, conversationId, detail, refresh, profil
   operationTitle:computed(()=>agentOperation.operationTitle(activity.value)),
   operationSteps:computed(()=>detail.value?agentOperation.operationSteps(detail.value,activity.value,operation.value):[]),
   operationPercent:computed(()=>agentOperation.operationPercent(detail.value,activity.value)),
+  mayCloseProfile,
   dispose:()=>{disposed=true;}};
 }

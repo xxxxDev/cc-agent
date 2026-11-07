@@ -62,9 +62,43 @@ export async function settleOperation(id, kind, body, {current, update}) {
  return null;
 }
 
-// Agent Profile's draft, taken when it opens, and what of it is saved.
+// Agent Profile's draft, taken when it opens, and what of it is saved. The subagents'
+// model and effort (null: following the admin page) and the auto-compact timing
+// ('follow', null for Claude Code's default, or a preset) are in it where they apply,
+// and so are the compact-and-continue threshold (null follows the setting) and the
+// wrap-up check: every row is saved with the rest, nothing on its own.
 export function profileDraftOf(d) {
- return {title:d.title,description:d.description||'',memory:d.memory||'',model:d.model,effort:d.effort,access:d.access||{allow:[],exclude:[],domains:[]},profileVersion:d.profileVersion};
+ return {title:d.title,description:d.description||'',memory:d.memory||'',model:d.model,effort:d.effort,access:d.access||{allow:[],exclude:[],domains:[]},profileVersion:d.profileVersion,
+  ...(d.subagentsApply?{subagents:d.subagents?{...d.subagents}:null}:{}),
+  ...(d.autoCompactApply?{autoCompact:d.autoCompactOwn?(d.autoCompact??null):'follow'}:{}),
+  threshold:d.thresholdOwn?d.threshold:null,wrapUp:d.wrapUp!==false};
+}
+// What a draft would save, to tell whether it was changed: keys in one order, the
+// version left out.
+const sorted=v=>Array.isArray(v)?v.map(sorted):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().filter(k=>v[k]!==undefined).map(k=>[k,sorted(v[k])])):v;
+const same=(a,b)=>JSON.stringify(sorted(a))===JSON.stringify(sorted(b));
+export function profileKey(profile) {
+ if(!profile)return '';
+ const {profileVersion,...rest}=followSetting(profile);
+ return JSON.stringify(sorted(rest));
+}
+// What a save sends: only the fields changed from base, with the draft's version, so a
+// draft taken before something was changed elsewhere does not put the old values back.
+export function profileChanges(draft,base) {
+ const next=followSetting(draft),was=base?followSetting(base):{};
+ const body={profileVersion:draft.profileVersion};
+ for(const [k,v] of Object.entries(next))if(k!=='profileVersion'&&v!==undefined&&!same(v,was[k]))body[k]=v;
+ return body;
+}
+// A save refused as out of date: the changes made here, from the draft against what it
+// was taken from, go onto a draft of the agent as it is now. A field changed there too,
+// to something else, is a conflict: the value typed here stays in the draft, and it is
+// named.
+export function mergeProfile(draft,base,fresh) {
+ const mine=profileChanges(draft,base),now=followSetting(fresh),was=base?followSetting(base):{};
+ const merged={...fresh},conflicts=[];
+ for(const k of Object.keys(mine)){if(k==='profileVersion')continue;merged[k]=draft[k];if(!same(now[k],was[k])&&!same(now[k],mine[k]))conflicts.push(k);}
+ return {draft:merged,conflicts};
 }
 export function followSetting(profile) {
  return {...profile};
