@@ -116,7 +116,7 @@ export default {components:{GlassDropdown,AgentProfileFields,AgentProfilePanel,M
 <style scoped>
 /* A phone sheet stops short of the top, so the page's navbar shows above it, as iOS sheets
    do; inside it the status bar's room is not needed. */
-.popup.sheet-swipe{top:calc(var(--f7-safe-area-top) + 52px);height:auto;bottom:0;border-radius:16px 16px 0 0;overflow:hidden;--f7-safe-area-top:0px;}
+.popup.sheet-swipe{top:calc(env(safe-area-inset-top, 0px) + 52px);height:auto;bottom:0;border-radius:16px 16px 0 0;overflow:hidden;--f7-safe-area-top:0px;}
 /* The grab handle of a sheet that closes by a pull down, inside the navbar's top: above the
    view, which Framework7 lifts to z-index 5000. */
 .sheet-grabber{position:absolute;top:calc(var(--f7-safe-area-top) + 5px);left:50%;width:36px;height:5px;margin-left:-18px;border-radius:var(--cc-radius-pill);background:var(--cc-color-text-tertiary);z-index:5001;pointer-events:none;}
