@@ -24,10 +24,9 @@
        while the mouse is on it. -->
   <div v-else-if="compact && usageGroups.length" class="usage-rings">
     <template v-for="row in rows" :key="row.key">
-      <div class="usage-ring" :data-usage="row.group.key" @mouseenter="showCard($event, row)" @mouseleave="card = null">
-        <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="17" class="ring-track"/><circle v-if="row.meter" cx="20" cy="20" r="17" class="ring-fill" :class="row.meter.level" :stroke-dasharray="(row.meter.percent / 100 * RING) + ' ' + RING"/></svg>
+      <UsageRing :data-usage="row.group.key" :percent="row.meter ? row.meter.percent : null" :level="row.meter?.level" @mouseenter="showCard($event, row)" @mouseleave="card = null">
         <img :src="row.group.logo" :alt="row.group.name"/>
-      </div>
+      </UsageRing>
     </template>
     <!-- In <body>, not in the panel: a fixed box inside the panel's transformed layer is
          placed by the panel and, in WebKit, painted with its stale pixels. -->
@@ -65,9 +64,9 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { t } from '../js/i18n.js';
 import { usageGroups, watchUsage } from '../js/usage.js';
 import { sidebarAuto } from '../js/sidebarState.js';
+import UsageRing from './UsageRing.vue';
 
 defineProps({ list: Boolean, compact: Boolean });
-const RING = 2 * Math.PI * 17;
 const card = ref(null);
 // Only on a rail folded by hand: folding by itself, the sidebar opens with the full rows.
 function showCard(event, row) {
@@ -100,14 +99,6 @@ onUnmounted(() => stop?.());
 .usage-item .item-inner {padding-top:10px;padding-bottom:10px;}
 .usage-icon {display:block;width:28px;height:28px;border-radius:7px;}
 .usage-rings {display:flex;flex-direction:column;align-items:center;gap:12px;padding:0 0 12px;}
-.usage-ring {position:relative;width:40px;height:40px;}
-.usage-ring svg {position:absolute;inset:0;width:40px;height:40px;transform:rotate(-90deg);}
-.usage-ring circle {fill:none;stroke-width:3.5;}
-.ring-track {stroke:var(--usage-track, rgba(255,255,255,.12));}
-.ring-fill {stroke-linecap:round;transition:stroke-dasharray .4s ease;}
-.ring-fill.low {stroke:#34c759;}
-.ring-fill.mid {stroke:#ff9f0a;}
-.ring-fill.high {stroke:#ff453a;}
 .usage-ring img {position:absolute;inset:10px;width:20px;height:20px;border-radius:5px;}
 .usage-card {position:fixed;z-index:6100;transform:translateY(-50%);width:240px;padding:12px 14px;border-radius:12px;background:var(--cc-color-panel, #252525);border:1px solid var(--usage-track, rgba(255,255,255,.12));box-shadow:0 10px 28px rgba(0,0,0,.35);pointer-events:none;}
 </style>

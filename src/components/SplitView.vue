@@ -104,7 +104,7 @@ function openMore(index,event){const r=event.currentTarget.getBoundingClientRect
 // once switched on on the Admin tab.
 const moreItems=computed(()=>{
  const agent=moreFor.value===null?null:agents.value.find(a=>a.id===cells.value[moreFor.value]);
- return [{value:'checklist',f7:'checkmark_square',label:ct('清單')},{value:'search',f7:'search',label:ct('搜尋這個對話')},{value:'profile',f7:'info',label:'Agent Profile'},
+ return [{value:'checklist',f7:'checkmark_square',label:ct('待辦事項')},{value:'search',f7:'search',label:ct('搜尋這個對話')},{value:'profile',f7:'info',label:'Agent Profile'},
   ...(transcriptSwitch.value&&agent?.mode==='claude'?[{value:'inspector',f7:'ant',label:ct('Transcript 檢視')}]:[])];
 });
 async function pickMore(value){const index=moreFor.value;moreFor.value=null;if(index===null)return;const next=panels.value[index]===value?null:value;if(panels.value[index]==='profile'&&next!=='profile'&&!(await mayClose(index)))return;setPanel(index,next);}

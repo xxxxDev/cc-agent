@@ -277,8 +277,26 @@ writeFresh(path.join(config.cwd,'CLAUDE.md'),[
  ...(readOnlyDirs.length?['## Folders you may read but not change','',...readOnlyDirs.map(d=>`- \`${d}\``),'']:[]),
  ...(programs.length?['## Programs you may run outside the sandbox','','Run each one by exactly this command, on its own (no chain, pipe or variables in front). It changes to the program\'s own folder by itself.','',...programs.map(x=>`- \`${x.file}\`${x.run.args?' followed by its arguments':' (no arguments)'}: runs ${x.run.program}`),'']:[]),
 ].join('\n'));
+// How full its context is, for the page: Claude Code's statusLine and subagentStatusLine run
+// channel/statusLine.cjs, which keeps a few numbers in this control folder for the server
+// (agentStore.js contextUsage). Claude Code 2.1.319 runs both outside the sandbox: statusLine
+// through its hook runner, as it runs the hooks above, and subagentStatusLine through a runner
+// of its own (extendEnv false, a 5 s timeout); so a scoped agent's copy writes here too and its
+// own tools still cannot. A full-access agent's workspace settings would replace the user's own
+// status line, so its copy runs the user's command and prints what that prints, and takes
+// the user's padding and refresh interval. One already in that workspace file that is not
+// CC Agent's is kept as it is and ours not added, and the page says the numbers cannot be
+// shown (status-own in this folder). A user's status line from a plugin or another settings
+// layer is not looked for. The server asks for it (config.contextStatus); otherwise CC Agent's
+// own entries are taken out again.
+const STATUS_SCRIPT=path.join(config.root,'channel/statusLine.cjs');
+const ownerStatusLine=(()=>{if(!ownerConfig)return {};try{const s=JSON.parse(fs.readFileSync(path.join(process.env.HOME||'','.claude','settings.json'),'utf8'))?.statusLine;return Object.fromEntries(['padding','refreshInterval'].filter(k=>Number.isInteger(s?.[k])&&s[k]>=0&&s[k]<=3600).map(k=>[k,s[k]]));}catch{return {};}})();
+const statusCommand=kind=>[process.execPath,STATUS_SCRIPT,kind,controlDir].map(quote).join(' ')+(ownerConfig?' owner':'');
+const statusSettings=config.contextStatus===true?{statusLine:{type:'command',command:statusCommand('main'),...ownerStatusLine},subagentStatusLine:{type:'command',command:statusCommand('subagents')}}:{};
+const ourStatus=v=>!!v&&typeof v==='object'&&typeof v.command==='string'&&v.command.includes(STATUS_SCRIPT);
+let ownStatusLine=false;
 const settings=path.join(controlDir,'settings.json');
-if(!ownerConfig)writeFresh(settings,JSON.stringify({...own,...scope,enabledMcpjsonServers:[...new Set([...(own.enabledMcpjsonServers||[]),'executive'])],autoMemoryEnabled:false,claudeMdExcludes:[...(own.claudeMdExcludes||[]),...claudeMdExcludes],hooks}));
+if(!ownerConfig)writeFresh(settings,JSON.stringify({...own,...scope,...statusSettings,enabledMcpjsonServers:[...new Set([...(own.enabledMcpjsonServers||[]),'executive'])],autoMemoryEnabled:false,claudeMdExcludes:[...(own.claudeMdExcludes||[]),...claudeMdExcludes],hooks}));
 // CC Agent's hooks as a plugin, without replacing the full-access host settings.
 const hooksPlugin=path.join(controlDir,'plugin');
 if(ownerConfig){
@@ -322,12 +340,14 @@ if(ownerConfig){
     const env=Object.fromEntries(Object.entries(current.env&&typeof current.env==='object'?current.env:{}).filter(([k])=>!MANAGED_KEYS.includes(k)));
     Object.assign(env,subagentEnv);
     if(Object.keys(env).length)next.env=env;else delete next.env;
+    for(const key of ['statusLine','subagentStatusLine']){if(next[key]&&!ourStatus(next[key])){if(key==='statusLine'&&statusSettings[key])ownStatusLine=true;}else if(statusSettings[key])next[key]=statusSettings[key];else delete next[key];}
    }
    if(JSON.stringify(next)!==JSON.stringify(current)){fs.mkdirSync(path.dirname(local),{recursive:true});writeFresh(local,JSON.stringify(next,null,2)+'\n');}
   }
- }catch(e){await bridge(config,'error',{message:'無法寫入 agent 的本機設定（關掉 Discord plugin、子代理與自動壓縮設定），已拒絕啟動：'+e.message}).catch(()=>{});process.exit(1);}
+ }catch(e){await bridge(config,'error',{message:'無法寫入 agent 的本機設定（關掉 Discord plugin、子代理、自動壓縮與狀態列設定），已拒絕啟動：'+e.message}).catch(()=>{});process.exit(1);}
  fs.mkdirSync(noDiscord,{recursive:true,mode:0o700});
 }
+if(ownStatusLine)writeFresh(path.join(controlDir,'status-own'),'1');else fs.rmSync(path.join(controlDir,'status-own'),{force:true});
 // TMPDIR too, for Claude itself and what it starts outside the sandbox; sandboxed
 // commands get <agentTmp>/claude-<uid> from Claude (above). A scoped agent also gets
 // TMPPREFIX in that folder, for any shell Claude does not set it for: zsh's default,

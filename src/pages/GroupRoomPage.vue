@@ -7,7 +7,7 @@
    <f7-nav-left><f7-link class="back" icon-only :aria-label="ct('返回群組清單')" @click="toGroups"><i class="icon icon-back"/></f7-link></f7-nav-left>
    <f7-nav-title sliding><span class="nav-agent-name group-title">{{room?.name||ct('群組')}}<small v-if="room" class="group-sub">{{room.members.length}} {{ct('位成員')}} · {{ct('主負責')}} {{leadName}}</small></span></f7-nav-title>
    <f7-nav-right>
-    <f7-link icon-only icon-f7="checkmark_square" class="checklist-open" :class="{'inspector-on':sidePanel==='checklist'}" :aria-label="ct('清單')" @click="toggle('checklist')"/>
+    <f7-link icon-only icon-f7="checkmark_square" class="checklist-open" :class="{'inspector-on':sidePanel==='checklist'}" :aria-label="ct('待辦事項')" @click="toggle('checklist')"/>
     <f7-link icon-only icon-f7="search" class="conversation-search-open" :class="{'inspector-on':sidePanel==='search'}" :aria-label="ct('搜尋這個群組')" @click="toggle('search')"/>
     <f7-link icon-only icon-f7="person_2" class="group-settings" :aria-label="ct('群聊設定')" @click="settingsOpen=true"/>
     <f7-link v-if="isAdmin" icon-only icon-f7="chevron_left_slash_chevron_right" class="group-terminal" :aria-label="ct('開啟成員的終端機')" @click="openTerminalMenu"/>
@@ -25,8 +25,8 @@
   </div>
   <SlashMenu v-if="room&&slash.items.value.length" :items="slash.items.value" :active="slash.active.value" @hover="slash.active.value=$event" @pick="slash.complete"/>
   <MentionMenu v-else-if="room&&mention.items.value.length" :items="mention.items.value" :active="mention.active.value" @hover="mention.active.value=$event" @pick="pick"/>
-  <aside v-if="sidePanel==='checklist'" class="profile-panel checklist-panel" :aria-label="ct('清單')">
-   <header class="pp-head"><f7-link icon-only icon-f7="xmark" :aria-label="ct('關閉清單')" @click="panel=null"/><div class="pp-title">{{ct('清單')}}</div><f7-link icon-only icon-f7="plus" class="checklist-new" :aria-label="ct('新增清單')" @click="newChecklist"/></header>
+  <aside v-if="sidePanel==='checklist'" class="profile-panel checklist-panel" :aria-label="ct('待辦事項')">
+   <header class="pp-head"><f7-link icon-only icon-f7="xmark" :aria-label="ct('關閉待辦事項')" @click="panel=null"/><div class="pp-title">{{ct('待辦事項')}}</div><f7-link icon-only icon-f7="plus" class="checklist-new" :aria-label="ct('新增清單')" @click="newChecklist"/></header>
    <div class="pp-body"><ChecklistPanel :key="room.id" :source="checklistSource"/></div>
   </aside>
   <aside v-if="sidePanel==='search'" class="profile-panel search-panel" :aria-label="ct('搜尋這個群組')">
@@ -39,7 +39,7 @@
   <Teleport to=".framework7-root">
    <!-- On a phone, the same two as popups. -->
    <f7-popup :opened="popup==='checklist'" class="checklist-popup group-checklist-popup" @popup:closed="popup==='checklist'&&(panel=null)"><f7-view><f7-page>
-    <f7-navbar><f7-nav-left><f7-link popup-close icon-only icon-f7="xmark" :aria-label="ct('關閉清單')"/></f7-nav-left><f7-nav-title>{{ct('清單')}}</f7-nav-title><f7-nav-right><f7-link icon-only icon-f7="plus" class="checklist-new" :aria-label="ct('新增清單')" @click="newChecklist"/></f7-nav-right></f7-navbar>
+    <f7-navbar><f7-nav-left><f7-link popup-close icon-only icon-f7="xmark" :aria-label="ct('關閉待辦事項')"/></f7-nav-left><f7-nav-title>{{ct('待辦事項')}}</f7-nav-title><f7-nav-right><f7-link icon-only icon-f7="plus" class="checklist-new" :aria-label="ct('新增清單')" @click="newChecklist"/></f7-nav-right></f7-navbar>
     <ChecklistPanel v-if="popup==='checklist'&&room" :source="checklistSource"/>
    </f7-page></f7-view></f7-popup>
    <f7-popup :opened="popup==='search'" class="message-search-popup group-search-popup" @popup:closed="popup==='search'&&(panel=null)"><f7-view><f7-page>

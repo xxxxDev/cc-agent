@@ -60,8 +60,8 @@
   <div v-if="terminal" class="split-terminal"><TerminalPane :key="detail?.sessionId||conversationId" :conversation-id="conversationId"/></div>
   <!-- One side column at a time, as on the conversation page; over the whole cell in
        a narrow one. -->
-  <aside v-if="sidePanel==='checklist'" class="split-side" :aria-label="ct('清單')">
-   <header class="pp-head"><f7-link icon-only icon-f7="xmark" :aria-label="ct('關閉清單')" @click="$emit('close-panel')"/><div class="pp-title">{{ct('清單')}}</div><f7-link icon-only icon-f7="plus" class="checklist-new" :aria-label="ct('新增清單')" @click="askNewChecklist(agent.cell)"/></header>
+  <aside v-if="sidePanel==='checklist'" class="split-side" :aria-label="ct('待辦事項')">
+   <header class="pp-head"><f7-link icon-only icon-f7="xmark" :aria-label="ct('關閉待辦事項')" @click="$emit('close-panel')"/><div class="pp-title">{{ct('待辦事項')}}</div><f7-link icon-only icon-f7="plus" class="checklist-new" :aria-label="ct('新增清單')" @click="askNewChecklist(agent.cell)"/></header>
    <div class="pp-body"><ChecklistPanel :key="conversationId"/></div>
   </aside>
   <aside v-else-if="sidePanel==='search'" class="split-side" :aria-label="ct('搜尋這個對話')">

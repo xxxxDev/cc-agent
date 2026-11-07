@@ -34,8 +34,14 @@
   </f7-page></f7-view></f7-popup>
 <!-- The agent's checklists on a phone. -->
   <f7-popup :opened="checklistPopupOpen" @popup:closed="checklistPopupOpen&&(checklistOpen=false)" class="checklist-popup"><f7-view><f7-page>
-   <f7-navbar><f7-nav-left><f7-link popup-close icon-only icon-f7="xmark" :aria-label="ct('關閉清單')"/></f7-nav-left><f7-nav-title>{{ct('清單')}}</f7-nav-title><f7-nav-right><f7-link icon-only icon-f7="plus" class="checklist-new" :aria-label="ct('新增清單')" @click="newChecklist"/></f7-nav-right></f7-navbar>
+   <f7-navbar><f7-nav-left><f7-link popup-close icon-only icon-f7="xmark" :aria-label="ct('關閉待辦事項')"/></f7-nav-left><f7-nav-title>{{ct('待辦事項')}}</f7-nav-title><f7-nav-right><f7-link icon-only icon-f7="plus" class="checklist-new" :aria-label="ct('新增清單')" @click="newChecklist"/></f7-nav-right></f7-navbar>
    <ChecklistPanel v-if="checklistPopupOpen" :key="selected"/>
+  </f7-page></f7-view></f7-popup>
+<!-- How full the context is, from the phone's 「⋯」 menu or beside the terminal; the right
+       column on a desktop. -->
+  <f7-popup :opened="usagePopupOpen" @popup:closed="usagePopupOpen&&(usageOpen=false)" class="usage-popup"><f7-view><f7-page>
+   <f7-navbar><f7-nav-left><f7-link popup-close icon-only icon-f7="xmark" :aria-label="ct('關閉用量')"/></f7-nav-left><f7-nav-title>{{ct('用量')}}</f7-nav-title></f7-navbar>
+   <ContextUsagePanel v-if="usagePopupOpen" :usage="detail?.contextUsage" :agent="detail"/>
   </f7-page></f7-view></f7-popup>
 <GlassDropdown :open="!!menuConversation" :point="menuPoint" :items="user?.role==='admin'?[{value:'rename',label:ct('重新命名'),icon:'pencil'},{value:'remove',label:ct('刪除'),icon:'trash',danger:true}]:[]" @close="menuConversation=null" @select="menuAction"/></template>
 <script>
@@ -44,8 +50,9 @@ import {scopedAgents} from "../js/agentPreferences.js";
 import AgentProfilePanel from "./AgentProfilePanel.vue";
 import MessageSearchResults from "./MessageSearchResults.vue";
 import ChecklistPanel,{askNewChecklist} from "./ChecklistPanel.vue";
+import ContextUsagePanel from "./ContextUsagePanel.vue";
 import {inject,computed,ref,watch,onBeforeUnmount} from "vue";import {f7} from "framework7-vue";import GlassDropdown from "./GlassDropdown.vue";import {parseAgentJson} from "../js/agentImport.js";import {ct} from "../js/agent-i18n.js";
-export default {components:{GlassDropdown,AgentProfileFields,AgentProfilePanel,MessageSearchResults,ChecklistPanel},setup(){const w=inject("workspace");
+export default {components:{GlassDropdown,AgentProfileFields,AgentProfilePanel,MessageSearchResults,ChecklistPanel,ContextUsagePanel},setup(){const w=inject("workspace");
  const personal=computed(()=>w.user.value?.role==="admin");
  // A server that cannot fence an agent (Windows: Claude Code has no sandbox there, see
  // channel/platform.cjs) would refuse a scoped one at its first start. An admin's new agent
