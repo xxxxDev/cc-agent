@@ -80,7 +80,7 @@ For every feature in detail, see [docs/FEATURES.md](docs/FEATURES.md).
   <img src=".github/assets/screens/phones-dark.png" alt="The agent list, a chat and its usage view on a phone">
 </p>
 
-- **A chat that feels familiar.** A rounded composer that grows with your message, attachments with previews, mentions, message search and jump-to-latest.
+- **A chat that feels familiar.** A rounded composer that grows with your message, attachments with previews, mentions, replies to a single message, message search and jump-to-latest.
 - **Live, not polling.** One small socket tells the page that something changed. Pages put away stop asking. Every tab signs in and out together.
 - **Calm by default.** Light and dark themes, a quiet layout, and English and Traditional Chinese.
 - **Sign-in done properly.** Password with two-step codes, passkeys (Face ID, Touch ID, Windows Hello), QR sign-in from your phone, a device list where you can sign any device out instantly, and protection against repeated guesses.

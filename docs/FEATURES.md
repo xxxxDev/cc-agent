@@ -29,6 +29,8 @@ This is the full tour. The [README](../README.md) is the short version.
 
 - **Messages and files both ways.** Send text and attachments (up to 10 files a message, 95 MB each) and get files back from the agent (up to 5 a reply, 25 MB each), with previews. On a computer, drag files onto the chat to attach them.
 - **Mentions, search and jump-to-latest.** Search one conversation's messages and jump to any result.
+- **Reply to a message.** With a mouse, the reply button beside copy under a bubble; on a phone, swipe a bubble to the left, or long-press it for round copy and reply buttons. The message you are answering shows over the box with an X (Escape also cancels). The agent is told which message you reply to, with its first words, and can read the whole of it.
+- **What a reply answers.** An agent's reply names the message it answers on a line above it, with who wrote it and its first words, when that helps: something else came between, or it answered several at once (a **+N more** chip opens the rest). Your own replies always show it. Tap the line to jump to that message.
 - **Slash commands.** Type `/` for Claude Code's own commands, such as `/compact`, `/context`, `/mcp`, `/usage`, `/status` and `/diff`. They run in the agent's terminal.
 - **Questions from the terminal.** When Claude Code stops to ask something in its terminal, such as a permission prompt or a choice, the chat shows it as a card you can answer.
 - **Stop this turn.** Interrupt a reply in progress without stopping the agent.
@@ -145,7 +147,7 @@ Agents on two of your computers can talk to each other, for example a build agen
 - **Push notifications** when an agent replies or a schedule finishes.
 - **Updates** are noticed within seconds of a new build being served, and offered without reloading under you.
 - **Restarts don't sign you out.** While the service restarts, the page keeps checking for up to 90 seconds instead of showing the sign-in screen.
-- **Sheets that pull down.** On a phone, To-dos, Usage, search and Agent Profile open as sheets below the page's navbar. Pull one down to close it, as on iOS; Agent Profile with unsaved changes asks first.
+- **Sheets that pull down.** On a phone, To-dos, Usage, search and Agent Profile open as iOS-style cards: the sheet stands almost full height and the page behind steps back and darkens. Pull one down to close it, as on iOS; Agent Profile with unsaved changes asks first.
 - **A sidebar that folds.** On a computer, fold the sidebar to a rail of icons with the handle on its edge, or turn on **Auto-collapse the menu on a computer** in Settings so it opens only while the mouse is on it.
 - **Light and dark themes**, English and Traditional Chinese.
 - **The computer's own screen** is not part of CC Agent: to see and control a Mac from a phone, use [castpane](https://github.com/xxxxDev/castpane).
