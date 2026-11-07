@@ -93,7 +93,6 @@ export function useCellAgent({workspace, conversationId, detail, refresh, profil
   selected:conversationId,detail,error,action,pause,restart,handoff,importHistory,uploadAvatar,resetAvatar,
   profileDraft,profileSaving,saveProfile,profileDirty,closeProfile,guardOperation,syncProfileVersion,profileConflicts,
   statusLabel:computed(()=>agentOperation.statusLabel(detail.value)),
-  usageRows:computed(()=>agentOperation.usageRows(detail.value?.usage)),
  };
  return {cell,activity,locked,operationError,error,action,
   operationTitle:computed(()=>agentOperation.operationTitle(activity.value)),

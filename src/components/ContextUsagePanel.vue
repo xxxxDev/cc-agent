@@ -51,7 +51,8 @@
       </li></ul></div>
     </template>
 
-    <!-- What this agent has used in all its generations, as in its Agent Profile. -->
+    <!-- What this agent has used in all its generations: here only, no longer in Agent
+         Profile. -->
     <template v-if="totals">
       <f7-block-title class="cu-title">{{ ct('累計') }}</f7-block-title>
       <div class="list inset cu-card cu-totals"><ul><li class="cu-row">

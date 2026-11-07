@@ -41,15 +41,6 @@
   <f7-block-footer v-if="!detail.sessionModel">{{ct('既有 session 沿用原設定，儲存模型設定後套用。')}}</f7-block-footer>
   </template>
   <f7-block-footer v-else>{{ct('Agent 設定由管理員調整；如需變更，請聯絡 CC Agent 管理員。')}}</f7-block-footer>
-  <template v-if="usageRows">
-   <f7-list inset class="cc-settings-list agent-usage" :title="ct('依各模型的 token 與 API 參考價格估算，不是實際帳單；未知價格不計入金額。')+' '+ct('含這個 Agent 的所有世代。')">
-    <f7-list-item :title="ct('累計 token')" :after="usageRows.total"/>
-    <f7-list-item :title="ct('輸入 / 輸出')" :after="usageRows.io"/>
-    <f7-list-item :title="ct('快取 讀 / 寫')" :after="usageRows.cache"/>
-    <f7-list-item :title="ct('回合數')" :after="usageRows.turns"/>
-    <f7-list-item :title="ct('估算費用')" :after="usageRows.cost"/>
-   </f7-list>
-  </template>
   <AgentDiagnostics :admin="user?.role==='admin'" @trace-start="$emit('trace-start')" :detail="detail" :status="statusLabel"/>
   <!-- Messages with agents of a paired machine: an admin opens the agent, ticks which agents there it may hear from and write to,
        and may let its replies go back without being read first. Saved together, by its

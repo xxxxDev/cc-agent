@@ -24,23 +24,36 @@
 
   <p v-if="!allowed" class="split-note">{{ct('分割畫面只提供給管理員，在電腦寬度使用。')}}</p>
   <div v-else ref="grid" class="split-grid" :class="{dragging:!!dragging}" :style="{gridTemplateColumns:colSizes.map(f=>'minmax(0,'+f+'fr)').join(' '),gridTemplateRows:rowSizes.map(f=>'minmax(0,'+f+'fr)').join(' ')}">
-   <section v-for="(id,index) in cells" :key="index+':'+(id||'')" class="split-cell">
+   <section v-for="(id,index) in cells" :key="index+':'+(id||'')" :ref="el=>watchCell(el,index)" class="split-cell" :class="{'split-cell-compact':compact(index,id)}">
     <div class="split-cell-bar">
      <span v-if="id" class="split-presence" :class="presence[id]||'offline'" role="img" :aria-label="ct(presence[id]==='working'?'Agent 正在處理':presence[id]==='online'?'Agent 在線':'Agent 離線')" :title="ct(presence[id]==='working'?'Agent 正在處理':presence[id]==='online'?'Agent 在線':'Agent 離線')"/>
      <select :value="id||''" :aria-label="ct('這一格顯示的 Agent')" @change="assign(index,$event.target.value,$event.target)">
       <option value="">{{ct('選擇 Agent')}}</option>
       <optgroup v-for="section in sections" :key="section.label" :label="section.label"><option v-for="a in section.agents" :key="a.id" :value="a.id">{{a.title}}</option></optgroup>
      </select>
+     <!-- What the conversation's navbar holds on a computer: how full the context is,
+          待辦事項, 搜尋這個對話 and Agent Profile, with the terminal and the Transcript where
+          switched on, each opening its column inside the cell, as the header's own small
+          icons. A cell too narrow for them has them in its 「⋯」 menu instead; the terminal
+          switch stays out. -->
+     <template v-if="id&&!compact(index,id)">
+      <button v-if="context[id]" type="button" class="split-cell-icon split-cell-ring" :class="{on:panels[index]==='usage'}" :aria-pressed="String(panels[index]==='usage')" :aria-label="ringLabel(id)" :title="ringLabel(id)" @click="togglePanel(index,'usage')"><UsageRing class="split-ring" :percent="context[id].main?.percent??null" :class="{stale:context[id].main?.stale}"><span class="split-ring-text" aria-hidden="true">{{context[id].main?.percent??''}}</span></UsageRing></button>
+      <button type="button" class="split-cell-icon split-cell-checklist" :class="{on:panels[index]==='checklist'}" :aria-pressed="String(panels[index]==='checklist')" :aria-label="ct('待辦事項')" :title="ct('待辦事項')" @click="togglePanel(index,'checklist')"><i class="icon f7-icons">checkmark_square</i></button>
+      <button type="button" class="split-cell-icon split-cell-search" :class="{on:panels[index]==='search'}" :aria-pressed="String(panels[index]==='search')" :aria-label="ct('搜尋這個對話')" :title="ct('搜尋這個對話')" @click="togglePanel(index,'search')"><i class="icon f7-icons">search</i></button>
+     </template>
      <!-- The cell's terminal, as on the conversation page, when an admin has the
           chat/terminal switch on on the Admin tab. -->
-     <button v-if="id&&terminalSwitch" type="button" class="split-cell-terminal" :class="{on:terminalCells.has(index)}" :aria-pressed="String(terminalCells.has(index))" :title="terminalCells.has(index)?ct('回到聊天室'):ct('開啟 Claude 終端機')" :aria-label="terminalCells.has(index)?ct('回到聊天室'):ct('開啟 Claude 終端機')" @click="toggleTerminal(index)"><i class="icon f7-icons">chevron_left_slash_chevron_right</i></button>
-     <!-- What the conversation's navbar holds besides: its checklists, search, Agent
-          Profile and Transcript, in the cell's side column. -->
-     <button v-if="id" type="button" class="split-cell-more" :class="{on:!!panels[index]}" :aria-label="ct('更多')" :title="ct('更多')" @click="openMore(index,$event)"><i class="icon f7-icons">ellipsis</i></button>
+     <button v-if="id&&terminalSwitch" type="button" class="split-cell-icon split-cell-terminal" :class="{on:terminalCells.has(index)}" :aria-pressed="String(terminalCells.has(index))" :title="terminalCells.has(index)?ct('回到聊天室'):ct('開啟 Claude 終端機')" :aria-label="terminalCells.has(index)?ct('回到聊天室'):ct('開啟 Claude 終端機')" @click="toggleTerminal(index)"><i class="icon f7-icons">chevron_left_slash_chevron_right</i></button>
+     <template v-if="id&&!compact(index,id)">
+      <button v-if="inspectorFor(id)" type="button" class="split-cell-icon split-cell-inspector" :class="{on:panels[index]==='inspector'}" :aria-pressed="String(panels[index]==='inspector')" :aria-label="ct('Transcript 檢視')" :title="ct('Transcript 檢視')" @click="togglePanel(index,'inspector')"><i class="icon f7-icons">ant</i></button>
+      <button type="button" class="split-cell-icon split-cell-profile" :class="{on:panels[index]==='profile'}" :aria-pressed="String(panels[index]==='profile')" aria-label="Agent Profile" title="Agent Profile" @click="togglePanel(index,'profile')"><i class="icon f7-icons">info</i></button>
+     </template>
+     <!-- What the conversation's navbar holds besides, in a narrow cell. -->
+     <button v-else-if="id" type="button" class="split-cell-icon split-cell-more" :class="{on:!!panels[index]}" :aria-label="ct('更多')" :title="ct('更多')" @click="openMore(index,$event)"><i class="icon f7-icons">ellipsis</i></button>
      <a v-if="id" class="split-cell-open external" :href="'/?conversation='+id" @click.prevent="leave('/?conversation='+encodeURIComponent(id))" :title="ct('單獨打開這個 Agent')" :aria-label="ct('單獨打開這個 Agent')"><i class="icon f7-icons">arrow_up_right_square</i></a>
     </div>
     <SplitCell v-if="id" :key="id" :ref="el=>{cellViews[index]=el;}" :conversation-id="id" :terminal="terminalSwitch&&terminalCells.has(index)" :panel="panels[index]||null"
-     @close-panel="setPanel(index,null)" @open-terminal="terminalSwitch&&!terminalCells.has(index)&&toggleTerminal(index)" @presence="presence={...presence,[id]:$event}"
+     @close-panel="setPanel(index,null)" @open-panel="togglePanel(index,$event,true)" @context="context={...context,[id]:$event}" @open-terminal="terminalSwitch&&!terminalCells.has(index)&&toggleTerminal(index)" @presence="presence={...presence,[id]:$event}"
      @open-peer="leave('/?conversation='+encodeURIComponent($event))" @open-group="leave('/?group='+encodeURIComponent($event))"/>
     <p v-else class="split-empty">{{ct('從上方選一個 Agent')}}</p>
    </section>
@@ -56,10 +69,11 @@
  </div>
 </template>
 <script setup>
-import {ref,computed,onMounted,onUnmounted,watch} from 'vue';
+import {ref,computed,onMounted,onUnmounted,watch,reactive} from 'vue';
 import {api} from '../js/api.js';
 import SplitCell from './SplitCell.vue';
 import GlassDropdown from './GlassDropdown.vue';
+import UsageRing from './UsageRing.vue';
 import {terminalSwitch,transcriptSwitch,loadAgentPreferences,loadListPreferences,listGroups} from '../js/agentPreferences.js';
 import {agentSections} from '../js/agentSections.js';
 import {ct} from '../js/agent-i18n.js';
@@ -97,17 +111,36 @@ function startDrag(event,kind,i){
 const terminalCells=ref(new Set());
 function toggleTerminal(index){const next=new Set(terminalCells.value);if(next.has(index))next.delete(index);else next.add(index);terminalCells.value=next;}
 // Each cell's side column, one at a time, asked for each time as the terminal is.
-const panels=ref({}),moreFor=ref(null),morePoint=ref({clientX:0,clientY:0}),presence=ref({});
+const panels=ref({}),moreFor=ref(null),morePoint=ref({clientX:0,clientY:0}),presence=ref({}),context=ref({});
 function setPanel(index,name){panels.value={...panels.value,[index]:name};}
 function openMore(index,event){const r=event.currentTarget.getBoundingClientRect();morePoint.value={clientX:r.left+r.width/2,clientY:r.bottom};moreFor.value=index;}
 // The Transcript as on the conversation page: an admin's, for a Claude Code agent,
 // once switched on on the Admin tab.
+const ringLabel=id=>{const p=context.value[id]?.main?.percent;return ct('用量')+(p===null||p===undefined?'':' · '+ct('context 已用')+' '+p+'%');};
+const inspectorFor=id=>transcriptSwitch.value&&agents.value.find(a=>a.id===id)?.mode==='claude';
+// The 「⋯」 menu of a narrow cell, in the order of the conversation page's phone menu:
+// 用量 when the agent reports its context, as the ring shows only then.
 const moreItems=computed(()=>{
- const agent=moreFor.value===null?null:agents.value.find(a=>a.id===cells.value[moreFor.value]);
- return [{value:'checklist',f7:'checkmark_square',label:ct('待辦事項')},{value:'search',f7:'search',label:ct('搜尋這個對話')},{value:'profile',f7:'info',label:'Agent Profile'},
-  ...(transcriptSwitch.value&&agent?.mode==='claude'?[{value:'inspector',f7:'ant',label:ct('Transcript 檢視')}]:[])];
+ const id=moreFor.value===null?null:cells.value[moreFor.value];
+ return [{value:'checklist',f7:'checkmark_square',label:ct('待辦事項')},...(id&&context.value[id]?[{value:'usage',f7:'gauge',label:ct('用量')}]:[]),{value:'search',f7:'search',label:ct('搜尋這個對話')},{value:'profile',f7:'info',label:'Agent Profile'},
+  ...(id&&inspectorFor(id)?[{value:'inspector',f7:'ant',label:ct('Transcript 檢視')}]:[])];
 });
-async function pickMore(value){const index=moreFor.value;moreFor.value=null;if(index===null)return;const next=panels.value[index]===value?null:value;if(panels.value[index]==='profile'&&next!=='profile'&&!(await mayClose(index)))return;setPanel(index,next);}
+async function pickMore(value){const index=moreFor.value;moreFor.value=null;if(index===null)return;await togglePanel(index,value);}
+// One side column a cell at a time: its button again closes it; a profile with unsaved
+// changes asks before another takes its place. open: only open, never close (the usage
+// view's auto-compact row opening Agent Profile).
+async function togglePanel(index,value,open=false){const next=!open&&panels.value[index]===value?null:value;if(panels.value[index]===next)return;if(panels.value[index]==='profile'&&!(await mayClose(index)))return;setPanel(index,next);}
+// Whether a cell is too narrow for the navbar's buttons, from its own width, not the
+// window's: each small icon takes 36px (28px and the 8px between) and the agent's name and
+// the rest of the header keep 230px; below that they go in its 「⋯」 menu. Four buttons:
+// 374px; with the terminal and the Transcript too, 446px.
+const BUTTON=36,HEADER_REST=230;
+const widths=reactive({}),cellEls={};
+const buttonsFor=id=>3+(context.value[id]?1:0)+(terminalSwitch.value?1:0)+(inspectorFor(id)?1:0);
+const compact=(index,id)=>!!id&&widths[index]!==undefined&&widths[index]<HEADER_REST+BUTTON*buttonsFor(id);
+// A cell's section is replaced when it is given another agent: only the one on screen counts.
+const cellSize=typeof ResizeObserver==='function'?new ResizeObserver(entries=>{for(const e of entries){if(!e.target.isConnected)continue;const i=Object.keys(cellEls).find(k=>cellEls[k]===e.target);if(i!==undefined)widths[i]=e.contentRect.width;}}):null;
+function watchCell(el,index){if(!el||cellEls[index]===el)return;if(cellEls[index])cellSize?.unobserve(cellEls[index]);cellEls[index]=el;cellSize?.observe(el);}
 // A cell's Agent Profile with unsaved changes asks before it goes.
 const cellViews={};
 const mayClose=async index=>!cellViews[index]?.mayCloseProfile||await cellViews[index].mayCloseProfile();
@@ -136,7 +169,7 @@ onMounted(()=>{
  if(currentUser.value?.role==='admin')loadAgentPreferences().catch(()=>{});
  loadListPreferences().catch(()=>{});
 });
-onUnmounted(()=>{query?.removeEventListener('change',track);clearInterval(refresh);});
+onUnmounted(()=>{query?.removeEventListener('change',track);clearInterval(refresh);cellSize?.disconnect();});
 watch(()=>currentUser.value?.id,loadAgents);
 </script>
 <style scoped>
@@ -170,15 +203,23 @@ watch(()=>currentUser.value?.id,loadAgents);
 .split-cell-bar select {flex:1;min-width:0;height:28px;border-radius:8px;border:1px solid color-mix(in srgb,currentColor 20%,transparent);background:transparent;color:inherit;font:inherit;padding:0 6px;}
 /* Framework7 colours a dark option but not its group, which Windows drew as a pale band with the name unreadable. */
 .split-cell-bar option,.split-cell-bar optgroup {background:var(--f7-page-bg-color,#121212);}
-.split-cell-open {display:flex;color:inherit;opacity:.75;}
+.split-cell-open {flex:0 0 auto;display:flex;align-items:center;justify-content:center;width:28px;height:28px;color:inherit;opacity:.75;}
+.split-cell-open .icon {font-size:18px;}
 .split-presence {flex:0 0 auto;width:9px;height:9px;border-radius:50%;background:#8e8e93;}
 .split-presence.online {background:#34c759;}
 .split-presence.working {background:#ff9500;}
-.split-cell-more {display:flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:0;border-radius:8px;background:transparent;color:inherit;opacity:.75;cursor:pointer;}
-.split-cell-more.on {opacity:1;background:color-mix(in srgb,currentColor 14%,transparent);}
-.split-cell-more .icon {font-size:18px;}
-.split-cell-terminal {display:flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:0;border-radius:8px;background:transparent;color:inherit;opacity:.75;cursor:pointer;}
-.split-cell-terminal.on {opacity:1;background:color-mix(in srgb,currentColor 14%,transparent);}
-.split-cell-terminal .icon {font-size:18px;}
+/* The header's small icons: the terminal switch, the 「⋯」 menu and the navbar's buttons
+   beside them; one whose column is open is lit. */
+.split-cell-icon {flex:0 0 auto;display:flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:0;border-radius:8px;background:transparent;color:inherit;opacity:.75;cursor:pointer;}
+.split-cell-icon.on {opacity:1;background:color-mix(in srgb,currentColor 14%,transparent);}
+.split-cell-icon .icon {font-size:18px;}
+/* The same visual size for every icon in the bar: the
+   info glyph is a thin letter and reads small at 18px, the ring is drawn to the others'
+   outline. */
+.split-cell-profile .icon {font-size:19px;}
+/* How full the context is, the navbar's ring at the icons' size, its number in the middle. */
+.split-ring {width:18px;height:18px;--usage-track:color-mix(in srgb,currentColor 20%,transparent);}
+.split-ring.stale {opacity:.55;}
+.split-ring-text {position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;letter-spacing:-.3px;}
 .split-empty {margin:auto;color:var(--cc-color-text-secondary,#999);}
 </style>

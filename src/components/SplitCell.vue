@@ -4,7 +4,7 @@
       asking the server on their own made the view slow). It does what the
       conversation page does: the same bubbles and composer, "/" and "@", files, permission
       requests, reconnecting, the shield while the agent starts or compacts, and
-      beside the conversation its checklists, search, Agent Profile and Transcript.
+      beside the conversation its usage, checklists, search, Agent Profile and Transcript.
       What acts on the agent is js/cellAgent.js. -->
  <div ref="root" class="split-conversation" @keydown.esc="onEscape" :class="{'with-terminal':terminal&&wide,'terminal-only':terminal&&!wide,'side-cover':!!sidePanel&&narrow}" :style="terminal&&wide?{'--terminal-share':(share*100).toFixed(2)+'%'}:null">
   <div class="split-chat" :style="{'--conversation-composer-height':composerHeight+'px'}" @dragover.prevent="fileDrag.over($event,!locked&&!!detail)" @drop.prevent="fileDrag.end();!locked&&dropFiles($event)" @paste="!locked&&pasteFiles($event)">
@@ -60,7 +60,12 @@
   <div v-if="terminal" class="split-terminal"><TerminalPane :key="detail?.sessionId||conversationId" :conversation-id="conversationId"/></div>
   <!-- One side column at a time, as on the conversation page; over the whole cell in
        a narrow one. -->
-  <aside v-if="sidePanel==='checklist'" class="split-side" :aria-label="ct('待辦事項')">
+  <!-- The usage view the context ring opens, as in the conversation page's column. -->
+  <aside v-if="sidePanel==='usage'" class="split-side split-side-usage" :aria-label="ct('用量')">
+   <header class="pp-head"><f7-link icon-only icon-f7="xmark" :aria-label="ct('關閉用量')" @click="$emit('close-panel')"/><div class="pp-title">{{ct('用量')}}</div><f7-link icon-only icon-f7="arrow_clockwise" class="usage-refresh" :class="{spinning:usageRefreshing}" :aria-label="ct('重新整理用量')" :title="ct('重新整理用量')" @click="refreshUsage"/></header>
+   <div class="pp-body"><ContextUsagePanel v-if="detail" :key="conversationId" :usage="detail.contextUsage" :agent="detail"/></div>
+  </aside>
+  <aside v-else-if="sidePanel==='checklist'" class="split-side" :aria-label="ct('待辦事項')">
    <header class="pp-head"><f7-link icon-only icon-f7="xmark" :aria-label="ct('關閉待辦事項')" @click="$emit('close-panel')"/><div class="pp-title">{{ct('待辦事項')}}</div><f7-link icon-only icon-f7="plus" class="checklist-new" :aria-label="ct('新增清單')" @click="askNewChecklist(agent.cell)"/></header>
    <div class="pp-body"><ChecklistPanel :key="conversationId"/></div>
   </aside>
@@ -95,6 +100,8 @@ import ChecklistPanel,{askNewChecklist} from './ChecklistPanel.vue';
 import AgentProfilePanel from './AgentProfilePanel.vue';
 import MessageSearchResults from './MessageSearchResults.vue';
 import TranscriptInspector from './TranscriptInspector.vue';
+import ContextUsagePanel from './ContextUsagePanel.vue';
+import {loadUsage} from '../js/usage.js';
 import {api} from '../js/api.js';
 import {defaultAvatar} from '../js/avatarShape.js';
 import {ct} from '../js/agent-i18n.js';
@@ -113,7 +120,7 @@ import {currentUser} from '../js/auth.js';
 import {f7} from 'framework7-vue';
 
 const props=defineProps({conversationId:{type:String,required:true},terminal:Boolean,panel:{type:String,default:null}});
-const emit=defineEmits(['close-panel','open-terminal','open-peer','open-group','presence']);
+const emit=defineEmits(['close-panel','open-panel','open-terminal','open-peer','open-group','presence','context']);
 const workspace=inject('workspace');
 const isAdmin=computed(()=>currentUser.value?.role==='admin');
 // Wide enough for the terminal beside the conversation, and each side's share; too
@@ -147,6 +154,20 @@ const inspectorAllowed=computed(()=>isAdmin.value&&detail.value?.mode==='claude'
 const sidePanel=computed(()=>props.panel==='inspector'&&!inspectorAllowed.value?null:props.panel);
 const profileOpen=computed({get:()=>sidePanel.value==='profile',set:open=>{if(!open&&sidePanel.value==='profile')emit('close-panel');}});
 const agent=useCellAgent({workspace,conversationId:computed(()=>props.conversationId),detail,refresh,profileOpen});
+// The usage view's auto-compact row opens this cell's Agent Profile at that choice, as
+// the conversation page's opens its own (js/agent-chat.js openAutoCompactChoice).
+agent.cell.openAutoCompactChoice=async()=>{
+ emit('open-panel','profile');
+ for(let i=0;i<20&&!disposed;i++){
+  await new Promise(r=>setTimeout(r,100));
+  const row=root.value?.querySelector('.split-side .agent-auto-compact');
+  if(!row?.offsetParent)continue;
+  row.scrollIntoView({block:'center'});
+  const box=row.getBoundingClientRect();
+  (row.querySelector('a')||row).dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,clientX:box.left+box.width/2,clientY:box.top+box.height/2}));
+  return;
+ }
+};
 provide('workspace',agent.cell);
 const {locked,action,operationTitle,operationSteps,operationPercent}=agent;
 // The split view asks before its profile's unsaved changes go with another agent or panel.
@@ -155,6 +176,12 @@ const cellError=agent.error,operationError=agent.operationError;
 // The light by the agent's name above the cell, as in the conversation's navbar.
 const presence=computed(()=>{const d=detail.value;if(!d)return 'offline';return agent.activity.value?'working':d.connected?'online':'offline';});
 watch(presence,p=>emit('presence',p),{immediate:true});
+// How full its context is, for the ring above the cell.
+watch(()=>JSON.stringify(detail.value?.contextUsage??null),()=>emit('context',detail.value?.contextUsage??null),{immediate:true});
+// The usage view's refresh button: the agent asked again, and the plan's limits asked of
+// Anthropic again, as on the conversation page.
+const usageRefreshing=ref(false);
+async function refreshUsage(){if(usageRefreshing.value)return;usageRefreshing.value=true;try{await Promise.all([refresh(),loadUsage({fresh:true}).catch(()=>{})]);}finally{usageRefreshing.value=false;}}
 
 // A cell has no bar under a navbar, so a turn it did not start (from the terminal,
 // say) shows in the typing bubble too, with the button that stops it.

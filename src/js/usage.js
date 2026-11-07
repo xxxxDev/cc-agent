@@ -1,7 +1,7 @@
 import { computed, ref, watch } from 'vue';
 import { t } from './i18n.js';
 import { api, currentUser } from './auth.js';
-import { embedded, splitView } from './embed.js';
+import { embedded } from './embed.js';
 
 // How much of the Claude subscription is used, for an admin (the
 // endpoints are admin only). Shown at the foot of the desktop
@@ -11,7 +11,9 @@ import { embedded, splitView } from './embed.js';
 // appears, every five minutes, and when the app comes back to the front.
 export const claudeUsage = ref(null);
 
-export const usageAllowed = () => !embedded && !splitView && currentUser.value?.role === 'admin';
+// The split view too, since its cells have the usage view:
+// only an open usage view there asks, as the split view has no sidebar.
+export const usageAllowed = () => !embedded && currentUser.value?.role === 'admin';
 
 export const usageGroups = computed(() => {
   const when = iso => { if (!iso) return ''; const d = new Date(iso), now = new Date(), hm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
