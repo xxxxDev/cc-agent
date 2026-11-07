@@ -382,6 +382,7 @@ function relays(stateRoot, conversation) {
   return state ? [...state.relays.values()] : [];
 }
 
+const READ_SLICE = Number(process.env.CC_AGENT_TRANSCRIPT_SLICE) || 16 * 1024 * 1024;
 function read(file) {
   let stat;
   try { stat = fs.statSync(file); } catch { readers.delete(file); return null; }
@@ -392,21 +393,27 @@ function read(file) {
     let fd;
     try {
       fd = fs.openSync(file, 'r');
-      const length = stat.size - state.offset;
-      const buffer = Buffer.allocUnsafe(length);
-      const read = fs.readSync(fd, buffer, 0, length, state.offset);
-      state.offset += read;
-      // Split on bytes, not characters: the tail may stop mid-record and even
-      // mid-codepoint, and decoding that would corrupt the next line.
-      const chunk = Buffer.concat([state.partial, buffer.subarray(0, read)]);
-      const end = chunk.lastIndexOf(0x0a);
-      if (end < 0) { state.partial = chunk; return state; }
-      state.partial = chunk.subarray(end + 1);
-      for (const line of chunk.subarray(0, end).toString('utf8').split('\n')) {
-        if (!line) continue;
-        let record;
-        try { record = JSON.parse(line); } catch { continue; }
-        absorb(state, record);
+      // In slices: a long session's transcript can pass 512 MB, more than one string
+      // can hold, and decoding it whole threw, so after a restart such an agent showed
+      // no turn and none of its subagents at work.
+      while (state.offset < stat.size) {
+        const length = Math.min(stat.size - state.offset, READ_SLICE);
+        const buffer = Buffer.allocUnsafe(length);
+        const read = fs.readSync(fd, buffer, 0, length, state.offset);
+        if (read <= 0) break;
+        state.offset += read;
+        // Split on bytes, not characters: the tail may stop mid-record and even
+        // mid-codepoint, and decoding that would corrupt the next line.
+        const chunk = state.partial.length ? Buffer.concat([state.partial, buffer.subarray(0, read)]) : buffer.subarray(0, read);
+        const end = chunk.lastIndexOf(0x0a);
+        if (end < 0) { state.partial = Buffer.from(chunk); continue; }
+        state.partial = Buffer.from(chunk.subarray(end + 1));
+        for (const line of chunk.subarray(0, end).toString('utf8').split('\n')) {
+          if (!line) continue;
+          let record;
+          try { record = JSON.parse(line); } catch { continue; }
+          absorb(state, record);
+        }
       }
     } catch { return state; }
     finally { if (fd !== undefined) try { fs.closeSync(fd); } catch {} }
