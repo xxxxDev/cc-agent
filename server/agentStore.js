@@ -980,7 +980,9 @@ function send(c,text,key,attachmentIds=[],extra={}) {
   extra={...extra};delete extra.replyTo;
   // Words from another machine stay out of the owner's own channel event: the agent
   // gets only the id and reads them with history.
-  if(target)Object.assign(extra,{replyTo:target.id,replyPreview:replyPreviewOf(target),...(target.peer||target.role==='relay'?{replyOutside:true}:{})});
+  // The agent's words to or for an outside chat count as outside too, as user_history withholds
+  // them (review L1, 2026-11-08).
+  if(target)Object.assign(extra,{replyTo:target.id,replyPreview:replyPreviewOf(target),...(target.peer||target.role==='relay'||target.outbound||target.role==='assistant'&&[target.inReplyTo,target.nudgeFor].some(id=>id&&c.messages.find(x=>x.id===id)?.external)?{replyOutside:true}:{})});
  }
  // Started only once the message is known good, so a refused one starts nothing.
  if(wake){
@@ -1607,7 +1609,7 @@ function bridge(c,action,data={}) {
   const raw=String(data.query||'').trim(),q=String(data.query||'').slice(0,120).toLowerCase();
   const byId=raw?c.messages.find(m=>m.id===raw):null;
   const found=[...(byId?[byId]:[]),...c.messages.filter(m=>m!==byId&&(!q||String(m.text||'').toLowerCase().includes(q))).slice(byId?-29:-30)];
-  return {messages:found.map(m=>({...m,text:m.role==='assistant'?attachments.channelText(stateRoot,c,m):neutralSender(attachments.channelText(stateRoot,c,m))}))};
+  return {messages:found.map(({replyPreview,...m})=>({...m,...(m.replyOutside?{}:replyPreview!==undefined?{replyPreview}:{}),text:m.role==='assistant'?attachments.channelText(stateRoot,c,m):neutralSender(attachments.channelText(stateRoot,c,m))}))};
  }
  else if(action==='precompact'){
   // When it started, for the page to say how long it has run; a /compact asked
