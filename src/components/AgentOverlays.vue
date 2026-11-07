@@ -22,24 +22,24 @@
   </div>
  </f7-page></f7-view></f7-popup>
 
-  <f7-popup :opened="infoOpen" :close-by-backdrop-click="false" @popup:closed="infoOpen=false" class="conversation-info"><f7-view><f7-page><f7-navbar><f7-nav-left><f7-link icon-only icon-f7="xmark" :aria-label="ct('關閉對話資訊')" @click="closeProfile()"/></f7-nav-left><f7-nav-title>{{'Agent Profile'}}</f7-nav-title><f7-nav-right><!-- Save without scrolling to the button at the end. --><f7-link v-if="user?.role==='admin'" icon-only icon-f7="floppy_disk" class="profile-save" :class="{disabled:profileSaving||!profileDirty||!profileDraft?.title?.trim()}" :aria-label="ct('保存 Agent Profile')" @click="!profileSaving&&profileDirty&&profileDraft?.title?.trim()&&saveProfile()"/></f7-nav-right></f7-navbar>
+  <f7-popup ref="infoPopup" :opened="infoOpen" :close-by-backdrop-click="false" :swipe-to-close="sheetSwipe" @popup:closed="infoOpen=false" class="conversation-info" :class="{'sheet-swipe':sheetSwipe}"><div v-if="sheetSwipe" class="sheet-grabber" aria-hidden="true"/><f7-view><f7-page><f7-navbar><f7-nav-left><f7-link icon-only icon-f7="xmark" :aria-label="ct('關閉對話資訊')" @click="closeProfile()"/></f7-nav-left><f7-nav-title>{{'Agent Profile'}}</f7-nav-title><f7-nav-right><!-- Save without scrolling to the button at the end. --><f7-link v-if="user?.role==='admin'" icon-only icon-f7="floppy_disk" class="profile-save" :class="{disabled:profileSaving||!profileDirty||!profileDraft?.title?.trim()}" :aria-label="ct('保存 Agent Profile')" @click="!profileSaving&&profileDirty&&profileDraft?.title?.trim()&&saveProfile()"/></f7-nav-right></f7-navbar>
    <AgentProfilePanel v-if="infoOpen" @trace-start="infoOpen=false"/>
   </f7-page></f7-view></f7-popup>
 <!-- Searching this conversation, from the search
        button beside the terminal switch; a tap on a result opens the message. -->
-  <f7-popup :opened="searchPopupOpen" @popup:opened="focusSearch" @popup:closed="searchPopupOpen&&(searchOpen=false)" class="message-search-popup"><f7-view><f7-page>
+  <f7-popup :opened="searchPopupOpen" :swipe-to-close="sheetSwipe" @popup:opened="focusSearch" @popup:closed="searchPopupOpen&&(searchOpen=false)" class="message-search-popup" :class="{'sheet-swipe':sheetSwipe}"><div v-if="sheetSwipe" class="sheet-grabber" aria-hidden="true"/><f7-view><f7-page>
    <f7-navbar><f7-nav-left><f7-link popup-close icon-only icon-f7="xmark" :aria-label="ct('關閉搜尋')"/></f7-nav-left><f7-nav-title>{{ct('搜尋這個對話')}}</f7-nav-title></f7-navbar>
    <f7-list inset><f7-list-input v-model:value="searchText" type="search" :placeholder="ct('搜尋聊天記錄')" :aria-label="ct('搜尋聊天記錄')" class="message-search-input"/></f7-list>
    <MessageSearchResults v-if="searchPopupOpen&&selected" :query="searchText" :conversation-id="selected" @pick="pickFound"/>
   </f7-page></f7-view></f7-popup>
 <!-- The agent's checklists on a phone. -->
-  <f7-popup :opened="checklistPopupOpen" @popup:closed="checklistPopupOpen&&(checklistOpen=false)" class="checklist-popup"><f7-view><f7-page>
+  <f7-popup :opened="checklistPopupOpen" :swipe-to-close="sheetSwipe" @popup:closed="checklistPopupOpen&&(checklistOpen=false)" class="checklist-popup" :class="{'sheet-swipe':sheetSwipe}"><div v-if="sheetSwipe" class="sheet-grabber" aria-hidden="true"/><f7-view><f7-page>
    <f7-navbar><f7-nav-left><f7-link popup-close icon-only icon-f7="xmark" :aria-label="ct('關閉待辦事項')"/></f7-nav-left><f7-nav-title>{{ct('待辦事項')}}</f7-nav-title><f7-nav-right><f7-link icon-only icon-f7="plus" class="checklist-new" :aria-label="ct('新增清單')" @click="newChecklist"/></f7-nav-right></f7-navbar>
    <ChecklistPanel v-if="checklistPopupOpen" :key="selected"/>
   </f7-page></f7-view></f7-popup>
 <!-- How full the context is, from the phone's 「⋯」 menu or beside the terminal; the right
        column on a desktop. -->
-  <f7-popup :opened="usagePopupOpen" @popup:closed="usagePopupOpen&&(usageOpen=false)" class="usage-popup"><f7-view><f7-page>
+  <f7-popup :opened="usagePopupOpen" :swipe-to-close="sheetSwipe" @popup:closed="usagePopupOpen&&(usageOpen=false)" class="usage-popup" :class="{'sheet-swipe':sheetSwipe}"><div v-if="sheetSwipe" class="sheet-grabber" aria-hidden="true"/><f7-view><f7-page>
    <f7-navbar><f7-nav-left><f7-link popup-close icon-only icon-f7="xmark" :aria-label="ct('關閉用量')"/></f7-nav-left><f7-nav-title>{{ct('用量')}}</f7-nav-title><f7-nav-right><f7-link icon-only icon-f7="arrow_clockwise" class="usage-refresh" :class="{spinning:usageRefreshing}" :aria-label="ct('重新整理用量')" @click="refreshUsage"/></f7-nav-right></f7-navbar>
    <ContextUsagePanel v-if="usagePopupOpen" :usage="detail?.contextUsage" :agent="detail"/>
   </f7-page></f7-view></f7-popup>
@@ -77,6 +77,22 @@ export default {components:{GlassDropdown,AgentProfileFields,AgentProfilePanel,M
  // closeProfile, which asks first about unsaved changes.
  const onBackdrop=e=>{if(w.infoOpen.value&&e.target?.classList?.contains('popup-backdrop')&&document.querySelector('.popup.conversation-info.modal-in'))w.closeProfile();};
  document.addEventListener('click',onBackdrop);onBeforeUnmount(()=>document.removeEventListener('click',onBackdrop));
+ // The phone sheets close with a finger pulled down, as an iOS sheet does: Framework7's
+ // own swipeToClose, which pulls the sheet only while its
+ // page is scrolled to the top, so a long list still scrolls. framework7-vue reads it only
+ // when the popup mounts, so it is on wherever there is touch and off for a mouse, where a
+ // drag in the popup a computer shows beside the terminal would close it.
+ const sheetSwipe=typeof window!=='undefined'&&('ontouchstart' in window||(window.DocumentTouch&&document instanceof window.DocumentTouch))?'to-bottom':false;
+ // Agent Profile with unsaved changes: Framework7 calls the popup's close right after the
+ // element's popup:swipeclose, so that one call goes through closeProfile instead, which
+ // asks; on 繼續編輯 the sheet springs back, on 放棄修改 it closes as from its ✕.
+ // framework7-vue's own @popup:swipeclose never fires (it listens for swipeClose, Framework7
+ // emits swipeclose), hence the element's event.
+ const infoPopup=ref(null);
+ function profileSwipeClose(e){const popup=e.currentTarget?.f7Modal;if(!w.profileDirty.value||!popup)return;const close=popup.close;
+  popup.close=function(){popup.close=close;popup.$el?.removeClass('swipe-close-to-bottom');w.closeProfile();return popup;};}
+ watch(()=>infoPopup.value?.$el,(el,old)=>{old?.removeEventListener?.('popup:swipeclose',profileSwipeClose);el?.addEventListener?.('popup:swipeclose',profileSwipeClose);},{flush:'post',immediate:true});
+ onBeforeUnmount(()=>infoPopup.value?.$el?.removeEventListener?.('popup:swipeclose',profileSwipeClose));
  // Only what the JSON names is replaced. Folders are left out while full access is on:
  // the lists are hidden then, so a folder the server refuses could not be fixed.
  function applyImport(text){
@@ -94,10 +110,16 @@ export default {components:{GlassDropdown,AgentProfileFields,AgentProfilePanel,M
  async function onImportFile(e){const f=e.target.files?.[0];e.target.value="";if(!f)return;if(f.size>200000){importDone.value=false;importNote.value=ct("檔案太大");return;}applyImport(await f.text());}
  function focusSearch(){document.querySelector('.message-search-popup .message-search-input input')?.focus();}
  async function pickFound(hit){w.searchOpen.value=false;await w.showMessage(hit.conversationId,hit.messageId);}
- return {...w,newChecklist:()=>askNewChecklist(w),personal,importText,importNote,importDone,importRow,newBody,applyImport,onImportFile,focusSearch,pickFound,
+ return {...w,newChecklist:()=>askNewChecklist(w),sheetSwipe,infoPopup,personal,importText,importNote,importDone,importRow,newBody,applyImport,onImportFile,focusSearch,pickFound,
  menuAction(value){const c=w.menuConversation.value;if(!c)return;if(value==="rename")w.renameConversation(c);if(value==="remove")w.deleteConversation(c);w.menuConversation.value=null;}}}};
 </script>
 <style scoped>
+/* A phone sheet stops short of the top, so the page's navbar shows above it, as iOS sheets
+   do; inside it the status bar's room is not needed. */
+.popup.sheet-swipe{top:calc(var(--f7-safe-area-top) + 52px);height:auto;bottom:0;border-radius:16px 16px 0 0;overflow:hidden;--f7-safe-area-top:0px;}
+/* The grab handle of a sheet that closes by a pull down, inside the navbar's top: above the
+   view, which Framework7 lifts to z-index 5000. */
+.sheet-grabber{position:absolute;top:calc(var(--f7-safe-area-top) + 5px);left:50%;width:36px;height:5px;margin-left:-18px;border-radius:var(--cc-radius-pill);background:var(--cc-color-text-tertiary);z-index:5001;pointer-events:none;}
 .import-actions{display:flex;flex-wrap:wrap;gap:8px;padding:0 16px;margin:4px 0 12px;}
 .agent-create-body{display:flow-root;padding-bottom:12px;}
 /* The new-agent sheet's cards are one width and follow one another as Agent Profile's do. */
