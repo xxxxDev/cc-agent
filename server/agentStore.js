@@ -1683,8 +1683,8 @@ function bridge(c,action,data={}) {
    // or explain. Keyed by when it started and what it
    // is, so one already named never blocks again.
    if(data.checkFinal===true&&data.stopHookActive!==true){
-    let jobs=[];try{jobs=transcript.currentWork(stateRoot,c).commands||[];}catch{}
-    const keyOf=job=>String(job.since||'')+'|'+String(job.description||'');
+    let jobs=[];try{const w=transcript.currentWork(stateRoot,c);jobs=[...(w.commands||[]),...(w.lingering||[]).map(j=>({...j,subagent:true}))];}catch{}
+    const keyOf=job=>(job.subagent?'subagent|':'')+String(job.since||'')+'|'+String(job.description||'');
     const fresh=jobs.filter(job=>!(g.bgReminded||[]).includes(keyOf(job)));
     if(fresh.length){
      g.bgReminded=[...(g.bgReminded||[]),...fresh.map(keyOf)].slice(-50);
@@ -2783,11 +2783,21 @@ function wrapUpNote(m){return m.wrapUp?`[Sent automatically by CC Agent: CC Agen
 const SERVICE_STARTED_AT=Date.now();
 // The background commands a turn left running, named once when the turn ends (the Stop
 // hook's result, below). Kept apart from the wrap-up check.
-function backgroundReminder(commands,language,now=Date.now()){
+function commandReminder(commands,language,now){
  const zh=language!=='en';
  const lines=commands.map(job=>{const at=Date.parse(job.since||''),minutes=Number.isFinite(at)?Math.max(0,Math.round((now-at)/60000)):null;const what=job.description||(zh?'（沒有說明的指令）':'a command with no description');return '- '+what+(minutes===null?'':zh?`（已跑 ${minutes} 分鐘）`:` (running for ${minutes} min)`);});
  return zh?`CC Agent 自動提醒（不是擁有者說的）：你還有 ${commands.length} 個背景指令在跑：\n${lines.join('\n')}\n不再需要的請用 TaskStop 關掉；要留著的，請在回覆裡簡短說明為什麼留著。`
   :`An automatic reminder from CC Agent, not the owner: you still have ${commands.length} background command${commands.length===1?'':'s'} running:\n${lines.join('\n')}\nStop the ones you no longer need with TaskStop; for any you keep, say briefly in your reply why.`;
+}
+function backgroundReminder(jobs,language,now=Date.now()){
+ const zh=language!=='en';
+ // A helper that has already reported but left something of its own running is named
+ // apart: its work is done, so it is stopped, not explained.
+ const done=jobs.filter(j=>j.subagent),commands=jobs.filter(j=>!j.subagent);
+ const helperText=done.length?(zh?`你有 ${done.length} 個子代理已經回報完成，但還留著它自己的背景工作，所以一直顯示工作中：\n${done.map(j=>'- '+(j.description||'（沒有說明的子代理）')).join('\n')}\n讀完它的結果後，用 TaskStop 關掉它（它的成果不會不見）；真的還要它做事，請在回覆裡簡短說明。`
+  :`You have ${done.length} subagent${done.length===1?'':'s'} that already reported but left background work of ${done.length===1?'its':'their'} own running, so ${done.length===1?'it shows':'they show'} as at work:\n${done.map(j=>'- '+(j.description||'a subagent with no description')).join('\n')}\nOnce you have read the result, stop it with TaskStop (its work stays); if it still has work to do, say so briefly in your reply.`):'';
+ if(!commands.length)return (zh?'CC Agent 自動提醒（不是擁有者說的）：':'An automatic reminder from CC Agent, not the owner: ')+helperText;
+ return commandReminder(commands,language,now)+(helperText?'\n\n'+helperText:'');
 }
 function runWrapUps({now=Date.now(),startedAt=SERVICE_STARTED_AT,ownerActive=()=>true}={}){
  for(const c of state.conversations){

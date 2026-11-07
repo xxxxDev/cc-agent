@@ -156,6 +156,10 @@ function trackBackground(state, record) {
     for (const notice of text.split('<task-notification>').slice(1)) {
       const body = notice.split('</task-notification>')[0], id = TASK_ID_ONE.exec(body)?.[1];
       if (id && !WAITING_ON_OWN_WORK.test(body)) state.background.delete(id);
+      // It reported, yet something it started still runs (a monitor, a test run): it is
+      // marked so the turn's end can name it for the agent to stop (a helper done for an
+      // hour still showed at work).
+      else if (id && state.background.has(id)) { const job = state.background.get(id); job.reported = true; job.reportedAt = record.timestamp || null; }
     }
   }
 }
@@ -509,7 +513,7 @@ function liveBackground(state, now = Date.now()) {
 // (a subagent at work, and no spinner on the list); for the wrap-up check, how many
 // of them are subagents and which are commands.
 function currentWork(stateRoot, conversation) {
-  const none = {inTurn: false, background: 0, subagents: 0, commands: []};
+  const none = {inTurn: false, background: 0, subagents: 0, commands: [], lingering: []};
   const run = (conversation?.runs || []).at(-1);
   if (conversation?.mode !== 'claude' || !run) return none;
   const file = locate(path.join(stateRoot, 'workspaces', conversation.id, 'g' + run.number), run.sessionId);
@@ -517,7 +521,8 @@ function currentWork(stateRoot, conversation) {
   if (!state) return none;
   const jobs = liveBackground(state);
   return {inTurn: inTurn(state), background: jobs.length, subagents: jobs.filter(j => j.kind === 'subagent').length,
-    commands: jobs.filter(j => j.kind === 'command').map(({description, since}) => ({description, since}))};
+    commands: jobs.filter(j => j.kind === 'command').map(({description, since}) => ({description, since})),
+    lingering: jobs.filter(j => j.kind === 'subagent' && j.reported).map(({description, reportedAt}) => ({description, since: reportedAt}))};
 }
 
 // Whether the session has finished a turn since `since` (ms) and is not in one now: a
