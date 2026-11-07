@@ -522,7 +522,7 @@ function currentWork(stateRoot, conversation) {
   const jobs = liveBackground(state);
   return {inTurn: inTurn(state), background: jobs.length, subagents: jobs.filter(j => j.kind === 'subagent').length,
     commands: jobs.filter(j => j.kind === 'command').map(({description, since}) => ({description, since})),
-    lingering: jobs.filter(j => j.kind === 'subagent' && j.reported).map(({description, reportedAt}) => ({description, since: reportedAt}))};
+    lingering: jobs.filter(j => j.kind === 'subagent' && j.reported).map(({description, since, reportedAt}) => ({description, since, reportedAt}))};
 }
 
 // Whether the session has finished a turn since `since` (ms) and is not in one now: a
