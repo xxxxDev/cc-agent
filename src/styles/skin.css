@@ -426,6 +426,9 @@ body {
   background: var(--cc-color-panel, #252525); color: var(--cc-color-text, #fff);
   border: 1px solid var(--usage-track, rgba(127, 127, 127, .3)); box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
 }
+/* The same tip under an icon button in a navbar or a split cell's header (js/hoverTip.js). */
+.sidebar-tip.hover-tip { transform: none; }
+.sidebar-tip.hover-tip[hidden] { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .cc-app .panel-left.panel-in-breakpoint,
   .cc-app .panel-left.panel-in-breakpoint ~ .views,

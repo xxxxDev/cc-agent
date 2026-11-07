@@ -23,6 +23,7 @@ import {startViewportRecovery} from './js/viewportRecovery.js';
 Framework7.use(Framework7Vue);
 import safeDialogs from './js/safeDialog.js';
 import { PRODUCT } from './js/productConfig.js';
+import { tipDirective } from './js/hoverTip.js';
 Framework7.use(safeDialogs);
 
 // Build marker: log the build id on every load so the running build can be confirmed
@@ -31,6 +32,8 @@ console.log(`[${PRODUCT.name}] build ${__BUILD_ID__}`);
 
 const app = createApp(App);
 app.use(createPinia());
+// v-tip: an icon button's name under it while the mouse rests on it (js/hoverTip.js).
+app.directive('tip', tipDirective);
 registerComponents(app);
 app.mount('#app');
 

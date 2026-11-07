@@ -2,7 +2,7 @@
   <!-- How full the main context is, in the conversation's navbar beside the checklist
        button (issue #12 point 1): the sidebar's
        usage ring at a navbar icon's size, its percentage in the middle. -->
-  <f7-link icon-only class="context-ring-open" :class="{'inspector-on': on}" :aria-pressed="String(on)" :aria-label="label" :title="label" @click="$emit('toggle')">
+  <f7-link icon-only class="context-ring-open" :class="{'inspector-on': on}" :aria-pressed="String(on)" :aria-label="label" @click="$emit('toggle')">
     <UsageRing class="context-ring" :percent="percent" :class="{stale: usage?.main?.stale}"><span class="context-ring-text" aria-hidden="true">{{ percent === null ? '' : percent }}</span></UsageRing>
   </f7-link>
 </template>
