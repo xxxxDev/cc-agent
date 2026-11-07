@@ -32,7 +32,8 @@ This is the full tour. The [README](../README.md) is the short version.
 - **Slash commands.** Type `/` for Claude Code's own commands, such as `/compact`, `/context`, `/mcp`, `/usage`, `/status` and `/diff`. They run in the agent's terminal.
 - **Questions from the terminal.** When Claude Code stops to ask something in its terminal, such as a permission prompt or a choice, the chat shows it as a card you can answer.
 - **Stop this turn.** Interrupt a reply in progress without stopping the agent.
-- **Checklists.** An agent keeps steps, to-dos and things to verify in checklists beside the chat. Tap an item to move it on (to do, doing, done); long-press to mark it blocked, add a note, edit or delete it. You can add your own items too.
+- **To-dos.** An agent keeps steps, to-dos and things to verify in lists under **To-dos** beside the chat. Tap an item to move it on (to do, doing, done); long-press to mark it blocked, add a note, edit or delete it. You can add your own items too.
+- **Finished to-dos.** By default every list is kept. An admin can have a list whose every item is done deleted 1, 3, 7 or 30 days after its last change, with **Keep finished to-dos** in the Admin tab's Wrap-up group. A list with anything still to do, in progress or blocked is never deleted, and neither are a deleted agent's lists.
 - **Wrap-up check (optional).** It is off until an admin turns it on in the Admin tab. Then an agent that has finished a task and sat idle for 10 minutes (the admin can change the wait) is asked to make sure its work is saved and its notes are current. It is not asked after a turn that only read or answered, and it is not asked while the agent still has background commands or subagents running. The admin can change the text it sends, and an agent can be left out by turning off **Automatic wrap-up check** in its Agent Profile.
 
 
@@ -104,7 +105,10 @@ Agents on two of your computers can talk to each other, for example a build agen
 - **Live progress** in the conversation's title bar, and whether it is still working in the background.
 - **Terminal view.** Switch to the agent's real Claude Code terminal, beside the chat on a computer. An admin turns the switch on in the Admin tab.
 - **Transcript inspector.** Tap any message to see what that exchange sent to the model and got back, with tool calls, tokens and an estimated cost from API reference prices (not a bill), and the subagents the agent started. Admins only, turned on in the Admin tab.
-- **Split view (experimental).** On a computer, an admin can show several conversations side by side and drag the columns and rows to size.
+- **Context ring and usage view.** On a computer, a ring beside the To-dos button shows how full the agent's context is. It opens **Usage**: the context window (how much is used, where it auto-compacts, the model and effort), unfolding to each running subagent's context; your plan's 5-hour and weekly limits; the agent's auto-compact timing, which an admin can open in Agent Profile from there; and the agent's total tokens and estimated cost. A refresh button asks again. On a phone, **Usage** is in the ⋯ menu.
+- **Where the numbers come from.** Claude Code reports them through its status line, which CC Agent sets for each agent. Your own status line is kept: for a full-access agent, CC Agent's command also runs the status line in your Claude Code user settings and shows what it prints in the terminal. If an agent's workspace settings already have a status line of their own, it is left alone, and the usage view says its usage can't be shown.
+- **Split view (experimental).** On a computer, an admin can show several conversations side by side and drag the columns and rows to size. Each cell's header holds the conversation's buttons as small icons: the context ring, To-dos, search and Agent Profile, with the terminal and Transcript where they are turned on. A cell too narrow for them has them in its ⋯ menu.
+- **Icon names.** On a computer, resting the mouse on a navbar or split-view icon shows its name under it.
 - **Claude usage.** On macOS and Windows, the sidebar shows how much of your Claude subscription's 5-hour and weekly windows is used, for admins.
 - **Diagnostics.** A support view of an agent's state that never includes the account, memory, chat or credentials.
 
@@ -137,6 +141,7 @@ Agents on two of your computers can talk to each other, for example a build agen
 - **Push notifications** when an agent replies or a schedule finishes.
 - **Updates** are noticed within seconds of a new build being served, and offered without reloading under you.
 - **Restarts don't sign you out.** While the service restarts, the page keeps checking for up to 90 seconds instead of showing the sign-in screen.
+- **Sheets that pull down.** On a phone, To-dos, Usage, search and Agent Profile open as sheets below the page's navbar. Pull one down to close it, as on iOS; Agent Profile with unsaved changes asks first.
 - **A sidebar that folds.** On a computer, fold the sidebar to a rail of icons with the handle on its edge, or turn on **Auto-collapse the menu on a computer** in Settings so it opens only while the mouse is on it.
 - **Light and dark themes**, English and Traditional Chinese.
 - **The computer's own screen** is not part of CC Agent: to see and control a Mac from a phone, use [castpane](https://github.com/xxxxDev/castpane).
