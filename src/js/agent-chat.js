@@ -18,6 +18,7 @@ import {useMentionMenu,caretToEnd} from './mentionMenu.js';
 import {inSections} from './agentSections.js';
 import {viewingGroup,groups as chatGroups,loadGroups} from './groups.js';
 import {ref,computed,onMounted,onUnmounted,nextTick,watch} from 'vue';
+import {loadUsage} from './usage.js';
 import {secondClock} from './secondClock.js';
 import {SOURCES} from './agent-models.js';
 import {defaultAvatar} from './avatarShape.js';
@@ -237,6 +238,25 @@ async function toggleChecklist(){if(!checklistOpen.value&&profilePanelVisible.va
 watch(usagePanelVisible,open=>{if(!open)return;profilePanelOpen.value=false;searchOpen.value=false;checklistOpen.value=false;if(inspectorOpen.value){inspectorOpen.value=false;clearInspection();}});
 watch(()=>[profilePanelOpen.value,searchPanelVisible.value,inspectorOpen.value,checklistPanelVisible.value],([p,s,i,k])=>{if((p||s||i||k)&&wideScreen.value)usageOpen.value=false;});
 async function toggleUsage(){if(!usageOpen.value&&profilePanelVisible.value&&!(await mayCloseProfile()))return;usageOpen.value=!usageOpen.value;}
+// The usage view's refresh button: the agent asked again, and the plan's limits asked of
+// Anthropic again (the server still asks at most every five minutes).
+const usageRefreshing=ref(false);
+async function refreshUsage(){if(usageRefreshing.value)return;usageRefreshing.value=true;try{await Promise.all([attempt(refresh),loadUsage({fresh:true})]);}finally{usageRefreshing.value=false;}}
+// Its auto-compact row: the usage view saves nothing; for an
+// admin it opens Agent Profile at 自動壓縮時機 and opens that choice there.
+async function openAutoCompactChoice(){
+ usageOpen.value=false;await nextTick();
+ if(!(wideScreen.value&&!terminalOpen.value&&profilePanelOpen.value))await openProfile();
+ for(let i=0;i<20;i++){
+  await new Promise(r=>setTimeout(r,100));
+  const row=[...document.querySelectorAll('.agent-auto-compact')].find(el=>el.offsetParent);
+  if(!row)continue;
+  row.scrollIntoView({block:'center'});
+  const box=row.getBoundingClientRect();
+  (row.querySelector('a')||row).dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,clientX:box.left+box.width/2,clientY:box.top+box.height/2}));
+  return;
+ }
+}
 const usageRows=computed(()=>agentOperation.usageRows(detail.value?.usage));
 const agentOperationTitle=computed(()=>agentOperation.operationTitle(activity(detail.value)));
 const agentOperationSteps=computed(()=>{secondClock.value;const d=detail.value;return d?agentOperation.operationSteps(d,activity(d),operations.value[selected.value]):[];});
@@ -1071,6 +1091,6 @@ onMounted(()=>{
  poll=setInterval(tick,1200);});
 onUnmounted(()=>{boxWatch?.disconnect();document.removeEventListener('keydown',onEscape);document.removeEventListener('keydown',onFind);window.removeEventListener('popstate',restoreUrl);notifications.stop();document.removeEventListener('visibilitychange',onAppVisible);window.removeEventListener('focus',onAppFocus);unwatchWidth?.();disposed=true;cancelHistoryPaging();operations.value={};clearInterval(poll);live?.close();live=null;wakeRun++;});
 
-return {unreadOf,unreadLabel,unreadTotal,mixedList:computed(mixed),chosenByPresence,chooseByPresence,atStart,directOpening,toGroups,openingId,toList,cancelOpening,toggleGroupCollapse,openGroup,mention,pickMention,checklistOpen,checklistPanelVisible,checklistPopupOpen,toggleChecklist,usageOpen,usagePanelVisible,usagePopupOpen,toggleUsage,typingBubble,searchPanelVisible,searchPopupOpen,toggleSearch,enterConversation,searchOpen,searchText,foundMessage,searchMessages,showMessage,noteInBubble,pauseAgent,startAgent,allChosen,toggleAllChosen,slash,composerKeydown,chosenList,isChosen,toggleChosen,groupChosen,toggleGroupChosen,terminalSide,chatHidden,terminalWidthCss,startTerminalResize,moveGroups,listRows,sections,listGroups,listSources,listSource,chooseSource,addGroup,editingGroup,startGroupRename,cancelGroupRename,finishGroupRename,deleteGroup,uploadAvatar,resetAvatar,autoSort:agentPreferences.autoSort,backgroundProgress,agentAvatar,presence,embedded,recoverOrphanedConversation,activity,progressInBubble,progressInBar,showViewSwitch,showTerminalSwitch,showSubnavbar,usageRows,olderBusy,pagingBack,atBottom,loadOlder,onMessagesScroll,onHistoryWheel,onHistoryTouchStart,onHistoryTouchMove,onHistoryTouchEnd,onHistoryTouchCancel,toLatest,
+return {unreadOf,unreadLabel,unreadTotal,mixedList:computed(mixed),chosenByPresence,chooseByPresence,atStart,directOpening,toGroups,openingId,toList,cancelOpening,toggleGroupCollapse,openGroup,mention,pickMention,checklistOpen,checklistPanelVisible,checklistPopupOpen,toggleChecklist,usageOpen,usagePanelVisible,usagePopupOpen,toggleUsage,usageRefreshing,refreshUsage,openAutoCompactChoice,typingBubble,searchPanelVisible,searchPopupOpen,toggleSearch,enterConversation,searchOpen,searchText,foundMessage,searchMessages,showMessage,noteInBubble,pauseAgent,startAgent,allChosen,toggleAllChosen,slash,composerKeydown,chosenList,isChosen,toggleChosen,groupChosen,toggleGroupChosen,terminalSide,chatHidden,terminalWidthCss,startTerminalResize,moveGroups,listRows,sections,listGroups,listSources,listSource,chooseSource,addGroup,editingGroup,startGroupRename,cancelGroupRename,finishGroupRename,deleteGroup,uploadAvatar,resetAvatar,autoSort:agentPreferences.autoSort,backgroundProgress,agentAvatar,presence,embedded,recoverOrphanedConversation,activity,progressInBubble,progressInBar,showViewSwitch,showTerminalSwitch,showSubnavbar,usageRows,olderBusy,pagingBack,atBottom,loadOlder,onMessagesScroll,onHistoryWheel,onHistoryTouchStart,onHistoryTouchMove,onHistoryTouchEnd,onHistoryTouchCancel,toLatest,
  inspectorOpen,inspectorVisible,showInspectorButton,profilePanelOpen,profilePanelVisible,openProfile,wideScreen,inspectId,inspectData,inspectBusy,inspectError,inspect,toggleInspector,clearInspection,agentLocked,agentOperationTitle,agentOperationSteps,agentOperationPercent,agentOperationError,newProfile,profileDraft,profileSaving,saveProfile,profileDirty,closeProfile,guardOperation,syncProfileVersion,profileConflicts,files,fileInput,pickFiles,dropFiles,pasteFiles,removeFile,chooseFiles,previewDraft,ct,generation,user,busy,error,theme,menuConversation,menuPoint,preferenceThreshold,editMode,orderBusy,toggleEdit,bulkBusy,pauseEveryAgent,startEveryAgent,restartEveryAgent,reorderChats,onChatsIn,terminalOpen,conversations,selected,detail,search,draft,scroll,newOpen,infoOpen,newTitle,memoryDraft,filtered,statusLabel,awaitingReply,canSend,conversationMenu,renameConversation,deleteConversation,savePreferences,wakingId,waking,wakeError,closeNew,openNewChat,create,select,bottom,send,enterSend,action,interrupting,canInterrupt,interruptTurn,pause,restart,handoff,importHistory,saveMemory,time,renderMarkdown,renderTypedMarkdown};
 }

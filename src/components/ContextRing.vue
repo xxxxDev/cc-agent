@@ -19,7 +19,7 @@ const label = computed(() => ct('用量') + (percent.value === null ? '' : ' · 
 </script>
 
 <style scoped>
-.context-ring {width:26px;height:26px;}
+.context-ring {width:32px;height:32px;}
 .context-ring.stale {opacity:.55;}
-.context-ring-text {position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;letter-spacing:-.2px;color:var(--f7-navbar-link-color, var(--f7-theme-color));}
+.context-ring-text {position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;letter-spacing:-.2px;color:var(--f7-navbar-link-color, var(--f7-theme-color));}
 </style>

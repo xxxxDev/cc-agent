@@ -40,7 +40,7 @@
 <!-- How full the context is, from the phone's 「⋯」 menu or beside the terminal; the right
        column on a desktop. -->
   <f7-popup :opened="usagePopupOpen" @popup:closed="usagePopupOpen&&(usageOpen=false)" class="usage-popup"><f7-view><f7-page>
-   <f7-navbar><f7-nav-left><f7-link popup-close icon-only icon-f7="xmark" :aria-label="ct('關閉用量')"/></f7-nav-left><f7-nav-title>{{ct('用量')}}</f7-nav-title></f7-navbar>
+   <f7-navbar><f7-nav-left><f7-link popup-close icon-only icon-f7="xmark" :aria-label="ct('關閉用量')"/></f7-nav-left><f7-nav-title>{{ct('用量')}}</f7-nav-title><f7-nav-right><f7-link icon-only icon-f7="arrow_clockwise" class="usage-refresh" :class="{spinning:usageRefreshing}" :aria-label="ct('重新整理用量')" @click="refreshUsage"/></f7-nav-right></f7-navbar>
    <ContextUsagePanel v-if="usagePopupOpen" :usage="detail?.contextUsage" :agent="detail"/>
   </f7-page></f7-view></f7-popup>
 <GlassDropdown :open="!!menuConversation" :point="menuPoint" :items="user?.role==='admin'?[{value:'rename',label:ct('重新命名'),icon:'pencil'},{value:'remove',label:ct('刪除'),icon:'trash',danger:true}]:[]" @close="menuConversation=null" @select="menuAction"/></template>

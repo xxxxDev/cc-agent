@@ -50,7 +50,7 @@
    </div>
   </aside>
   <aside v-if="usagePanelVisible" class="profile-panel usage-panel" :aria-label="ct('用量')">
-   <header class="pp-head"><f7-link icon-only icon-f7="xmark" :aria-label="ct('關閉用量')" @click="usageOpen=false"/><div class="pp-title">{{ct('用量')}}</div><span class="pp-spacer"/></header>
+   <header class="pp-head"><f7-link icon-only icon-f7="xmark" :aria-label="ct('關閉用量')" @click="usageOpen=false"/><div class="pp-title">{{ct('用量')}}</div><f7-link icon-only icon-f7="arrow_clockwise" class="usage-refresh" :class="{spinning:usageRefreshing}" :aria-label="ct('重新整理用量')" :title="ct('重新整理用量')" @click="refreshUsage"/></header>
    <div class="pp-body"><ContextUsagePanel :usage="detail.contextUsage" :agent="detail"/></div>
   </aside>
   <aside v-if="checklistPanelVisible" class="profile-panel checklist-panel" :aria-label="ct('待辦事項')">
