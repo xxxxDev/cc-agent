@@ -61,8 +61,8 @@ body {
   --f7-page-bg-color: var(--cc-color-page);
   --f7-bars-bg-color: var(--cc-color-bars);
   /* Navbar geometry. */
-  --f7-navbar-height: 58px; /* F7 v9 default 76px: 7px above and below the 44px buttons */
-  --f7-navbar-large-title-height: 48px; /* 30px under the former 76px bar: the 18px it gave up keeps the large title clear of the buttons */
+  /* --f7-navbar-height: see "Navbar row as native iOS 26" below (58px without a safe area, 54px under one). */
+  /* --f7-navbar-large-title-height: also below (48px; 45px under a status bar, where the bar takes 3px). */
   --f7-tabbar-labels-height: var(--cc-size-tabbar);
   --f7-tabbar-label-font-size: var(--cc-font-label-sm);
   /* Search radius: the search field rounds at 24px; F7 v9 defaults the inline searchbar to 44px.
@@ -729,6 +729,68 @@ img[src$="/sources/anthropic-native.svg"] {
   width: 44px;
   min-width: 44px;
   padding: 0; /* a 44x44 circle */
+}
+
+/* ---- Navbar row as native iOS 26 (measured against the Settings app) ----
+ * Under a status bar the 44px buttons start right at the safe-area top, as iOS's do, with 10px
+ * below them: a 54px bar (Settings' separator at 100.7pt under a 47pt status bar).
+ * Without a safe area (a computer, a browser tab, a landscape phone, the pushed popup's page)
+ * they keep 7px above and below: a 58px bar. The large title gives up the 3px the bar takes
+ * (48px to 45px), so it stays where it was. Declared on every level that can carry its own
+ * --f7-safe-area-top (the popup's .page sets it to 0), so each resolves its own inset; the large
+ * title, page content and side columns follow --f7-navbar-height as before. */
+.cc-app,
+.cc-app .framework7-root,
+.cc-app .view,
+.cc-app .page,
+.cc-app .navbar {
+  --cc-navbar-above: max(0px, calc(7px - var(--f7-safe-area-top)));
+  --cc-navbar-below: calc(10px - var(--cc-navbar-above) * 3 / 7);
+  --f7-navbar-height: calc(44px + var(--cc-navbar-above) + var(--cc-navbar-below));
+  --f7-navbar-large-title-height: calc(45px + var(--cc-navbar-above) * 3 / 7);
+}
+.cc-app .navbar .navbar-inner {
+  padding-top: calc(var(--f7-safe-area-top) + var(--cc-navbar-above));
+  padding-bottom: var(--cc-navbar-below);
+}
+/* The app installed on an iPhone home screen (status bar style "default") starts the page right
+ * under the status bar with no safe-area inset, so the rule above would keep 7px above the
+ * buttons and they would sit 7pt below Settings'. There the bar is the native 54px with the
+ * buttons at the page's top, in portrait; popups keep their own. */
+@media (display-mode: standalone) and (orientation: portrait) {
+  @supports (-webkit-touch-callout: none) {
+    .cc-app :is(.framework7-root, .view, .page, .navbar):not(.popup *) {
+      --cc-navbar-above: 0px;
+    }
+  }
+}
+/* On a phone the outer buttons sit 20px in from each edge (iOS: 20pt on this width; F7 16px), and
+ * the back chevron is iOS's: about 1pt smaller (10.7x18.7pt) and 1.7pt left of the circle's
+ * centre. The page follows the buttons, as Settings does: the large title, inset lists, cards,
+ * blocks and their titles, and the Agents search row sit 20px in. A computer keeps 16px and
+ * F7's chevron. */
+@media (max-width: 767px) {
+  .cc-app,
+  .cc-app .framework7-root {
+    --f7-list-inset-side-margin: 20px;
+    --f7-card-margin-horizontal: 20px;
+    --f7-block-padding-horizontal: 20px;
+  }
+  .cc-app .navbar {
+    --f7-navbar-inner-padding-left: 20px;
+    --f7-navbar-inner-padding-right: 20px;
+    --f7-navbar-large-title-padding-left: 20px;
+    --f7-navbar-large-title-padding-right: 20px;
+  }
+  .cc-app .navbar .left .icon-back::after {
+    font-size: 18.7px;
+    transform: translateX(-1.7px);
+  }
+  /* The </> glyph's ink sits 1px below its box's centre (Safari and Chrome alike); the "⋯"
+   * beside it is within half a pixel already. */
+  .cc-app .navbar .right .view-toggle[aria-pressed='false'] i.icon {
+    transform: translateY(-1px);
+  }
 }
 
 /* The attachment dialog titles a file name, which may be one long unbroken word. */

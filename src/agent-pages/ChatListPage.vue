@@ -105,7 +105,7 @@ import {inject,ref,computed} from "vue";import GlassDropdown from "../components
 </script>
 
 <style scoped>
-.agent-search-row {display:flex;align-items:center;gap:16px;padding:0 16px;margin:var(--f7-list-margin-vertical,32px) 0;}
+.agent-search-row {display:flex;align-items:center;gap:16px;padding:0 var(--f7-list-inset-side-margin,16px);margin:var(--f7-list-margin-vertical,32px) 0;}
 .agent-search {flex:1;}
 /* On a computer the row takes the list's own column, as the inset lists do in skin.css. */
 @media (min-width:1024px){.agent-search-row{max-width:min(828px,calc(100% - 32px));margin-left:auto;margin-right:auto;padding:0;}}
