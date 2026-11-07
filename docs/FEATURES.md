@@ -10,9 +10,14 @@ This is the full tour. The [README](../README.md) is the short version.
 - **Agent Profile.** Every agent has a profile: what it is for, its boundaries and its current state. The agent keeps it up to date itself, and you see each change as a card in the chat. Its long-term memory sits beside it.
 - **Carry on an existing session.** An admin can enter a local Claude Code session ID, and the new agent carries on that conversation. A session can also write a short JSON about itself, which you paste to fill in the create form.
 - **Start, pause, restart.** Pausing interrupts a reply in progress and keeps the chat. Restarting resumes the same session. The list can pause or restart every agent at once.
-- **Changing the model or effort** reconnects the agent and keeps the conversation.
-- **Handing off to a fresh session.** A long conversation is compacted by Claude Code. After a set number of compactions (5 unless an admin changes it, 0 turns it off), CC Agent saves the agent's memory and recent discussion and carries on in a new Claude Code session. You can also ask for this by hand.
-- **Deleted agents.** A deleted agent leaves the list but is kept for the number of days an admin chooses, and can be restored with its own session until then. Admins can also keep deleted agents for good.
+- **Saving the profile.** Agent Profile saves every change with one Save button, which lights up once something changed. A new model, effort or access reconnects the agent and keeps the conversation. A setting that waits for the agent to start again is asked about once: restart now, or once the current reply is done. Closing the profile with unsaved changes asks before discarding them, and an action such as start, restart, pause or handoff asks whether to save first.
+- **Subagents' model and effort.** In the Admin tab, an admin sets the model and effort that full-access Claude agents give their subagents, and can lock the model so every subagent uses it. An agent follows that or sets its own in Agent Profile. A change applies when the agent next starts.
+- **Auto-compact timing.** When Claude Code compacts an agent's conversation: Claude Code's default, or at 200k, 300k, 400k, 500k or 700k tokens. An admin sets it in the Admin tab's Handoff group, and an agent follows that or sets its own in Agent Profile. Too low and it keeps compacting, since starting up alone can take over 50k. A change applies when the agent next starts.
+- **Handing off to a fresh session.** A long conversation is compacted by Claude Code. After a set number of compactions (5 unless an admin changes it, 0 turns it off; an agent can set its own number in Agent Profile), CC Agent saves the agent's memory and recent messages and carries on in a new Claude Code session. You can also press **Continue** to do it by hand.
+- **What a handoff carries.** The 12 most recent messages, unless an admin changes it (0 to 50). Pressing **Continue** asks how many first, unless an admin turns that off. With **After a handoff** set to **At the first message**, the new session starts only when the next message arrives, which saves the start-up of a session nobody uses.
+- **Deleted agents.** A deleted agent leaves the list and can be restored with its own session. By default it is never purged; an admin can have deleted agents purged after 7 to 365 days.
+- **Signing Claude in again.** When Claude's login on this computer runs out, the chat shows a card and you get a push notification. An admin signs in again from that card, or by typing `/login`, with no terminal needed. Every agent on the computer shares that login.
+- **Agents that start agents.** The computer's owner can name agents by conversation id in `.local/agent-starters.json` (`{"conversationIds": [...]}`). Each must be a full-access Claude agent of an admin. From its next start it can list the Claude agents of active accounts and start stopped ones, each with its own profile and access, and the started agent's chat says who started it.
 - **Pictures and order.** Give an agent its own picture, drag the list into the order you like, and sort agents into sections.
 
 
@@ -22,13 +27,13 @@ This is the full tour. The [README](../README.md) is the short version.
 
 ## Chat
 
-- **Messages and files both ways.** Send text and attachments (up to 25 MB a file) and get files back from the agent, with previews.
+- **Messages and files both ways.** Send text and attachments (up to 10 files a message, 95 MB each) and get files back from the agent (up to 5 a reply, 25 MB each), with previews. On a computer, drag files onto the chat to attach them.
 - **Mentions, search and jump-to-latest.** Search one conversation's messages and jump to any result.
 - **Slash commands.** Type `/` for Claude Code's own commands, such as `/compact`, `/context`, `/mcp`, `/usage`, `/status` and `/diff`. They run in the agent's terminal.
 - **Questions from the terminal.** When Claude Code stops to ask something in its terminal, such as a permission prompt or a choice, the chat shows it as a card you can answer.
 - **Stop this turn.** Interrupt a reply in progress without stopping the agent.
 - **Checklists.** An agent keeps steps, to-dos and things to verify in checklists beside the chat. Tap an item to move it on (to do, doing, done); long-press to mark it blocked, add a note, edit or delete it. You can add your own items too.
-- **Wrap-up check (optional).** It is off until an admin turns it on in the Admin tab. Then an agent that has finished a task and gone idle is asked to make sure its work is saved and its notes are current. It is not asked after a turn that only read or answered, and it is not asked while the agent still has background commands or subagents running. The admin can change the text it sends.
+- **Wrap-up check (optional).** It is off until an admin turns it on in the Admin tab. Then an agent that has finished a task and sat idle for 10 minutes (the admin can change the wait) is asked to make sure its work is saved and its notes are current. It is not asked after a turn that only read or answered, and it is not asked while the agent still has background commands or subagents running. The admin can change the text it sends, and an agent can be left out by turning off **Automatic wrap-up check** in its Agent Profile.
 
 
 <p align="center">
@@ -53,7 +58,7 @@ Agents on two of your computers can talk to each other, for example a build agen
   <picture><source media="(prefers-color-scheme: dark)" srcset="../.github/assets/peer-link-dark.png"><img src="../.github/assets/peer-link-light.png" alt="Machine A calls machine B over SSH with a dedicated key; a forced command hands the messages to CC Agent there, and each side delivers them to its own agents"></picture>
 </p>
 
-- **Pair the machines once.** One machine shows a one-time code on **Admin → Peer link**, and you type it on the other. Then an admin on each side presses **Enable** and confirms with their password. Setup takes a dedicated SSH key restricted to one command; [PEER-LINK.md](PEER-LINK.md) walks through it.
+- **Pair the machines once.** One machine shows a one-time code on **Admin → Peer link**, and you type it on the other. Then an admin on each side presses **Enable** and confirms with their password (and two-step code), or with a passkey added with the password. Setup takes a dedicated SSH key restricted to one command; [PEER-LINK.md](PEER-LINK.md) walks through it.
 - **Open only the agents you choose.** In an agent's Agent Profile, turn on **Peer messages** and tick which agents of the other machine it may exchange messages with. Both sides must tick each other, and only full-access agents of an admin can take part.
 - **Talk in the chat you already use.** Name an agent of the other machine with `@` (listed as `machine/name` under **Another machine**), and your agent passes your words on with its `peer_send` tool; it can also write on its own for work you gave it. Its answer comes back into the same conversation. The message shows as a bubble with where it went and what became of it: queued, delivered, expired, refused or unsent. Messages from the other machine sit on the left, with that machine's icon and the agent's name.
 - **Answers wait for you.** An agent's reply to the other machine is a draft with **Send** and **Don't send** under it, unless you switch on **Send replies back automatically** for that agent.
@@ -100,7 +105,7 @@ Agents on two of your computers can talk to each other, for example a build agen
 - **Terminal view.** Switch to the agent's real Claude Code terminal, beside the chat on a computer. An admin turns the switch on in the Admin tab.
 - **Transcript inspector.** Tap any message to see what that exchange sent to the model and got back, with tool calls, tokens and an estimated cost from API reference prices (not a bill), and the subagents the agent started. Admins only, turned on in the Admin tab.
 - **Split view (experimental).** On a computer, an admin can show several conversations side by side and drag the columns and rows to size.
-- **Claude usage.** On macOS, the sidebar shows how much of your Claude subscription's 5-hour and weekly windows is used, for admins.
+- **Claude usage.** On macOS and Windows, the sidebar shows how much of your Claude subscription's 5-hour and weekly windows is used, for admins.
 - **Diagnostics.** A support view of an agent's state that never includes the account, memory, chat or credentials.
 
 
@@ -124,11 +129,14 @@ Agents on two of your computers can talk to each other, for example a build agen
 - **QR sign-in.** Bind the phone app once, then scan the code on a computer's sign-in page to sign it in without a password. You confirm by picking the number the computer shows, and the phone warns you when that computer is not on its network.
 - **Devices.** See every signed-in device and sign any of them out.
 - **Repeated guesses.** An IP with 10 failures in 15 minutes is blocked from password sign-in for an hour, then a day, then a week if it keeps happening. QR sign-in still works. An admin can lift a block.
+- **Guesses at one account.** When an account name gets 20 wrong passwords within an hour, from any addresses, or 10 wrong two-step codes in a day, it can sign in with a password only from networks it used in the last 30 days, for an hour (a day if it happens again). QR sign-in still works.
 
 ## The app
 
 - **Install it** to the home screen on iPhone, Android or a computer.
 - **Push notifications** when an agent replies or a schedule finishes.
 - **Updates** are noticed within seconds of a new build being served, and offered without reloading under you.
+- **Restarts don't sign you out.** While the service restarts, the page keeps checking for up to 90 seconds instead of showing the sign-in screen.
+- **A sidebar that folds.** On a computer, fold the sidebar to a rail of icons with the handle on its edge, or turn on **Auto-collapse the menu on a computer** in Settings so it opens only while the mouse is on it.
 - **Light and dark themes**, English and Traditional Chinese.
 - **The computer's own screen** is not part of CC Agent: to see and control a Mac from a phone, use [castpane](https://github.com/xxxxDev/castpane).

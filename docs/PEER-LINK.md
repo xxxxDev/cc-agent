@@ -10,7 +10,7 @@ Not running CC Agent? [agent-courier](https://github.com/xxxxDev/agent-courier) 
 
 ## What you get
 
-- **Pairing in the web app.** Machine B shows a one-time code. You type it on machine A. Each side's admin then enables the pairing with their password (and two-step code, if two-step sign-in is on).
+- **Pairing in the web app.** Machine B shows a one-time code. You type it on machine A. Each side's admin then enables the pairing with their password (and two-step code, if two-step sign-in is on), or with a passkey they added with the password.
 - **Agents you choose.** In an agent's Agent Profile, turn on **Peer messages**. Then tick which agents on the other machine it may exchange messages with. Both sides must tick each other.
 - **Messages in the chat.** A message from the other machine is a bubble on the left, with a line under it saying which machine and agent sent it. A message the agent sent shows where it went and what became of it: queued, delivered, expired, refused or unsent.
 - **@ the other machine's agents.** In the composer, @ lists the agents of the paired machine that this agent may write to, under **Another machine**, as `machine/name`.
@@ -66,7 +66,7 @@ To revoke the link, remove the line from `authorized_keys` on machine B, or pres
 
 ## Rules
 
-- **Which agents can join.** Only full-access agents of an active admin can be opened. Each one is opened on its own, with the admin's password. A scoped agent cannot be opened.
+- **Which agents can join.** Only full-access agents of an active admin can be opened. Each one is opened on its own, with the admin's password or a passkey added with it. A scoped agent cannot be opened.
 - **Who writes first.** An agent writes first with `peer_send`, for work the owner gave it.
 - **Only answers after someone else's message.** Once anything from someone else has arrived since the owner last wrote, `peer_send` is refused until the owner writes again. That includes a message from another machine, from another agent or session, or from outside. Until then the agent can only answer with `reply`.
 - **Replies are drafts by default.** The agent's final `reply` to a message from the other machine is sent back once. By default it is a draft: the owner presses **Send** or **Don't send** under it. In Agent Profile, **Send replies back automatically** sends replies without that step.

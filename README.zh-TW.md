@@ -58,7 +58,7 @@ CC Agent 跑在你自己的 Mac 上。你建立的每個 agent，都是 tmux 裡
 </tr>
 <tr>
 <td align="center"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/assets/sticker-done-dark.gif"><img src=".github/assets/sticker-done-light.gif" width="120" alt=""></picture></td>
-<td><b>重要的事會通知你。</b>agent 回覆或排程完成時，推播會送到你的手機。你也能即時看到 agent 正在做什麼、看它的終端機、它開的 subagent、token 用量和費用。</td>
+<td><b>重要的事會通知你。</b>agent 回覆或排程完成時，推播會送到你的手機。你也能即時看到 agent 正在做什麼、看它的終端機、它開的子代理、token 用量和費用。</td>
 </tr>
 </table>
 
@@ -109,7 +109,7 @@ CC Agent 跑在你自己的電腦上，目前在 macOS（Apple Silicon）上開�
 
 | 需要 | 用途 |
 | --- | --- |
-| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) 最新版（測試過 2.1.306），且已登入 | 每個 agent 都是一個 Claude Code session，CC Agent 用它的 channels 與 hooks |
+| [Claude Code](https://code.claude.com/docs/en/overview) 最新版（測試過 2.1.306；2.1.293 以上可用），且已登入 | 每個 agent 都是一個 Claude Code session，CC Agent 用它的 channels 與 hooks |
 | [Node.js](https://nodejs.org) 24 LTS 最新版（測試過 24.22.1；22.12 以上可用）與 npm | 執行伺服器、建置網頁 |
 | [tmux](https://github.com/tmux/tmux) 最新版（測試過 3.8；3.5 以上可用） | 讓每個 agent 的 session 在背景持續執行 |
 | Xcode Command Line Tools（macOS） | 選用，排程背景腳本用 Python 時提供 python3 |
@@ -120,7 +120,7 @@ CC Agent 跑在你自己的電腦上，目前在 macOS（Apple Silicon）上開�
 ## 開始使用
 
 ```sh
-git clone https://github.com/<you>/cc-agent.git
+git clone https://github.com/xxxxDev/cc-agent.git
 cd cc-agent
 npm install
 npm run build
@@ -131,11 +131,13 @@ npm start
 
 第一次啟動時，它會建立資料夾 `.local/`、自己的密鑰和推播金鑰，以及一個 `admin` 帳號，隨機密碼存在 `.local/local-access.json`（只有你讀得到）。用 `admin` 和這組密碼登入、改掉密碼、開啟兩步驟驗證或加一把通行密鑰，接著建立一個 agent、幫它選個資料夾，跟它打聲招呼。
 
+被鎖在外面時，在執行 CC Agent 的電腦上跑 `node scripts/sign-in-rescue.mjs two-step <帳號>` 可以關掉那個帳號的兩步驟驗證，`protection <帳號>` 解除帳號的登入保護，`block <IP 位址>` 解除 IP 的封鎖。之後在一天內重新啟動 CC Agent 就會套用。
+
 ## 在其他系統上執行
 
 CC Agent 目前只在 Apple 晶片的 macOS 上部署過。要在其他系統上執行，請自行驗證。以下幾點可以當起點：
 
-- **Linux：** `npm install` 之前先裝好 C++ 編譯工具。終端機檢視用的 node-pty 沒有 Linux 的現成版本，安裝時會現場編譯。
+- **Linux：** `npm install` 之前先裝好 C++ 編譯工具。終端機檢視用的 node-pty 沒有 Linux 的現成版本，安裝時會現場編譯。限定範圍的 agent 另外需要 `bubblewrap` 和 `socat`，Claude Code 的沙盒要用到。
 - **Windows（實驗性）：** 可以在 Windows 11 原生執行，用 [psmux](https://psmux.pages.dev) 取代 tmux（`scoop install psmux` 會把 `tmux.exe` 放進 PATH），也可以在 WSL 裡執行。原生執行需要原生安裝的 `claude.exe`，只有 npm 的 `claude.cmd` 無法啟動 agent。另外還需要 [Git for Windows](https://git-scm.com/download/win)：Claude Code 的 shell 工具要透過 Git 的 `bash.exe` 執行，CC Agent 會自己找到它（也可以用 `CLAUDE_CODE_GIT_BASH_PATH` 指定）。Windows 上的差異：只能執行**完整權限**的 agent，新建的 agent 也預設完整權限。Windows 上的 Claude Code 沒有沙盒，限定範圍的 agent 會拒絕啟動並說明原因。
 - **只能在 macOS 用的部分：** 排程的背景腳本在 macOS 沙盒裡執行；Claude 用量從 macOS 鑰匙圈讀 Claude Code 的登入（Windows 上改讀 `~/.claude/.credentials.json`）。在其他系統上，這兩項目前還不能用。
 
