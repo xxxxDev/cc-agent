@@ -14,7 +14,7 @@ import * as agentOperation from './agentOperation.js';
 import {askHandoff} from './handoffAsk.js';
 import {afterProfileSave,askDiscard,guardOperation as guardProfile,staleProfile,resolveStale,busyNotice} from './profileSave.js';
 
-export function useCellAgent({workspace, conversationId, detail, refresh, profileOpen}) {
+export function useCellAgent({workspace, conversationId, detail, refresh, profileOpen, returnFromProfile}) {
  const error=ref(''),operation=ref(null),operationError=ref('');
  const activity=computed(()=>agentActivity(detail.value,operation.value));
  const locked=computed(()=>!!activity.value&&!operationError.value);
@@ -69,26 +69,27 @@ export function useCellAgent({workspace, conversationId, detail, refresh, profil
  watch(()=>[profileOpen.value,detail.value?.id],([open,id],[wasOpen,wasId]=[])=>{if(open&&detail.value&&(!wasOpen||id!==wasId)&&!profileDirty.value)takeProfileDraft();},{immediate:true});
  const merge=d=>{if(d?.id===conversationId.value)detail.value={...detail.value,...d,messages:detail.value?.messages||d.messages};};
  // Only what changed is sent; refused as out of date, it is merged onto the agent as it is now.
- async function saveProfile({ask=true,retried=false}={}){
+ async function saveProfile({ask=true,retried=false,back=true}={}){
   if(profileSaving.value)return;
   if(operation.value){busyNotice();return;}
   profileSaving.value=true;error.value='';
   let r;
   try{r=await api('/conversations/'+conversationId.value+'/profile',{method:'POST',body:JSON.stringify(agentOperation.profileChanges(profileDraft.value,profileBase.value))});}
   catch(e){profileSaving.value=false;if(!staleProfile(e)){error.value=e.message;return;}
-   return resolveStale({latest:async()=>{await refresh();return detail.value?agentOperation.profileDraftOf(detail.value):null;},draft:profileDraft.value,base:profileBase.value,retried,again:()=>saveProfile({ask,retried:true}),
+   return resolveStale({latest:async()=>{await refresh();return detail.value?agentOperation.profileDraftOf(detail.value):null;},draft:profileDraft.value,base:profileBase.value,retried,again:()=>saveProfile({ask,retried:true,back}),
     take:(fresh,draft,conflicts)=>{profileBase.value=fresh;profileDraft.value=draft;profileConflicts.value=conflicts;}});}
   await refresh();
   profileSaving.value=false;
-  if(r){profileDraft.value={...profileDraft.value,profileVersion:r.profileVersion};profileBase.value=profileDraft.value;profileConflicts.value=[];afterProfileSave(r,{update:merge,ask});}
+  if(r){profileDraft.value={...profileDraft.value,profileVersion:r.profileVersion};profileBase.value=profileDraft.value;profileConflicts.value=[];afterProfileSave(r,{update:merge,ask,done:back?()=>returnFromProfile?.():undefined});}
   return r;
  }
  const mayCloseProfile=async()=>{if(!profileDirty.value)return true;if(!(await askDiscard()))return false;profileDraft.value=profileBase.value;profileConflicts.value=[];return true;};
  // Only its own step, as on the conversation page: a change made elsewhere in between
  // still goes through the merge.
  const syncProfileVersion=d=>{if(d?.profileVersion!==(profileDraft.value?.profileVersion??-2)+1)return;if(profileBase.value)profileBase.value={...profileBase.value,profileVersion:d.profileVersion};if(profileDraft.value)profileDraft.value={...profileDraft.value,profileVersion:d.profileVersion};};
- async function closeProfile(){if(!(await mayCloseProfile()))return;profileOpen.value=false;}
- const guardOperation=kind=>guardProfile(kind,{dirty:()=>profileOpen.value&&profileDirty.value,save:saveProfile,discard:()=>{profileDraft.value=profileBase.value;},ask:r=>afterProfileSave(r,{update:merge})});
+ // Opened from the usage view, closing goes back to it (SplitCell.vue returnFromProfile).
+ async function closeProfile(){if(!(await mayCloseProfile()))return;if(returnFromProfile?.())return;profileOpen.value=false;}
+ const guardOperation=kind=>guardProfile(kind,{dirty:()=>profileOpen.value&&profileDirty.value,save:o=>saveProfile({...o,back:false}),discard:()=>{profileDraft.value=profileBase.value;},ask:r=>afterProfileSave(r,{update:merge})});
  const cell={...workspace,
   selected:conversationId,detail,error,action,pause,restart,handoff,importHistory,uploadAvatar,resetAvatar,
   profileDraft,profileSaving,saveProfile,profileDirty,closeProfile,guardOperation,syncProfileVersion,profileConflicts,

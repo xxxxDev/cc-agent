@@ -153,10 +153,17 @@ const {files,fileInput,pickFiles,dropFiles,pasteFiles,removeFile,chooseFiles,pre
 const inspectorAllowed=computed(()=>isAdmin.value&&detail.value?.mode==='claude');
 const sidePanel=computed(()=>props.panel==='inspector'&&!inspectorAllowed.value?null:props.panel);
 const profileOpen=computed({get:()=>sidePanel.value==='profile',set:open=>{if(!open&&sidePanel.value==='profile')emit('close-panel');}});
-const agent=useCellAgent({workspace,conversationId:computed(()=>props.conversationId),detail,refresh,profileOpen});
+// Agent Profile opened from the usage view's auto-compact row goes back to the usage view
+// when closed, saved or its changes dropped: marked only when that row opens it; opened
+// any other way (the cell's header), the mark goes. A cell is made anew for another agent.
+let returnPending=false;const profileReturn=ref(false);
+watch(sidePanel,(now,before)=>{if(now==='profile'&&before!=='profile'){profileReturn.value=returnPending;returnPending=false;}});
+function returnFromProfile(){if(!profileReturn.value||sidePanel.value!=='profile')return false;profileReturn.value=false;emit('open-panel','usage');return true;}
+const agent=useCellAgent({workspace,conversationId:computed(()=>props.conversationId),detail,refresh,profileOpen,returnFromProfile});
 // The usage view's auto-compact row opens this cell's Agent Profile at that choice, as
 // the conversation page's opens its own (js/agent-chat.js openAutoCompactChoice).
 agent.cell.openAutoCompactChoice=async()=>{
+ returnPending=true;
  emit('open-panel','profile');
  for(let i=0;i<20&&!disposed;i++){
   await new Promise(r=>setTimeout(r,100));

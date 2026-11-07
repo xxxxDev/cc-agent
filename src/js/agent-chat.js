@@ -209,7 +209,18 @@ async function toggleInspector(){
 // terminal view, keeps the popup. The column holds one panel at a time.
 const profilePanelOpen=ref(false);
 const profilePanelVisible=computed(()=>profilePanelOpen.value&&wideScreen.value&&!terminalOpen.value&&!!detail.value);
+// Agent Profile opened from the usage view's auto-compact row goes back to the usage view
+// when closed, saved or its changes dropped. Set only by that row; any other opening, or
+// another agent, clears it.
+const profileReturn=ref(null);
+watch(selected,()=>{profileReturn.value=null;});
+function returnFromProfile(){
+ if(profileReturn.value!=='usage')return false;
+ profileReturn.value=null;infoOpen.value=false;profilePanelOpen.value=false;usageOpen.value=true;
+ return true;
+}
 async function openProfile(){
+ profileReturn.value=null;
  if(!wideScreen.value||terminalOpen.value){infoOpen.value=true;return;}
  if(profilePanelOpen.value&&!(await mayCloseProfile()))return;
  profilePanelOpen.value=!profilePanelOpen.value;
@@ -247,6 +258,7 @@ async function refreshUsage(){if(usageRefreshing.value)return;usageRefreshing.va
 async function openAutoCompactChoice(){
  usageOpen.value=false;await nextTick();
  if(!(wideScreen.value&&!terminalOpen.value&&profilePanelOpen.value))await openProfile();
+ profileReturn.value='usage';
  for(let i=0;i<20;i++){
   await new Promise(r=>setTimeout(r,100));
   const row=[...document.querySelectorAll('.agent-auto-compact')].find(el=>el.offsetParent);
@@ -958,20 +970,20 @@ const profileDirty=computed(()=>user.value?.role==='admin'&&!!profileBase.value&
 // it; then one question if any of it waits for a restart (js/profileSave.js).
 // Only what changed is sent (agentOperation.profileChanges). Refused as out of date, it
 // is merged onto the agent as it is now; while an operation runs, it waits.
-async function saveProfile({ask=true,retried=false}={}){
+async function saveProfile({ask=true,retried=false,back=true}={}){
  const id=selected.value;if(profileSaving.value||!id)return;
  if(operations.value[id]){busyNotice();return;}
  profileSaving.value=true;error.value='';
  const owner=user.value?.id;let r;
  try{r=await api('/conversations/'+id+'/profile',{method:'POST',body:JSON.stringify(agentOperation.profileChanges(profileDraft.value,profileBase.value))});}
  catch(e){profileSaving.value=false;if(!staleProfile(e)){error.value=e.message;return;}
-  return resolveStale({latest:()=>latestProfile(id),draft:profileDraft.value,base:profileBase.value,retried,again:()=>saveProfile({ask,retried:true}),
+  return resolveStale({latest:()=>latestProfile(id),draft:profileDraft.value,base:profileBase.value,retried,again:()=>saveProfile({ask,retried:true,back}),
    take:(fresh,draft,conflicts)=>{profileBase.value=fresh;profileDraft.value=draft;profileConflicts.value=conflicts;}});}
  profileSaving.value=false;
  if(user.value?.id!==owner||!r)return;
  updateAgent(r);refresh().catch(()=>{});
  profileDraft.value={...profileDraft.value,profileVersion:r.profileVersion};profileBase.value=profileDraft.value;profileConflicts.value=[];infoOpen.value=false;
- afterProfileSave(r,{update:updateAgent,ask});
+ afterProfileSave(r,{update:updateAgent,ask,done:back?returnFromProfile:undefined});
  return r;
 }
 // The agent as it is now, for a refused save to merge onto (resolveStale).
@@ -982,11 +994,11 @@ async function latestProfile(id){
  return agentOperation.profileDraftOf(detail.value);
 }
 // An operation with unsaved profile changes: save first, drop them, or not go on.
-const guardOperation=kind=>guardProfile(kind,{dirty:()=>(infoOpen.value||profilePanelVisible.value)&&profileDirty.value,save:saveProfile,discard:()=>{profileDraft.value=profileBase.value;},ask:r=>afterProfileSave(r,{update:updateAgent})});
+const guardOperation=kind=>guardProfile(kind,{dirty:()=>(infoOpen.value||profilePanelVisible.value)&&profileDirty.value,save:o=>saveProfile({...o,back:false}),discard:()=>{profileDraft.value=profileBase.value;},ask:r=>afterProfileSave(r,{update:updateAgent})});
 // Unsaved changes going (closed, another agent, another panel) are asked about first;
 // dropped, the draft is what was saved again.
 async function mayCloseProfile(){if(!profileDirty.value)return true;if(!(await askDiscard()))return false;profileDraft.value=profileBase.value;profileConflicts.value=[];return true;}
-async function closeProfile(){if(!(await mayCloseProfile()))return;infoOpen.value=false;profilePanelOpen.value=false;}
+async function closeProfile(){if(!(await mayCloseProfile()))return;if(returnFromProfile())return;infoOpen.value=false;profilePanelOpen.value=false;}
 // The draft is taken when Agent Profile opens, in either form, and again when the
 // open panel moves to another agent — never on the 1.2 s refresh, which would undo typing.
 // Hidden and shown again for the same agent (an operation, the terminal, another panel,

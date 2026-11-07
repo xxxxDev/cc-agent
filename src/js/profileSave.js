@@ -15,14 +15,17 @@ const toast=(text,closeTimeout=3000)=>f7.toast.create({text:ct(text),closeTimeou
 // a warning when something after the save did not work. update(d) takes the agent as the
 // apply answers it. ask false: a start or restart about to run puts it into effect, so
 // nothing is asked; 'hint': another dialog follows (pause, handoff), so what still waits
-// is said in the toast instead of a question.
-export function afterProfileSave(r,{update,ask=true}){
+// is said in the toast instead of a question. done(): called once all of that is over, after
+// the restart question is answered when there is one (Agent Profile opened from the usage
+// view goes back to it then).
+export function afterProfileSave(r,{update,ask=true,done}){
+ const finish=()=>{done?.();};
  if(r?.warning)f7.dialog.alert(escapeHtml(r.warning));
  const {needs,what=[]}=r?.restartNeeds||{};
  const waits=(needs==='idle'||needs==='busy')&&what.length>0;
- if(ask==='hint'&&waits){toast(ct('設定已保存')+' '+ct('還沒套用，按上方的「重啟」才會生效。'),4000);return;}
- if(needs==='next-start'&&ask){toast('已保存，下次啟動時套用。');return;}
- if(!ask||ask==='hint'||!waits){toast('設定已保存',1800);return;}
+ if(ask==='hint'&&waits){toast(ct('設定已保存')+' '+ct('還沒套用，按上方的「重啟」才會生效。'),4000);finish();return;}
+ if(needs==='next-start'&&ask){toast('已保存，下次啟動時套用。');finish();return;}
+ if(!ask||ask==='hint'||!waits){toast('設定已保存',1800);finish();return;}
  toast('設定已保存');
  const id=r.id;
  const apply=async()=>{try{const a=await api('/conversations/'+id+'/profile-apply',{method:'POST',body:'{}'});if(a?.id===id)update(a);
@@ -30,7 +33,7 @@ export function afterProfileSave(r,{update,ask=true}){
  const changed=ct('這次修改的{what}要重新啟動才會生效。').replace('{what}',what.map(k=>ct(NAMES[k]||k)).join(ct('、')));
  setTimeout(()=>f7.dialog.create({title:escapeHtml(r.title||''),
   text:escapeHtml(changed+' '+ct(needs==='idle'?'現在重新啟動嗎？聊天內容不會不見。':'agent 正在工作，要在它這次完成後自動重新啟動套用嗎？')),
-  buttons:[{text:ct('稍後')},{text:ct(needs==='idle'?'重新啟動':'好'),strong:true,onClick:apply}],destroyOnClose:true}).open(),350);
+  buttons:[{text:ct('稍後')},{text:ct(needs==='idle'?'重新啟動':'好'),strong:true,onClick:apply}],destroyOnClose:true,on:{closed:finish}}).open(),350);
 }
 
 // Closing with unsaved changes asks first; true when they may go.
