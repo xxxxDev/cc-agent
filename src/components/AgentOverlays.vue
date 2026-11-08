@@ -1,5 +1,5 @@
 <template>
- <f7-popup :opened="newOpen" @popup:closed="newOpen=false" class="agent-create"><f7-view><f7-page>
+ <f7-popup :opened="newOpen" :swipe-to-close="sheetSwipe" :push="sheetSwipe" @popup:closed="newOpen&&closeNew()" class="agent-create" :class="{'sheet-swipe':sheetSwipe}"><div v-if="sheetSwipe" class="sheet-grabber" aria-hidden="true"/><f7-view><f7-page>
   <!-- Laid out like Agent Profile: close at the left,
        create at the right, cards of one width, and what explains a row is its hover hint. -->
   <f7-navbar><f7-nav-left><f7-link icon-only icon-f7="xmark" :class="{disabled:busy}" :aria-label="ct('關閉')" @click="closeNew"/></f7-nav-left><f7-nav-title>{{ct('新增 agent')}}</f7-nav-title><f7-nav-right><f7-link icon-only icon-f7="checkmark_alt" class="agent-create-go" :class="{disabled:busy||!newProfile.title.trim()}" :aria-label="ct('建立 Agent')" :title="ct('建立 Agent')" @click="!busy&&newProfile.title.trim()&&create()"/></f7-nav-right></f7-navbar>
