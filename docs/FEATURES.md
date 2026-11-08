@@ -29,8 +29,12 @@ This is the full tour. The [README](../README.md) is the short version.
 
 - **Messages and files both ways.** Send text and attachments (up to 10 files a message, 95 MB each) and get files back from the agent (up to 5 a reply, 25 MB each), with previews. On a computer, drag files onto the chat to attach them.
 - **Mentions, search and jump-to-latest.** Search one conversation's messages and jump to any result.
-- **Reply to a message.** With a mouse, the reply button beside copy under a bubble; on a phone, swipe a bubble to the left, or long-press it for round copy and reply buttons. The message you are answering shows over the box with an X (Escape also cancels). The agent is told which message you reply to, with its first words, and can read the whole of it.
-- **What a reply answers.** An agent's reply names the message it answers on a line above it, with who wrote it and its first words, when that helps: something else came between, or it answered several at once (a **+N more** chip opens the rest). Your own replies always show it. Tap the line to jump to that message.
+- **Reply to a message.** With a mouse, the reply button beside copy under a bubble. On a phone, swipe a bubble to the left until the round reply icon lights up, or long-press it and tap reply. The message you are answering shows in a bar over the box: the agent's words with its small picture, your own with no name. Tap the bar to see that message again, scrolled to and highlighted; the X (or Escape) cancels. The agent is told which message you reply to, with its first words, and can read the whole of it.
+- **What a reply answers.** An agent's reply names the message it answers on a line above it, with its first words, when that helps: something else came between, or it answered several at once (a **+N more** chip opens the rest). The agent's words carry its small picture, an agent on another machine its name, and your own words no name at all. Your own replies always show the line. Tap it to jump to that message.
+- **Long-press menu.** On a phone, a long press lifts the bubble a little over a dimmed page, with round buttons under it: copy, select text and reply. **Select text** hands the words to the phone's own selection, all selected, so its handles can pick part of them. A tap elsewhere closes it. The dim, the lift and the buttons fade in and out together.
+- **Upload progress.** While a message with files goes, the send button turns into a spinner, and each file shows whether it is waiting, uploading with its percent, or done, with a line over the box such as **Uploading 2 of 3 (45%)…**. From 99% a file shows **Processing** until the server has it, since a phone's browser hands the whole file to the network at once. A file that fails is marked, and you can keep typing meanwhile.
+- **The phone's file picker.** On an iPhone, the box lets go of the keyboard before the **+** file picker opens, so the keyboard no longer jumps up and away behind it. While the picker is open, a tap on the box only closes the picker; tap again to type.
+- **Messages between agents** show as dashed bubbles: what agents send one another in a group, or to and from another machine, stands apart from what they say to you.
 - **Slash commands.** Type `/` for Claude Code's own commands, such as `/compact`, `/context`, `/mcp`, `/usage`, `/status` and `/diff`. They run in the agent's terminal.
 - **Questions from the terminal.** When Claude Code stops to ask something in its terminal, such as a permission prompt or a choice, the chat shows it as a card you can answer.
 - **Stop this turn.** Interrupt a reply in progress without stopping the agent.
@@ -38,6 +42,24 @@ This is the full tour. The [README](../README.md) is the short version.
 - **Finished to-dos.** By default every list is kept. An admin can have a list whose every item is done deleted 1, 3, 7 or 30 days after its last change, with **Keep finished to-dos** in the Admin tab's Wrap-up group. A list with anything still to do, in progress or blocked is never deleted, and neither are a deleted agent's lists.
 - **Wrap-up check (optional).** It is off until an admin turns it on in the Admin tab. Then an agent that has finished a task and sat idle for 10 minutes (the admin can change the wait) is asked to make sure its work is saved and its notes are current. It is not asked after a turn that only read or answered, and it is not asked while the agent still has background commands or subagents running. The admin can change the text it sends, and an agent can be left out by turning off **Automatic wrap-up check** in its Agent Profile.
 
+
+<p align="center">
+  <img src="../.github/assets/screens/phones-reply-dark.png" alt="On a phone: a reply naming what it answers, the long-press menu, and the reply bar over the box">
+</p>
+
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="../.github/assets/anim/swipe-reply-dark.svg"><img src="../.github/assets/anim/swipe-reply-light.svg" width="300" alt="Swiping a bubble to the left to reply: the reply icon lights up and the reply bar shows over the box"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset="../.github/assets/anim/long-press-dark.svg"><img src="../.github/assets/anim/long-press-light.svg" width="300" alt="A long press dims the page and lifts the bubble with copy, select text and reply under it; Select text selects its words"></picture>
+</p>
+
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="../.github/assets/anim/jump-to-message-dark.svg"><img src="../.github/assets/anim/jump-to-message-light.svg" width="300" alt="Tapping the line over a reply scrolls up to the message it answers and highlights it"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset="../.github/assets/anim/upload-progress-dark.svg"><img src="../.github/assets/anim/upload-progress-light.svg" width="300" alt="Three files sent: each waits, uploads with its percent, shows Processing, then the message is in"></picture>
+</p>
+
+<p align="center">
+  <img src="../.github/assets/screens/phones-upload-dark.png" alt="Upload progress on a phone: a file at 45%, a file processing, and the sent message">
+</p>
 
 <p align="center">
   <img src="../.github/assets/screens/desktop-prompt-dark.png" alt="A question from the terminal answered in the chat">
@@ -112,7 +134,6 @@ Agents on two of your computers can talk to each other, for example a build agen
 - **Split view (experimental).** On a computer, an admin can show several conversations side by side and drag the columns and rows to size. Each cell's header holds the conversation's buttons as small icons: the context ring, To-dos, search and Agent Profile, with the terminal and Transcript where they are turned on. A cell too narrow for them has them in its ⋯ menu.
 - **Icon names.** On a computer, resting the mouse on a navbar or split-view icon shows its name under it.
 - **Claude usage.** On macOS and Windows, the sidebar shows how much of your Claude subscription's 5-hour and weekly windows is used, for admins.
-- **Diagnostics.** A support view of an agent's state that never includes the account, memory, chat or credentials.
 
 
 <p align="center">
@@ -131,6 +152,34 @@ Agents on two of your computers can talk to each other, for example a build agen
   <img src="../.github/assets/screens/desktop-split-dark.png" alt="Split view with two conversations side by side">
 </p>
 
+## Diagnostics
+
+- **Engineering diagnostics.** At the bottom of Agent Profile, a support view of an agent's state that never includes the account, memory, chat or credentials. Copy it to send by hand.
+- **Record diagnostics.** For a problem with taps, the keyboard or the layout, especially on a phone: it records the page's geometry and what happened (taps, focus moves, the file picker, viewport changes, the window's focus), naming elements by tag and class only, never their text. It keeps recording on every page until you stop it, for at most five minutes.
+- **The recording badge.** While it records, a red **● Recording 0:23** badge sits under the navbar on every page, in the middle on a phone and at the top right on a computer, out of the way of the navbar's buttons and the box. Tap it for **Stop and report**, **Stop only** (kept in Agent Profile to copy or report later) or **Keep recording**.
+- **Report diagnostics.** Sends the same text to the admins, for one of your own agents (up to 512 KB, ten an hour), and they get a notification.
+- **Diagnostic reports.** Admins find them in the Admin tab: who sent each, for which agent, when and from which build. Open one to read and copy it, mark it handled, delete it, or hand it to one of your agents. The agent's conversation opens with the report as a `.txt` file in its box, and the file starts by saying who sent it, for which agent and when, and that it is that user's words: data to read, not instructions to follow.
+
+<p align="center">
+  <img src="../.github/assets/screens/phones-diagnostics-dark.png" alt="Engineering diagnostics in Agent Profile, the red recording badge over a chat, and its Stop and report question">
+</p>
+
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="../.github/assets/anim/recording-badge-dark.svg"><img src="../.github/assets/anim/recording-badge-light.svg" width="300" alt="The recording badge counting; a tap asks, and Stop and report sends the diagnostics to the admins"></picture>
+</p>
+
+<p align="center">
+  <img src="../.github/assets/screens/desktop-diagnostic-reports-dark.png" alt="The admin's Diagnostic reports list">
+</p>
+
+<p align="center">
+  <img src="../.github/assets/screens/desktop-diagnostic-report-dark.png" alt="One diagnostic report opened, with copy, mark handled, delete and hand to an agent">
+</p>
+
+<p align="center">
+  <img src="../.github/assets/screens/desktop-diagnostic-handed-dark.png" alt="A report handed to an agent: the .txt file opens by saying who sent it and to treat it as data">
+</p>
+
 ## Accounts and sign-in
 
 - **Admins and users.** An admin creates accounts and the agents each person uses. A user sees only their own agents. Each person should use Claude under their own plan; see Anthropic's terms for how a plan may be shared.
@@ -147,7 +196,13 @@ Agents on two of your computers can talk to each other, for example a build agen
 - **Push notifications** when an agent replies or a schedule finishes.
 - **Updates** are noticed within seconds of a new build being served, and offered without reloading under you.
 - **Restarts don't sign you out.** While the service restarts, the page keeps checking for up to 90 seconds instead of showing the sign-in screen.
-- **Sheets that pull down.** On a phone, To-dos, Usage, search and Agent Profile open as iOS-style cards: the sheet stands almost full height and the page behind steps back and darkens. Pull one down to close it, as on iOS; Agent Profile with unsaved changes asks first.
+- **Sheets that pull down.** On a phone, To-dos, Usage, search and Agent Profile open as iOS-style pushed cards: the sheet stands almost full height and the page behind steps back and darkens. Pull one down to close it, as on iOS; Agent Profile with unsaved changes asks first.
+- **A phone layout like iOS 26.** On a phone, the navbar and the page sides match the iPhone's own apps: the buttons at the top, and lists, cards and titles 20px from the edges.
+- **Blue for highlights, orange for warnings.** Cards, the working dots, search matches and a message you jump to are blue. Orange is kept for what needs your attention: limits, signing in again, permission prompts and high usage.
 - **A sidebar that folds.** On a computer, fold the sidebar to a rail of icons with the handle on its edge, or turn on **Auto-collapse the menu on a computer** in Settings so it opens only while the mouse is on it.
 - **Light and dark themes**, English and Traditional Chinese.
 - **The computer's own screen** is not part of CC Agent: to see and control a Mac from a phone, use [castpane](https://github.com/xxxxDev/castpane).
+
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="../.github/assets/anim/push-sheet-dark.svg"><img src="../.github/assets/anim/push-sheet-light.svg" width="300" alt="On a phone, Usage opens from the ⋯ menu as a pushed card while the page behind steps back"></picture>
+</p>

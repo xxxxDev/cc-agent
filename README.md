@@ -80,7 +80,13 @@ For every feature in detail, see [docs/FEATURES.md](docs/FEATURES.md).
   <img src=".github/assets/screens/phones-dark.png" alt="The agent list, a chat and its usage view on a phone">
 </p>
 
-- **A chat that feels familiar.** A rounded composer that grows with your message, attachments with previews, mentions, replies to a single message, message search and jump-to-latest.
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset=".github/assets/anim/swipe-reply-dark.svg"><img src=".github/assets/anim/swipe-reply-light.svg" width="300" alt="Swiping a bubble to the left to reply on a phone"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset=".github/assets/anim/long-press-dark.svg"><img src=".github/assets/anim/long-press-light.svg" width="300" alt="A long press lifts the bubble with copy, select text and reply under it"></picture>
+</p>
+
+- **A chat that feels familiar.** A rounded composer that grows with your message, attachments with previews and upload progress, mentions, replies to a single message with a line showing what each reply answers, message search and jump-to-latest.
+- **At home on a phone.** Swipe a bubble to the left to reply, or long-press it for copy, select text and reply over a dimmed page. The navbar and page sides follow iOS 26, and sheets open as pushed cards you pull down to close.
 - **Live, not polling.** One small socket tells the page that something changed. Pages put away stop asking. Every tab signs in and out together.
 - **Calm by default.** Light and dark themes, a quiet layout, and English and Traditional Chinese.
 - **Sign-in done properly.** Password with two-step codes, passkeys (Face ID, Touch ID, Windows Hello), QR sign-in from your phone, a device list where you can sign any device out instantly, and protection against repeated guesses.

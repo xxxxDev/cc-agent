@@ -80,7 +80,13 @@ CC Agent 跑在你自己的 Mac 上。你建立的每個 agent，都是 tmux 裡
   <img src=".github/assets/screens/phones-dark.png" alt="手機上的 agent 清單、對話與它的用量">
 </p>
 
-- **熟悉的聊天介面。**圓角輸入框會隨內容長高，附件有預覽，支援提及、回覆單一則訊息、訊息搜尋和回到最新。
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset=".github/assets/anim/swipe-reply-dark.svg"><img src=".github/assets/anim/swipe-reply-light.svg" width="300" alt="在手機上把泡泡往左滑來回覆"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset=".github/assets/anim/long-press-dark.svg"><img src=".github/assets/anim/long-press-light.svg" width="300" alt="長按讓泡泡浮起，下方有複製、選取文字和回覆"></picture>
+</p>
+
+- **熟悉的聊天介面。**圓角輸入框會隨內容長高，附件有預覽和上傳進度，支援提及、回覆單一則訊息（回覆上方標出它回答哪一則）、訊息搜尋和回到最新。
+- **在手機上順手。**把泡泡往左滑就能回覆，長按會在變暗的頁面上叫出複製、選取文字和回覆。標題列和頁面兩側跟 iOS 26 一樣，面板像推出的卡片，往下拉就關。
 - **即時，不輪詢。**一條小小的連線通知頁面「有變動」；收起來的頁面不再發請求；所有分頁一起登入、一起登出。
 - **安靜的預設。**淺色與深色主題，版面乾淨，介面有中文和英文。
 - **認真做好的登入。**密碼加兩步驟驗證、通行密鑰（Face ID、Touch ID、Windows Hello）、用手機掃碼登入、可以立刻登出任何裝置的裝置清單，以及防止重複猜密碼的保護。
