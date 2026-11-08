@@ -784,7 +784,7 @@ img[src$="/sources/anthropic-native.svg"] {
   height: 5px;
   margin-left: -18px;
   border-radius: var(--cc-radius-pill);
-  background: var(--cc-color-text-tertiary);
+  background: color-mix(in srgb, var(--cc-color-text-tertiary) 45%, transparent);
   z-index: 5001;
   pointer-events: none;
 }
