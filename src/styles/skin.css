@@ -765,9 +765,9 @@ img[src$="/sources/anthropic-native.svg"] {
   }
 }
 /* A phone sheet pushed as an iOS card (popup push) has its grab handle 5px from its top, so the
- * buttons and title start lower than a page's, as an iOS 26 sheet's do: 16px above, 8px below. */
+ * buttons and title start lower than a page's, as an iOS 26 sheet's do: 20px above (measured on the Photos picker), 8px below. */
 .cc-app .popup.sheet-swipe :is(.page, .navbar) {
-  --cc-navbar-above: 16px;
+  --cc-navbar-above: 20px;
   --cc-navbar-below: 8px;
 }
 /* On a phone the outer buttons sit 20px in from each edge (iOS: 20pt on this width; F7 16px), and
