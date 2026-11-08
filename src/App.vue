@@ -136,6 +136,7 @@
       </template>
     </template>
     <AgentOverlays v-if="currentUser"/>
+    <RecordingBadge v-if="currentUser"/>
   </f7-app>
 </template>
 
@@ -145,6 +146,7 @@ import { f7 } from 'framework7-vue';
 import routes from './routes.js';
 import InstallScreen from './components/InstallScreen.vue';
 import LoginPage from './pages/LoginPage.vue';
+import RecordingBadge from './components/RecordingBadge.vue';
 import { t } from './js/i18n.js';
 import { api, authLoading, currentUser, verifyAuth, signedInByQr } from './js/auth.js';
 import { createPresenceHeartbeat } from './js/presence-heartbeat.js';
