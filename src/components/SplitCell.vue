@@ -61,16 +61,16 @@
   <!-- One side column at a time, as on the conversation page; over the whole cell in
        a narrow one. -->
   <!-- The usage view the context ring opens, as in the conversation page's column. -->
-  <aside v-if="sidePanel==='usage'" class="split-side split-side-usage" :aria-label="ct('用量')">
-   <header class="pp-head"><f7-link icon-only icon-f7="xmark" :aria-label="ct('關閉用量')" @click="$emit('close-panel')"/><div class="pp-title">{{ct('用量')}}</div><f7-link icon-only icon-f7="arrow_clockwise" class="usage-refresh" :class="{spinning:usageRefreshing}" :aria-label="ct('重新整理用量')" :title="ct('重新整理用量')" @click="refreshUsage"/></header>
+  <aside v-if="sidePanel==='usage'" class="split-side split-side-usage" :aria-label="ct('用量統計')">
+   <header class="pp-head"><f7-link icon-only icon-f7="xmark" :aria-label="ct('關閉用量')" @click="$emit('close-panel')"/><div class="pp-title">{{ct('用量統計')}}</div><f7-link icon-only icon-f7="arrow_clockwise" class="usage-refresh" :class="{spinning:usageRefreshing}" :aria-label="ct('重新整理用量')" :title="ct('重新整理用量')" @click="refreshUsage"/></header>
    <div class="pp-body"><ContextUsagePanel v-if="detail" :key="conversationId" :usage="detail.contextUsage" :agent="detail"/></div>
   </aside>
   <aside v-else-if="sidePanel==='checklist'" class="split-side" :aria-label="ct('待辦事項')">
    <header class="pp-head"><f7-link icon-only icon-f7="xmark" :aria-label="ct('關閉待辦事項')" @click="$emit('close-panel')"/><div class="pp-title">{{ct('待辦事項')}}</div><f7-link icon-only icon-f7="plus" class="checklist-new" :aria-label="ct('新增清單')" @click="askNewChecklist(agent.cell)"/></header>
    <div class="pp-body"><ChecklistPanel :key="conversationId"/></div>
   </aside>
-  <aside v-else-if="sidePanel==='search'" class="split-side" :aria-label="ct('搜尋這個對話')">
-   <header class="pp-head"><f7-link icon-only icon-f7="xmark" :aria-label="ct('關閉搜尋')" @click="$emit('close-panel')"/><div class="pp-title">{{ct('搜尋這個對話')}}</div><span class="pp-spacer"/></header>
+  <aside v-else-if="sidePanel==='search'" class="split-side" :aria-label="ct('搜尋對話')">
+   <header class="pp-head"><f7-link icon-only icon-f7="xmark" :aria-label="ct('關閉搜尋')" @click="$emit('close-panel')"/><div class="pp-title">{{ct('搜尋對話')}}</div><span class="pp-spacer"/></header>
    <div class="pp-body">
     <f7-list inset><f7-list-input v-model:value="searchText" type="search" :placeholder="ct('搜尋聊天記錄')" :aria-label="ct('搜尋聊天記錄')" class="message-search-input"/></f7-list>
     <MessageSearchResults :query="searchText" :conversation-id="conversationId" @pick="hit=>jumpTo(hit.messageId)"/>

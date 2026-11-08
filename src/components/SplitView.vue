@@ -37,9 +37,9 @@
           icons. A cell too narrow for them has them in its 「⋯」 menu instead; the terminal
           switch stays out. -->
      <template v-if="id&&!compact(index,id)">
-      <button v-if="context[id]" type="button" class="split-cell-icon split-cell-ring" :class="{on:panels[index]==='usage'}" :aria-pressed="String(panels[index]==='usage')" :aria-label="ringLabel(id)" v-tip="ct('用量')" @click="togglePanel(index,'usage')"><UsageRing class="split-ring" :percent="context[id].main?.percent??null" :class="{stale:context[id].main?.stale}"><span class="split-ring-text" aria-hidden="true">{{context[id].main?.percent??''}}</span></UsageRing></button>
+      <button v-if="context[id]" type="button" class="split-cell-icon split-cell-ring" :class="{on:panels[index]==='usage'}" :aria-pressed="String(panels[index]==='usage')" :aria-label="ringLabel(id)" v-tip="ct('用量統計')" @click="togglePanel(index,'usage')"><UsageRing class="split-ring" :percent="context[id].main?.percent??null" :class="{stale:context[id].main?.stale}"><span class="split-ring-text" aria-hidden="true">{{context[id].main?.percent??''}}</span></UsageRing></button>
       <button type="button" class="split-cell-icon split-cell-checklist" :class="{on:panels[index]==='checklist'}" :aria-pressed="String(panels[index]==='checklist')" :aria-label="ct('待辦事項')" v-tip="ct('待辦事項')" @click="togglePanel(index,'checklist')"><i class="icon f7-icons">checkmark_square</i></button>
-      <button type="button" class="split-cell-icon split-cell-search" :class="{on:panels[index]==='search'}" :aria-pressed="String(panels[index]==='search')" :aria-label="ct('搜尋這個對話')" v-tip="ct('搜尋這個對話')" @click="togglePanel(index,'search')"><i class="icon f7-icons">search</i></button>
+      <button type="button" class="split-cell-icon split-cell-search" :class="{on:panels[index]==='search'}" :aria-pressed="String(panels[index]==='search')" :aria-label="ct('搜尋對話')" v-tip="ct('搜尋對話')" @click="togglePanel(index,'search')"><i class="icon f7-icons">search</i></button>
      </template>
      <!-- The cell's terminal, as on the conversation page, when an admin has the
           chat/terminal switch on on the Admin tab. -->
@@ -116,13 +116,13 @@ function setPanel(index,name){panels.value={...panels.value,[index]:name};}
 function openMore(index,event){const r=event.currentTarget.getBoundingClientRect();morePoint.value={clientX:r.left+r.width/2,clientY:r.bottom};moreFor.value=index;}
 // The Transcript as on the conversation page: an admin's, for a Claude Code agent,
 // once switched on on the Admin tab.
-const ringLabel=id=>{const p=context.value[id]?.main?.percent;return ct('用量')+(p===null||p===undefined?'':' · '+ct('context 已用')+' '+p+'%');};
+const ringLabel=id=>{const p=context.value[id]?.main?.percent;return ct('用量統計')+(p===null||p===undefined?'':' · '+ct('context 已用')+' '+p+'%');};
 const inspectorFor=id=>transcriptSwitch.value&&agents.value.find(a=>a.id===id)?.mode==='claude';
 // The 「⋯」 menu of a narrow cell, in the order of the conversation page's phone menu:
 // 用量 when the agent reports its context, as the ring shows only then.
 const moreItems=computed(()=>{
  const id=moreFor.value===null?null:cells.value[moreFor.value];
- return [{value:'checklist',f7:'checkmark_square',label:ct('待辦事項')},...(id&&context.value[id]?[{value:'usage',f7:'gauge',label:ct('用量')}]:[]),{value:'search',f7:'search',label:ct('搜尋這個對話')},{value:'profile',f7:'info',label:'Agent Profile'},
+ return [{value:'checklist',f7:'checkmark_square',label:ct('待辦事項')},...(id&&context.value[id]?[{value:'usage',f7:'gauge',label:ct('用量統計')}]:[]),{value:'search',f7:'search',label:ct('搜尋對話')},{value:'profile',f7:'info',label:'Agent Profile'},
   ...(id&&inspectorFor(id)?[{value:'inspector',f7:'ant',label:ct('Transcript 檢視')}]:[])];
 });
 async function pickMore(value){const index=moreFor.value;moreFor.value=null;if(index===null)return;await togglePanel(index,value);}

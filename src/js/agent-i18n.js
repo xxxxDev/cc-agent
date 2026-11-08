@@ -475,6 +475,9 @@ const english = {
 
   
   "Compact 後自動接續": "Continue after compaction",
+  "擴充功能": "Extensions",
+  "用量統計": "Usage",
+  "搜尋對話": "Search this conversation",
   "Compact 自動接續": "Continue after compaction",
   "Agent 刪除": "Deleted agents",
   "已完成的待辦事項保留": "Keep finished to-dos",

@@ -15,7 +15,7 @@ import { ct } from '../js/agent-i18n.js';
 const props = defineProps({ usage: { type: Object, default: null }, on: Boolean });
 defineEmits(['toggle']);
 const percent = computed(() => props.usage?.main?.percent ?? null);
-const label = computed(() => ct('用量') + (percent.value === null ? '' : ' · ' + ct('context 已用') + ' ' + percent.value + '%'));
+const label = computed(() => ct('用量統計') + (percent.value === null ? '' : ' · ' + ct('context 已用') + ' ' + percent.value + '%'));
 </script>
 
 <style scoped>
