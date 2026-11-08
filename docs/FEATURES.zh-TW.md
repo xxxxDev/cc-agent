@@ -18,11 +18,18 @@
 - **刪除的 agent。** 刪除後會從清單移除，可以連同原本的 session 一起救回。預設不刪除；管理員可以設定 7 到 365 天後永久刪除。
 - **重新登入 Claude。** 這台電腦上的 Claude 登入失效時，聊天室會出現一張卡片，並送出推播通知。管理員直接在卡片上，或輸入 `/login`，就能重新登入，不用開終端機。這台電腦的 agent 共用同一個登入。
 - **能啟動其他 agent 的 agent。** 這台電腦的擁有者可以在 `.local/agent-starters.json`（`{"conversationIds": [...]}`）用對話 ID 列出 agent。列出的必須是管理員的完整權限 Claude agent。它下次啟動後，就能列出啟用中帳號的 Claude agent，並啟動停止中的 agent；被啟動的 agent 用自己的 Profile 和權限，聊天室也會寫出是誰啟動的。
-- **頭像與排序。** 可以幫 agent 換頭像、拖曳調整清單順序，也可以把 agent 分組。
+- **頭像。** 可以幫 agent 換頭像。
+- **排序與群組。** 按「編輯」後每一列會出現拖曳把手。在預設的「全部」清單裡，agent 可以在自己的來源內拖到新位置、拖進或拖出群組（空的群組會留一格可以放），也可以用群組的把手移動整個群組。拖到自己來源以外（例如來源的標題上）放開，會輕輕晃一下回到原位，不會保存。「最近」照活動順序排列，不能拖曳。「新增群組」在各來源自己的清單裡。
+- **滑動操作。** 不在編輯模式時，把一列往左滑會出現圓形按鈕：暫停（agent 停止時是啟動），管理員還有刪除。刪除一定會先確認，暫停正在回覆的 agent 也會先問。
 
 
 <p align="center">
   <img src="../.github/assets/screens/desktop-profile-dark.png" alt="Agent Profile 面板">
+</p>
+
+<p align="center">
+  <img src="../.github/assets/anim/agent-list-drag-dark.svg" width="300" alt="按編輯，把一個 agent 拖到最上面、一個拖進群組，一個放在來源標題上晃一下回到原位，再按完成">
+  <img src="../.github/assets/anim/agent-swipe-actions-dark.svg" width="300" alt="往左滑一列出現暫停和刪除，停止中的 agent 出現啟動和刪除，再滑回去關上">
 </p>
 
 ## 聊天

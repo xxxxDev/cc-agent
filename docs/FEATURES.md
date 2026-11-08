@@ -18,11 +18,18 @@ This is the full tour. The [README](../README.md) is the short version.
 - **Deleted agents.** A deleted agent leaves the list and can be restored with its own session. By default it is never purged; an admin can have deleted agents purged after 7 to 365 days.
 - **Signing Claude in again.** When Claude's login on this computer runs out, the chat shows a card and you get a push notification. An admin signs in again from that card, or by typing `/login`, with no terminal needed. Every agent on the computer shares that login.
 - **Agents that start agents.** The computer's owner can name agents by conversation id in `.local/agent-starters.json` (`{"conversationIds": [...]}`). Each must be a full-access Claude agent of an admin. From its next start it can list the Claude agents of active accounts and start stopped ones, each with its own profile and access, and the started agent's chat says who started it.
-- **Pictures and order.** Give an agent its own picture, drag the list into the order you like, and sort agents into sections.
+- **Pictures.** Give an agent its own picture.
+- **Order and groups.** Tap **Edit** and each row gets a drag handle. In **All**, the default list, drag an agent to a new place within its source, into or out of a group (an empty group shows a place to drop it), or move a whole group by its handle. Let go outside the agent's source, such as on the source's title, and it goes back with a small shake, with nothing saved. **Recent** keeps its activity order and does not drag. **New group** is in a source's own list.
+- **Swipe for actions.** Outside Edit, swipe a row to the left for round buttons: pause, or start when the agent is stopped, and, for an admin, delete. Delete always asks first, and so does pausing an agent that is answering.
 
 
 <p align="center">
   <img src="../.github/assets/screens/desktop-profile-dark.png" alt="An agent's profile panel">
+</p>
+
+<p align="center">
+  <img src="../.github/assets/anim/agent-list-drag-dark.svg" width="300" alt="Edit, then an agent dragged to the top, another into a group, and one let go on the source title going back with a shake; Done">
+  <img src="../.github/assets/anim/agent-swipe-actions-dark.svg" width="300" alt="A row swiped left shows pause and delete, a stopped agent's row shows start and delete; each swiped back shut">
 </p>
 
 ## Chat
