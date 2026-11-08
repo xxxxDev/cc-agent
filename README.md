@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=".github/assets/agent-emote-dark.gif" width="180" alt="The CC Agent character">
+  <img src=".github/assets/agent-emote-dark.svg" width="180" alt="The CC Agent character">
 </p>
 
 <h1 align="center">CC Agent</h1>
@@ -39,19 +39,19 @@ For every feature in detail, see [docs/FEATURES.md](docs/FEATURES.md).
 
 <table>
 <tr>
-<td width="25%" align="center"><img src=".github/assets/sticker-wave-dark.gif" width="120" alt=""></td>
+<td width="25%" align="center"><img src=".github/assets/sticker-wave-dark.svg" width="120" alt=""></td>
 <td><b>Many agents, one place.</b> Give each agent a role: one for a codebase, one for your inbox, one for research. Each keeps its own working folder, Agent Profile (what it is for, its boundaries, its current state) and long-term memory. Switch between them like chats in a messaging app.</td>
 </tr>
 <tr>
-<td align="center"><img src=".github/assets/sticker-think-dark.gif" width="120" alt=""></td>
+<td align="center"><img src=".github/assets/sticker-think-dark.svg" width="120" alt=""></td>
 <td><b>Agents that work together.</b> Put several agents in a group chat with a lead, let them message each other, and follow shared to-do lists beside the conversation. Schedules wake an agent at set times, run small background scripts, or bring it new entries from an RSS feed. With the peer link, agents on two of your machines can message each other, even on different Claude accounts (<a href="docs/PEER-LINK.md">how</a>). An optional wrap-up check, off until an admin turns it on in the Admin tab, asks an agent that has finished a task to make sure its work is saved and its notes are current.</td>
 </tr>
 <tr>
-<td align="center"><img src=".github/assets/sticker-work-dark.gif" width="120" alt=""></td>
+<td align="center"><img src=".github/assets/sticker-work-dark.svg" width="120" alt=""></td>
 <td><b>Full access, or a fenced folder.</b> Trust an agent with your whole machine, or let it read and write only the folders you allow and load only the local MCP servers you tick. Scoped agents run in Claude Code's sandbox and auto mode: they may fetch web pages when they judge it useful, with the domains you list approved in advance and Bash's network held to them, and anything they were refused is filed as a report for you to review.</td>
 </tr>
 <tr>
-<td align="center"><img src=".github/assets/sticker-done-dark.gif" width="120" alt=""></td>
+<td align="center"><img src=".github/assets/sticker-done-dark.svg" width="120" alt=""></td>
 <td><b>Tells you when it matters.</b> Push notifications reach your phone when an agent replies or a schedule finishes. You can see a live view of what the agent is doing, how full its context is, its terminal, and its subagents, token use and cost.</td>
 </tr>
 </table>

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=".github/assets/agent-emote-dark.gif" width="180" alt="CC Agent 角色">
+  <img src=".github/assets/agent-emote-dark.svg" width="180" alt="CC Agent 角色">
 </p>
 
 <h1 align="center">CC Agent</h1>
@@ -39,19 +39,19 @@ CC Agent 跑在你自己的 Mac 上。你建立的每個 agent，都是 tmux 裡
 
 <table>
 <tr>
-<td width="25%" align="center"><img src=".github/assets/sticker-wave-dark.gif" width="120" alt=""></td>
+<td width="25%" align="center"><img src=".github/assets/sticker-wave-dark.svg" width="120" alt=""></td>
 <td><b>很多 agent，一個地方。</b>每個 agent 有自己的角色：一個管程式碼，一個處理信件，一個做研究。各自有工作資料夾、Agent Profile（用途、界線、目前狀態）和長期記憶，像通訊軟體裡的聊天室一樣切換。</td>
 </tr>
 <tr>
-<td align="center"><img src=".github/assets/sticker-think-dark.gif" width="120" alt=""></td>
+<td align="center"><img src=".github/assets/sticker-think-dark.svg" width="120" alt=""></td>
 <td><b>agent 之間可以合作。</b>把幾個 agent 放進群組，指定一個主負責，讓它們互傳訊息，在對話旁邊跟著同一份待辦事項進行。排程可以在固定時間叫醒 agent、執行小型背景腳本，或把 RSS 的新文章帶給它。透過跨機連線，你兩台電腦上的 agent 也能互傳訊息，就算登入不同的 Claude 帳號也可以（<a href="docs/PEER-LINK.md">設定方式</a>，英文）。另有選用的自動收尾檢查，預設關閉，管理員可在管理頁開啟：agent 完成任務後，會請它確認工作已保存、筆記是最新的。</td>
 </tr>
 <tr>
-<td align="center"><img src=".github/assets/sticker-work-dark.gif" width="120" alt=""></td>
+<td align="center"><img src=".github/assets/sticker-work-dark.svg" width="120" alt=""></td>
 <td><b>完整權限，或圈好的範圍。</b>信任的 agent 可以給整台電腦的權限；其他的只能讀寫你允許的資料夾、只載入你勾選的本機 MCP。限定範圍的 agent 跑在 Claude Code 的沙盒與 auto mode 裡：上網由它自己判斷，你列的網域只是預先放行，Bash 的網路則被沙盒限制在這些網域；被擋下的動作會寫成報告讓你審。</td>
 </tr>
 <tr>
-<td align="center"><img src=".github/assets/sticker-done-dark.gif" width="120" alt=""></td>
+<td align="center"><img src=".github/assets/sticker-done-dark.svg" width="120" alt=""></td>
 <td><b>重要的事會通知你。</b>agent 回覆或排程完成時，推播會送到你的手機。你也能即時看到 agent 正在做什麼、它的 context 用了多少、它的終端機、它開的子代理、token 用量和費用。</td>
 </tr>
 </table>
