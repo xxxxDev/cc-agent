@@ -3,11 +3,14 @@
 // at a time, so a group's handle is driven here: the block follows the pointer,
 // the other groups make room, and the new order of the groups goes to onDrop.
 // The untitled agents at the top are not a block and stay where they are.
+// In All a group moves only among its own source's groups: the blocks are that
+// source's, and the other sources' rows stay put, dimmed (src/js/sourceFence.js).
+import {sourceSegment, markFenced, clearFenced, outsideSource, refuseDrop} from './sourceFence.js';
 const EDGE = 60, SCROLL_STEP = 8;
 
-function blocksOf(list) {
+function blocksOf(rows) {
   const blocks = [];
-  for (const row of list.children) {
+  for (const row of rows) {
     if (row.classList.contains('agent-group-row')) blocks.push({id: row.dataset.group, rows: [row]});
     else if (blocks.length) blocks.at(-1).rows.push(row);
   }
@@ -25,13 +28,15 @@ export function startGroupDrag(event, onDrop) {
   if (event.button !== undefined && event.button !== 0) return;
   const handle = event.currentTarget, title = handle.closest('li'), list = title?.parentElement;
   if (!list) return;
-  const blocks = blocksOf(list), index = blocks.findIndex(block => block.rows[0] === title);
+  const part = sourceSegment(title), {segment, fenced} = part;
+  const blocks = blocksOf(segment), index = blocks.findIndex(block => block.rows[0] === title);
   if (index < 0 || blocks.length < 2) return;
   event.preventDefault();
   const dragged = blocks[index], scroller = list.closest('.page-content');
   const startY = event.clientY, startScroll = scroller?.scrollTop || 0;
   let target = index, lastY = event.clientY, frame = 0;
   list.classList.add('group-sorting');
+  markFenced(fenced, false);
   dragged.rows.forEach(row => row.classList.add('group-dragging'));
   try { handle.setPointerCapture(event.pointerId); } catch {}
 
@@ -63,7 +68,7 @@ export function startGroupDrag(event, onDrop) {
     place();
     if (!frame) frame = requestAnimationFrame(scroll);
   };
-  const end = () => {
+  const end = e => {
     handle.removeEventListener('pointermove', move);
     handle.removeEventListener('pointerup', end);
     handle.removeEventListener('pointercancel', end);
@@ -71,6 +76,10 @@ export function startGroupDrag(event, onDrop) {
     for (const block of blocks) block.rows.forEach(row => { row.style.transform = ''; });
     dragged.rows.forEach(row => row.classList.remove('group-dragging'));
     list.classList.remove('group-sorting');
+    // Let go over another source's rows, it goes back where it was.
+    const refused = outsideSource(part, e?.clientY);
+    clearFenced(list);
+    if (refused) { refuseDrop(title); return; }
     if (target === index) return;
     const order = blocks.map(block => block.id);
     order.splice(target, 0, order.splice(index, 1)[0]);

@@ -21,9 +21,12 @@
    <span v-if="!search&&!mixedList" class="agent-group-add"><f7-button small round tonal icon-f7="folder_badge_plus" @click="addGroup">{{ct('新增群組')}}</f7-button></span>
   </div>
   <!-- Groups, titled like the sections of Settings.
+       In All, dragging stays within each source (src/js/sourceFence.js); New group
+       is left to a source's own list, which says whose group it is. Recent keeps
+       its activity order and has no dragging.
        One sortable list with each group's title as a row in it, so an agent can be
        dragged past a title into that group, or into an empty one. -->
-  <f7-list inset media-list sortable :class="{editing:editMode}" :sortable-enabled="editMode&&!search&&!orderBusy&&!mixedList&&(!autoSort||listGroups.length>0)" :sortable-move-elements="false" @sortable:sort="reorderChats" class="conversation-list">
+  <f7-list inset media-list sortable :class="{editing:editMode}" :sortable-enabled="editMode&&!search&&!orderBusy&&listSource!=='recent'&&(!autoSort||listGroups.length>0)" :sortable-move-elements="false" @sortable:sort="reorderChats" class="conversation-list">
    <template v-for="row in listRows" :key="row.kind+':'+row.id">
     <!-- In All, each source's part of the list opens with its logo and name. -->
     <li v-if="row.kind==='source'" class="agent-source-title" :data-source="row.id"><img v-if="row.icon" :src="row.icon" alt="" width="20" height="20"/><span>{{row.name}}</span></li>
@@ -47,7 +50,7 @@
      <div v-if="row.collapsed&&!editMode" class="agent-group-tags">
       <button v-for="a in row.members" :key="a.id" type="button" class="agent-group-tag" :class="{thinking:thinking(a)}" :data-id="a.id" @click="select(a.id)"><f7-preloader v-if="thinking(a)" class="agent-group-busy" :size="10"/><span v-else class="tag-dot" :class="{online:a.connected&&!activity(a),working:!!activity(a)}" role="img" :aria-label="ct(presenceLabel(a))" :title="ct(presenceLabel(a))"></span>{{a.title}}</button>
      </div>
-     <div v-if="editMode&&!mixedList" class="sortable-handler agent-group-handle" :aria-label="ct('拖曳整個群組')" @touchstart.stop @mousedown.stop @pointerdown.stop="startGroupDrag($event,moveGroups)"/>
+     <div v-if="editMode&&listSource!=='recent'" class="sortable-handler agent-group-handle" :aria-label="ct('拖曳整個群組')" @touchstart.stop @mousedown.stop @pointerdown.stop="startGroupDrag($event,moveGroups)"/>
     </li>
     <li v-else-if="row.kind==='slot'" class="agent-group-slot in-group group-end" :data-group="row.group"><p class="agent-group-empty">{{ct('把 Agent 拖到這裡')}}</p></li>
    <f7-list-item v-else :swipeout="!editMode" :class="{'row-opening':openingId===row.agent.id,'in-source':listSource==='all','disallow-sorting':autoSort,'in-group':editMode&&!!row.group,'group-end':editMode&&!!row.group&&row.last,'waiting-choice':!!waitingChoice(row.agent)}" :data-id="row.agent.id" :link="editMode?false:'#'" :title="editMode&&user?.role==='admin'?undefined:row.agent.title" :text="waitingChoice(row.agent)||row.agent.preview||ct('尚無對話')" :badge="editMode?null:unreadLabel(unreadOf(row.agent))" badge-color="red" @click.prevent="!editMode&&!justSwiped($event)&&select(row.agent.id)" @swipeout="swiped" @contextmenu.prevent="user?.role==='admin'&&conversationMenu(row.agent,$event)" @keydown.shift.f10.prevent="user?.role==='admin'&&conversationMenu(row.agent,$event)">
@@ -72,7 +75,7 @@
 
 </template>
 <script>
-import {inject,ref,computed} from "vue";import GlassDropdown from "../components/GlassDropdown.vue";import {f7} from "framework7-vue";import TerminalPane from "../TerminalPane.vue";import MessageSearchResults from "../components/MessageSearchResults.vue";import {startGroupDrag} from "../js/groupDrag.js";import {avatarShape,defaultAvatar} from "../js/avatarShape.js";export default {components:{TerminalPane,MessageSearchResults,GlassDropdown},directives:{focus:{mounted:el=>{el.focus();el.select?.();}}},setup(){const w=inject("workspace");
+import {inject,ref,computed} from "vue";import GlassDropdown from "../components/GlassDropdown.vue";import {f7} from "framework7-vue";import TerminalPane from "../TerminalPane.vue";import MessageSearchResults from "../components/MessageSearchResults.vue";import {startGroupDrag} from "../js/groupDrag.js";import {fenceSourceDrag} from "../js/sourceFence.js";import {avatarShape,defaultAvatar} from "../js/avatarShape.js";export default {components:{TerminalPane,MessageSearchResults,GlassDropdown},mounted(){for(const name of ['pointerdown','touchstart','mousedown'])this.$el.addEventListener(name,fenceSourceDrag,{capture:true,passive:true});},beforeUnmount(){for(const name of ['pointerdown','touchstart','mousedown'])this.$el.removeEventListener(name,fenceSourceDrag,{capture:true});},directives:{focus:{mounted:el=>{el.focus();el.select?.();}}},setup(){const w=inject("workspace");
  // While an agent is answering, its light turns into a small spinner, on this list
  // only: the conversation has its typing bubble.
  // Work left running in the background (a subagent, a command) spins too, after
@@ -207,6 +210,14 @@ import {inject,ref,computed} from "vue";import GlassDropdown from "../components
 /* Dragging must not select the text it passes over. */
 .conversation-list.sortable-enabled {-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
 .conversation-list .disallow-sorting :deep(.sortable-handler) {display:none;}
+/* In All, while an agent or a group is dragged, the other sources' rows dim: it
+   cannot be dropped there. Framework7 drops their handles' padding with .no-sorting,
+   which would rewrap their text mid-drag, so it is kept. A drop that did not take
+   shakes the row once (src/js/sourceFence.js). */
+.conversation-list :deep(li.source-fenced) {opacity:.4;transition:opacity .2s ease;}
+.list.conversation-list.sortable-enabled :deep(li.source-fenced:not(.disallow-sorting) .item-inner) {padding-right:calc(var(--f7-sortable-handler-width) + var(--f7-safe-area-right));}
+.conversation-list :deep(li.drop-refused > *) {animation:drop-refused .4s ease;}
+@keyframes drop-refused {20%,60% {transform:translateX(-6px);} 40%,80% {transform:translateX(6px);}}
 /* A group dragged as one block: its rows ride together above the others, which
    slide aside to make room. */
 .agent-group-handle {touch-action:none;cursor:grab;}

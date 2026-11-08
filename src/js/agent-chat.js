@@ -22,6 +22,7 @@ import {loadUsage} from './usage.js';
 import {secondClock} from './secondClock.js';
 import {SOURCES} from './agent-models.js';
 import {defaultAvatar} from './avatarShape.js';
+import {refuseDrop,wasRefused} from './sourceFence.js';
 import {f7} from 'framework7-vue';
 import {currentUser as user,verifyAuth} from './auth.js';
 import {api} from './api.js';
@@ -139,7 +140,13 @@ function startEveryAgent(){
 // The list is one sortable list with each group's title as a row in it, so an
 // agent can be dragged past a title into that group, or into an empty one. The rows after the move say both the order and each
 // agent's group: an agent belongs to the nearest title above it, or to none.
-async function reorderChats({from,to}){if(orderBusy.value||search.value||from===to||mixed())return;const rows=[...listRows.value];rows.splice(to,0,rows.splice(from,1)[0]);await saveRows(rows);}
+// In All an agent moves only within its own source, as in that source's own list,
+// and only that source's part is saved; dropped outside it (on a source's title) it
+// goes back with nothing saved. src/js/sourceFence.js keeps Framework7 from offering
+// such a place; this is the last check.
+async function reorderChats({from,to,el}){if(orderBusy.value||search.value||from===to||listSource.value==='recent')return;const rows=[...listRows.value];if(rows[from]?.kind!=='agent'||wasRefused(el))return;const moved=rows[from];rows.splice(to,0,rows.splice(from,1)[0]);if(listSource.value!=='all')return saveRows(rows);
+ const start=rows.findLastIndex((r,i)=>i<to&&r.kind==='source');if(start<0||rows[start].id!=='source:'+sourceOfAgent(moved.agent)){refuseDrop(el);return;}
+ const next=rows.findIndex((r,i)=>i>start&&r.kind==='source');await saveRows(rows.slice(start+1,next<0?rows.length:next));}
 async function saveRows(rows){let group=null;const next=[],groups={};for(const row of rows){if(row.kind==='group'){group=row.id;continue;}if(row.kind==='slot')continue;next.push(row.agent);groups[row.id]=group;}
  // The other sources keep their own order after this one's.
  const shown=new Set(next.map(c=>c.id));next.push(...conversations.value.filter(c=>!shown.has(c.id)));orderBusy.value=true;const result=await attempt(()=>api('/conversations/reorder',{method:'POST',body:JSON.stringify({ids:next.map(c=>c.id),groups})}));if(result)conversations.value=result.conversations;orderBusy.value=false;if(!result){const latest=await attempt(()=>api('/conversations'));if(latest)conversations.value=latest.conversations;}}
@@ -319,13 +326,14 @@ const listGroups=agentPreferences.listGroups;
 function sourceSections(source){
  const groups=listGroups.value.filter(g=>(g.source||'native')===source),known=new Set(groups.map(g=>g.id)),items=filtered.value.filter(c=>sourceOfAgent(c)===source);
  const out=[{id:null,name:'',items:items.filter(c=>!c.listGroup||!known.has(c.listGroup))},...groups.map(g=>({id:g.id,name:g.name,items:items.filter(c=>c.listGroup===g.id)}))];
- return out.filter(section=>section.items.length||(section.id===null?!groups.length:editMode.value&&!search.value&&listSource.value!=='all'));
+ return out.filter(section=>section.items.length||(section.id===null?!groups.length:editMode.value&&!search.value));
 }
 // All shows the source's title row and each saved group.
 const byActivity=(a,b)=>String(b.activeAt||'').localeCompare(String(a.activeAt||''));
 const sections=computed(()=>listSource.value==='recent'?[{id:null,name:'',items:[...filtered.value].sort(byActivity)}]:listSource.value!=='all'?sourceSections(listSource.value):['native'].flatMap(source=>{
- const own=sourceSections(source).filter(section=>section.items.length);
- return own.length?[{source,items:[]},...own]:[];
+ // A source with agents shown; while editing, with its empty groups too, to drop into.
+ const own=sourceSections(source).filter(section=>section.items.length||section.id);
+ return own.some(section=>section.items.length)?[{source,items:[]},...own]:[];
 }));
 // The same, as the rows of the one list: a title row per group, then its agents.
 // An empty group has a slot in Edit mode, a row of its own to drop an agent on:
@@ -364,8 +372,10 @@ async function finishGroupRename(group,value){
 // A whole group was dragged to a new place (src/js/groupDrag.js): shown at once in
 // its new place, then saved; a failed save puts the order back as it was.
 async function moveGroups(order){
- const before=listGroups.value;
- const next=[...before].sort((a,b)=>order.indexOf(a.id)-order.indexOf(b.id));
+ // Only the dragged source's groups change places, among the places they hold; the
+ // other sources' groups stay where they are.
+ const before=listGroups.value,moved=before.filter(g=>order.includes(g.id)).sort((a,b)=>order.indexOf(a.id)-order.indexOf(b.id));
+ let k=0;const next=before.map(g=>order.includes(g.id)?moved[k++]:g);
  listGroups.value=next;
  orderBusy.value=true;
  if(!await saveGroups(next))listGroups.value=before;
