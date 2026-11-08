@@ -158,7 +158,7 @@ Agents on two of your computers can talk to each other, for example a build agen
 - **Record diagnostics.** For a problem with taps, the keyboard or the layout, especially on a phone: it records the page's geometry and what happened (taps, focus moves, the file picker, viewport changes, the window's focus), naming elements by tag and class only, never their text. It keeps recording on every page until you stop it, for at most five minutes.
 - **The recording badge.** While it records, a red **● Recording 0:23** badge sits under the navbar on every page, in the middle on a phone and at the top right on a computer, out of the way of the navbar's buttons and the box. Tap it for **Stop and report**, **Stop only** (kept in Agent Profile to copy or report later) or **Keep recording**.
 - **Report diagnostics.** Sends the same text to the admins, for one of your own agents (up to 512 KB, ten an hour), and they get a notification.
-- **Diagnostic reports.** Admins find them in the Admin tab: who sent each, for which agent, when and from which build. Open one to read and copy it, mark it handled, delete it, or hand it to one of your agents. The agent's conversation opens with the report as a `.txt` file in its box, and the file starts by saying who sent it, for which agent and when, and that it is that user's words: data to read, not instructions to follow.
+- **Diagnostic reports.** Admins find them in the Admin tab: who sent each, for which agent, when and from which build. Open one to read and copy it, mark it handled, delete it, or hand it to one of your agents. Agents that outside people can reach, or once could, are not listed, and an agent with full access asks you to confirm first. The agent's conversation opens with the report as a `.txt` file in its box. The file opens with a warning that the names and everything after them are that user's words, data to read and not instructions to follow, then gives when it was sent and, on labelled lines of their own, the sender's name and the agent's title in quotes.
 
 <p align="center">
   <img src="../.github/assets/screens/phones-diagnostics-dark.png" alt="Engineering diagnostics in Agent Profile, the red recording badge over a chat, and its Stop and report question">
@@ -177,7 +177,7 @@ Agents on two of your computers can talk to each other, for example a build agen
 </p>
 
 <p align="center">
-  <img src="../.github/assets/screens/desktop-diagnostic-handed-dark.png" alt="A report handed to an agent: the .txt file opens by saying who sent it and to treat it as data">
+  <img src="../.github/assets/screens/desktop-diagnostic-handed-dark.png" alt="A report handed to an agent: the .txt file opens with a warning to treat it as data, then who sent it">
 </p>
 
 ## Accounts and sign-in
