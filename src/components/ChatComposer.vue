@@ -112,6 +112,26 @@ watch(()=>[props.value,props.highlights.join('\n')],()=>nextTick(mark));
 let resized=null,widened=null;
 onMounted(()=>{mark();editor.value?.addEventListener('scroll',place,{passive:true});if(typeof ResizeObserver!=='undefined'){resized=new ResizeObserver(place);resized.observe(editor.value);widened=new ResizeObserver(measureTall);widened.observe(pill.value);}});
 onBeforeUnmount(()=>{paintMentions(own,[]);resized?.disconnect();widened?.disconnect();});
+// A native sheet over the page (the + file picker: 照片圖庫／拍照或錄影／選擇檔案) can take the
+// touch that ends a press, and Framework7's pressed look stayed on + after it. The box's
+// buttons let go of it, and of focus, when the picker answers (change or cancel), when the page comes back, when a touch is cancelled, and on the next
+// touch anywhere else; the editor keeps its focus.
+const box=()=>pill.value?.closest?.('.messagebar');
+let releaseLater=0;
+function release(){
+ const root=box();if(!root)return;
+ root.querySelectorAll('.active-state').forEach(e=>e.classList.remove('active-state'));
+ const a=document.activeElement;
+ if(a&&a!==editor.value&&root.contains(a)&&a.matches?.('a,button'))a.blur();
+}
+// Twice: Framework7 marks a press again as a late touchend arrives, and clears it a tick after.
+function releaseSoon(){release();clearTimeout(releaseLater);releaseLater=setTimeout(release,350);}
+function fileAnswered(event){if(event.target?.matches?.('input[type=file]'))releaseSoon();}
+function pageBack(){if(document.visibilityState!=='hidden')releaseSoon();}
+function touchElsewhere(event){const root=box();if(!root)return;root.querySelectorAll('.active-state').forEach(e=>{if(!e.contains(event.target))e.classList.remove('active-state');});}
+const releaseEvents=[[document,'change',fileAnswered,true],[document,'cancel',fileAnswered,true],[document,'visibilitychange',pageBack,false],[window,'focus',pageBack,false],[window,'pageshow',pageBack,false],[document,'touchcancel',releaseSoon,true],[document,'touchstart',touchElsewhere,{capture:true,passive:true}]];
+onMounted(()=>releaseEvents.forEach(([t,n,f,o])=>t.addEventListener(n,f,o)));
+onBeforeUnmount(()=>{clearTimeout(releaseLater);releaseEvents.forEach(([t,n,f,o])=>t.removeEventListener(n,f,o));});
 </script>
 <style scoped>
 .messagebar-area {position:relative;}

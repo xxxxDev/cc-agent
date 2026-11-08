@@ -1,8 +1,8 @@
 // A finger on a message bubble: drawn to the left, a round reply icon shows on its right and
 // fills in; past REPLY_PX it lights up (a short buzz where the phone has one) and letting
 // go replies, short of it the bubble slides back. Held still for LONG_PRESS_MS, the page
-// dims, the bubble lifts and two round buttons float over it, copy and reply; a tap
-// anywhere else closes them.
+// dims, the bubble lifts and two round buttons float under it, copy and reply; a tap
+// anywhere else closes them, all easing in and out.
 // It keeps out of the way of what fingers already do there: the direction is decided on
 // the first DECIDE_PX and only a leftward, mostly level move is taken (a vertical one
 // scrolls as before, and the iOS back swipe from the left edge goes rightward; a touch
@@ -12,7 +12,7 @@
 import {ref,computed,onMounted,onBeforeUnmount} from 'vue';
 
 export const LONG_PRESS_MS = 450, DECIDE_PX = 8, REPLY_PX = 56, EDGE_PX = 24;
-const MAX_PX = 96, ICON = 36, BUTTON = 44, GAP = 10, LIFT = 1.03;
+const MAX_PX = 96, ICON = 36, BUTTON = 44, GAP = 10, MENU_GAP = 12, LIFT = 1.03, CLOSE_MS = 220;
 // Never a gesture here: things that take a finger of their own.
 const SKIP_ALL = 'input,textarea,select,[contenteditable],.md-scroll';
 // No long press here: links, buttons, pictures and files keep the browser's own.
@@ -29,7 +29,8 @@ export function useBubbleGestures({list, find, canReply, isSent, reply, copy}) {
     return m ? {el, m} : null;
   }
   function start(e) {
-    if (menu.value) return;
+    if (menu.value && !menu.value.closing) return;
+    if (menu.value) finish();
     if (e.touches.length !== 1) { drop(); return; }
     const hit = bubbleOf(e.target);
     if (!hit || e.target.closest(SKIP_ALL) || String(window.getSelection?.() || '')) return;
@@ -101,43 +102,97 @@ export function useBubbleGestures({list, find, canReply, isSent, reply, copy}) {
     if (!g || g.mode) return;
     g.mode = 'menu';
     const {el, m} = g;
-    window.getSelection?.()?.removeAllRanges?.();
-    const bubble = el.querySelector('.message-bubble');
-    const box = (bubble && bubble.offsetParent !== null ? bubble : el.querySelector('.message-content') || el).getBoundingClientRect();
+    clearSelection();
+    // iOS starts its own text selection a moment after our press opens the menu, and put its
+    // handles on the menu's icons: clear it while the menu is up.
+    document.addEventListener('selectionchange', clearSelection);
+    setTimeout(clearSelection, 120); setTimeout(clearSelection, 400);
+    finish();
+    const content = el.querySelector('.message-content') || el, c = content.getBoundingClientRect(), sent = isSent(m);
+    const bubble = el.querySelector('.message-bubble'), shown = bubble && bubble.offsetParent !== null && bubble.getBoundingClientRect().height > 0;
+    // It lifts by LIFT from the middle of its own side (right for the reader's own, left for a reply).
+    const ox = sent ? c.right : c.left, oy = c.top + c.height / 2;
+    const lift = r => ({left: ox + (r.left - ox) * LIFT, top: oy + (r.top - oy) * LIFT, width: r.width * LIFT, height: r.height * LIFT});
+    // What the icons sit against: the bubble, or for files alone the files.
+    const anchorEl = shown ? bubble : el.querySelector('.message-header') || content, a = anchorEl.getBoundingClientRect();
+    lifted = buildLift(el, content, c, sent);
     el.classList.add('bubble-menu-on');
-    menu.value = {message: m, el, sent: isSent(m), canCopy: !!m.text, canReply: canReply(),
-      rect: {top: box.top, left: box.left, width: box.width, height: box.height}};
+    const cell = root?.closest?.('.split-cell') || root?.closest?.('.page');
+    const bar = cell?.querySelector?.('.messagebar')?.getBoundingClientRect(), nav = cell?.querySelector?.('.navbar, .split-cell-bar')?.getBoundingClientRect();
+    menu.value = {message: m, el, sent, canCopy: !!m.text, canSelect: !!m.text, canReply: canReply(), shown: false, closing: false,
+      bubble: lift(a), block: lift({left: c.left, top: c.top, width: c.width, height: a.bottom - c.top}),
+      floor: bar && bar.height ? bar.top : innerHeight, ceiling: nav && nav.height ? nav.bottom : 0};
+    // Drawn first as it is, then eased into place: the dim, the lift and the icons together.
+    requestAnimationFrame(() => requestAnimationFrame(() => { if (menu.value && !menu.value.closing) menu.value.shown = true; }));
     window.addEventListener('scroll', closeMenu, true);
     window.addEventListener('resize', closeMenu);
     document.addEventListener('keydown', onKey);
   }
+  // A copy of the message drawn over the dim, exactly where the message is, so what stays
+  // bright is the message itself, its tail and files included, in whatever shape the theme
+  // gives it (a rounded hole in the dim never matched the masked bubble). The message itself is hidden under it until the copy has eased back.
+  let lifted = null, closeTimer = 0;
+  function buildLift(el, content, c, sent) {
+    const box = el.getBoundingClientRect();
+    const shell = document.createElement('div');
+    shell.className = root?.className || 'messages message-list';
+    for (const at of root?.attributes || []) if (at.name.startsWith('data-v-')) shell.setAttribute(at.name, '');
+    shell.classList.add('bubble-lift-shell');
+    shell.setAttribute('aria-hidden', 'true');
+    Object.assign(shell.style, {position: 'fixed', inset: '0', display: 'block', minHeight: '0', margin: '0', padding: '0', background: 'none', pointerEvents: 'none', overflow: 'visible', zIndex: 'auto'});
+    const copy = el.cloneNode(true);
+    copy.classList.remove('bubble-menu-on', 'bubble-pressing', 'message-arrival', 'message-found', 'reply-swiping', 'reply-swipe-back');
+    copy.classList.add('bubble-lift');
+    copy.style.removeProperty('--reply-swipe');
+    for (const x of [copy, ...copy.querySelectorAll('[id],[data-message-id]')]) { x.removeAttribute('id'); x.removeAttribute('data-message-id'); }
+    copy.querySelectorAll('.reply-swipe-icon').forEach(x => x.remove());
+    copy.inert = true;
+    Object.assign(copy.style, {position: 'absolute', left: box.left + 'px', top: box.top + 'px', width: box.width + 'px', height: box.height + 'px', margin: '0', maxWidth: 'none', boxSizing: 'border-box'});
+    const inner = copy.querySelector('.message-content');
+    if (inner) inner.style.transformOrigin = `${sent ? c.width : 0}px ${c.height / 2}px`;
+    shell.appendChild(copy);
+    // Scrolled code blocks and tables keep their place in the copy.
+    const from = el.querySelectorAll('*'), to = copy.querySelectorAll('*');
+    shell.restore = () => { from.forEach((x, i) => { if ((x.scrollLeft || x.scrollTop) && to[i]) { to[i].scrollLeft = x.scrollLeft; to[i].scrollTop = x.scrollTop; } }); };
+    return shell;
+  }
+  // The backdrop's lift layer (a function ref): the copy goes in as it mounts.
+  function mountLift(layer) { if (layer && lifted && lifted.parentNode !== layer) { layer.appendChild(lifted); lifted.restore?.(); } }
+  const still = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  // Closing eases everything back out; the actions run at once, and the page is free under it.
   function closeMenu() {
     const open = menu.value;
-    if (!open) return;
-    open.el.classList.remove('bubble-menu-on');
-    menu.value = null;
+    if (!open || open.closing) return;
+    open.closing = true; open.shown = false;
     window.removeEventListener('scroll', closeMenu, true);
     window.removeEventListener('resize', closeMenu);
     document.removeEventListener('keydown', onKey);
+    document.removeEventListener('selectionchange', clearSelection);
+    clearTimeout(closeTimer);
+    closeTimer = setTimeout(finish, still() ? 0 : CLOSE_MS);
   }
+  function finish() {
+    clearTimeout(closeTimer);
+    const open = menu.value;
+    if (open) open.el.classList.remove('bubble-menu-on');
+    lifted?.remove(); lifted = null;
+    if (open) menu.value = null;
+  }
+  function clearSelection() { window.getSelection?.()?.removeAllRanges?.(); }
   function onKey(e) { if (e.key === 'Escape') { e.preventDefault(); closeMenu(); } }
-  function contextMenu(e) { if (g || menu.value) e.preventDefault(); }
+  function contextMenu(e) { if (g || (menu.value && !menu.value.closing)) e.preventDefault(); }
 
-  // The bubble's place, a little larger as it lifts, left clear of the dimming (the
-  // hole of an SVG mask over the page).
-  const holeStyle = computed(() => {
-    const open = menu.value, r = open?.rect; if (!r) return null;
-    // It grows by LIFT from its own side (left for a reply, right for the reader's own).
-    const grow = r.width * (LIFT - 1), padY = 4 + r.height * (LIFT - 1) / 2;
-    return {x: r.left - 4 - (open.sent ? grow : 0), y: r.top - padY, width: r.width + 8 + grow, height: r.height + padY * 2};
-  });
-  // Over the bubble, on its own side; under it when there is no room above.
+  // Under the bubble on its own side (right for the reader's own, left for a reply); over it
+  // when there is no room between it and the composer.
   const menuStyle = computed(() => {
     const open = menu.value; if (!open) return null;
-    const r = open.rect, count = (open.canCopy ? 1 : 0) + (open.canReply ? 1 : 0), w = count * BUTTON + (count - 1) * GAP;
-    const top = r.top - BUTTON - 14 >= 56 ? r.top - BUTTON - 14 : r.top + r.height + 14;
-    const x = open.sent ? r.left + r.width - w : r.left;
-    return {top: Math.min(top, innerHeight - BUTTON - 8) + 'px', left: Math.max(8, Math.min(x, innerWidth - w - 8)) + 'px'};
+    const count = (open.canCopy ? 1 : 0) + (open.canSelect ? 1 : 0) + (open.canReply ? 1 : 0), w = count * BUTTON + (count - 1) * GAP;
+    const below = open.bubble.top + open.bubble.height + MENU_GAP, above = open.block.top - MENU_GAP - BUTTON;
+    const floor = open.floor - 8, ceiling = Math.max(8, open.ceiling + 8);
+    const under = below + BUTTON <= floor || above < ceiling;
+    const top = under ? Math.min(below, floor - BUTTON) : above;
+    const x = open.sent ? open.bubble.left + open.bubble.width - w : open.bubble.left;
+    return {top: Math.max(8, top) + 'px', left: Math.max(8, Math.min(x, innerWidth - w - 8)) + 'px', '--bubble-menu-from': (under ? -6 : 6) + 'px'};
   });
 
   onMounted(() => {
@@ -150,7 +205,7 @@ export function useBubbleGestures({list, find, canReply, isSent, reply, copy}) {
     root.addEventListener('contextmenu', contextMenu);
   });
   onBeforeUnmount(() => {
-    closeMenu(); drop();
+    closeMenu(); finish(); drop();
     root?.removeEventListener('touchstart', start);
     root?.removeEventListener('touchmove', move);
     root?.removeEventListener('touchend', end);
@@ -159,8 +214,25 @@ export function useBubbleGestures({list, find, canReply, isSent, reply, copy}) {
   });
 
   return {
-    menu, holeStyle, menuStyle, close: closeMenu,
-    copy() { const m = menu.value?.message; closeMenu(); if (m) copy(m); },
-    reply() { const m = menu.value?.message; closeMenu(); if (m) reply(m); },
+    menu, menuStyle, mountLift, close: closeMenu,
+    copy() { const open = menu.value; if (!open || open.closing) return; closeMenu(); copy(open.message); },
+    reply() { const open = menu.value; if (!open || open.closing) return; closeMenu(); reply(open.message); },
+    // Select text: the menu closes and the bubble's words are
+    // handed to iOS's own selection, all of them selected, so its handles pick part of them;
+    // a tap elsewhere ends it.
+    select() {
+      const open = menu.value; if (!open || open.closing) return; closeMenu();
+      const el = open.el;
+      setTimeout(() => {
+        const text = el.querySelector('.message-text, .message-markdown');
+        if (!text) return;
+        el.classList.add('bubble-selecting');
+        const range = document.createRange(); range.selectNodeContents(text);
+        const sel = window.getSelection?.(); if (!sel) return;
+        sel.removeAllRanges(); sel.addRange(range);
+        const end = e => { if (e && el.contains(e.target)) return; el.classList.remove('bubble-selecting'); document.removeEventListener('touchstart', end, true); document.removeEventListener('mousedown', end, true); };
+        document.addEventListener('touchstart', end, true); document.addEventListener('mousedown', end, true);
+      }, still() ? 0 : CLOSE_MS + 20);
+    },
   };
 }

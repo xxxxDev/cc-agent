@@ -837,6 +837,7 @@ const english = {
   "回覆": "Reply",
   "回覆：": "Replying to ",
   "取消回覆": "Cancel reply",
+  "選取文字": "Select text",
   "跳到這則訊息": "Show this message",
   "顯示所有回覆的訊息": "Show every message this answers",
   "已傳給": "Sent to",
