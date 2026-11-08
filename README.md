@@ -81,8 +81,8 @@ For every feature in detail, see [docs/FEATURES.md](docs/FEATURES.md).
 </p>
 
 <p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset=".github/assets/anim/swipe-reply-dark.svg"><img src=".github/assets/anim/swipe-reply-light.svg" width="300" alt="Swiping a bubble to the left to reply on a phone"></picture>
-  <picture><source media="(prefers-color-scheme: dark)" srcset=".github/assets/anim/long-press-dark.svg"><img src=".github/assets/anim/long-press-light.svg" width="300" alt="A long press lifts the bubble with copy, select text and reply under it"></picture>
+  <img src=".github/assets/anim/swipe-reply-dark.svg" width="300" alt="Swiping a bubble to the left to reply on a phone">
+  <img src=".github/assets/anim/long-press-dark.svg" width="300" alt="A long press lifts the bubble with copy, select text and reply under it">
 </p>
 
 - **A chat that feels familiar.** A rounded composer that grows with your message, attachments with previews and upload progress, mentions, replies to a single message with a line showing what each reply answers, message search and jump-to-latest.

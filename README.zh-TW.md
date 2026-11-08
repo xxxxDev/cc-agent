@@ -81,8 +81,8 @@ CC Agent 跑在你自己的 Mac 上。你建立的每個 agent，都是 tmux 裡
 </p>
 
 <p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset=".github/assets/anim/swipe-reply-dark.svg"><img src=".github/assets/anim/swipe-reply-light.svg" width="300" alt="在手機上把泡泡往左滑來回覆"></picture>
-  <picture><source media="(prefers-color-scheme: dark)" srcset=".github/assets/anim/long-press-dark.svg"><img src=".github/assets/anim/long-press-light.svg" width="300" alt="長按讓泡泡浮起，下方有複製、選取文字和回覆"></picture>
+  <img src=".github/assets/anim/swipe-reply-dark.svg" width="300" alt="在手機上把泡泡往左滑來回覆">
+  <img src=".github/assets/anim/long-press-dark.svg" width="300" alt="長按讓泡泡浮起，下方有複製、選取文字和回覆">
 </p>
 
 - **熟悉的聊天介面。**圓角輸入框會隨內容長高，附件有預覽和上傳進度，支援提及、回覆單一則訊息（回覆上方標出它回答哪一則）、訊息搜尋和回到最新。

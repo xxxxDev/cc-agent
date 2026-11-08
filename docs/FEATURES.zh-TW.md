@@ -48,13 +48,13 @@
 </p>
 
 <p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="../.github/assets/anim/swipe-reply-dark.svg"><img src="../.github/assets/anim/swipe-reply-light.svg" width="300" alt="把泡泡往左滑來回覆：回覆圖示亮起，輸入框上方出現回覆列"></picture>
-  <picture><source media="(prefers-color-scheme: dark)" srcset="../.github/assets/anim/long-press-dark.svg"><img src="../.github/assets/anim/long-press-light.svg" width="300" alt="長按讓頁面變暗、泡泡浮起，下方有複製、選取文字和回覆；選取文字會選起它的文字"></picture>
+  <img src="../.github/assets/anim/swipe-reply-dark.svg" width="300" alt="把泡泡往左滑來回覆：回覆圖示亮起，輸入框上方出現回覆列">
+  <img src="../.github/assets/anim/long-press-dark.svg" width="300" alt="長按讓頁面變暗、泡泡浮起，下方有複製、選取文字和回覆；選取文字會選起它的文字">
 </p>
 
 <p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="../.github/assets/anim/jump-to-message-dark.svg"><img src="../.github/assets/anim/jump-to-message-light.svg" width="300" alt="點回覆上方那一行，會捲到它回答的訊息並標亮"></picture>
-  <picture><source media="(prefers-color-scheme: dark)" srcset="../.github/assets/anim/upload-progress-dark.svg"><img src="../.github/assets/anim/upload-progress-light.svg" width="300" alt="送出三個檔案：每個依序等待、上傳並顯示百分比、處理中，最後訊息送出"></picture>
+  <img src="../.github/assets/anim/jump-to-message-dark.svg" width="300" alt="點回覆上方那一行，會捲到它回答的訊息並標亮">
+  <img src="../.github/assets/anim/upload-progress-dark.svg" width="300" alt="送出三個檔案：每個依序等待、上傳並顯示百分比、處理中，最後訊息送出">
 </p>
 
 <p align="center">
@@ -165,7 +165,7 @@
 </p>
 
 <p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="../.github/assets/anim/recording-badge-dark.svg"><img src="../.github/assets/anim/recording-badge-light.svg" width="300" alt="錄製中標籤在計時；點它會詢問，選停止並回報就把診斷資訊送給管理員"></picture>
+  <img src="../.github/assets/anim/recording-badge-dark.svg" width="300" alt="錄製中標籤在計時；點它會詢問，選停止並回報就把診斷資訊送給管理員">
 </p>
 
 <p align="center">
@@ -204,5 +204,5 @@
 - **電腦本身的畫面** 不在 CC Agent 裡：要從手機看並操作 Mac，請用 [castpane](https://github.com/xxxxDev/castpane)。
 
 <p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="../.github/assets/anim/push-sheet-dark.svg"><img src="../.github/assets/anim/push-sheet-light.svg" width="300" alt="在手機上從「⋯」選單打開用量，面板像推出的卡片，後面的頁面往後退"></picture>
+  <img src="../.github/assets/anim/push-sheet-dark.svg" width="300" alt="在手機上從「⋯」選單打開用量，面板像推出的卡片，後面的頁面往後退">
 </p>

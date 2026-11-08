@@ -48,13 +48,13 @@ This is the full tour. The [README](../README.md) is the short version.
 </p>
 
 <p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="../.github/assets/anim/swipe-reply-dark.svg"><img src="../.github/assets/anim/swipe-reply-light.svg" width="300" alt="Swiping a bubble to the left to reply: the reply icon lights up and the reply bar shows over the box"></picture>
-  <picture><source media="(prefers-color-scheme: dark)" srcset="../.github/assets/anim/long-press-dark.svg"><img src="../.github/assets/anim/long-press-light.svg" width="300" alt="A long press dims the page and lifts the bubble with copy, select text and reply under it; Select text selects its words"></picture>
+  <img src="../.github/assets/anim/swipe-reply-dark.svg" width="300" alt="Swiping a bubble to the left to reply: the reply icon lights up and the reply bar shows over the box">
+  <img src="../.github/assets/anim/long-press-dark.svg" width="300" alt="A long press dims the page and lifts the bubble with copy, select text and reply under it; Select text selects its words">
 </p>
 
 <p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="../.github/assets/anim/jump-to-message-dark.svg"><img src="../.github/assets/anim/jump-to-message-light.svg" width="300" alt="Tapping the line over a reply scrolls up to the message it answers and highlights it"></picture>
-  <picture><source media="(prefers-color-scheme: dark)" srcset="../.github/assets/anim/upload-progress-dark.svg"><img src="../.github/assets/anim/upload-progress-light.svg" width="300" alt="Three files sent: each waits, uploads with its percent, shows Processing, then the message is in"></picture>
+  <img src="../.github/assets/anim/jump-to-message-dark.svg" width="300" alt="Tapping the line over a reply scrolls up to the message it answers and highlights it">
+  <img src="../.github/assets/anim/upload-progress-dark.svg" width="300" alt="Three files sent: each waits, uploads with its percent, shows Processing, then the message is in">
 </p>
 
 <p align="center">
@@ -165,7 +165,7 @@ Agents on two of your computers can talk to each other, for example a build agen
 </p>
 
 <p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="../.github/assets/anim/recording-badge-dark.svg"><img src="../.github/assets/anim/recording-badge-light.svg" width="300" alt="The recording badge counting; a tap asks, and Stop and report sends the diagnostics to the admins"></picture>
+  <img src="../.github/assets/anim/recording-badge-dark.svg" width="300" alt="The recording badge counting; a tap asks, and Stop and report sends the diagnostics to the admins">
 </p>
 
 <p align="center">
@@ -204,5 +204,5 @@ Agents on two of your computers can talk to each other, for example a build agen
 - **The computer's own screen** is not part of CC Agent: to see and control a Mac from a phone, use [castpane](https://github.com/xxxxDev/castpane).
 
 <p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="../.github/assets/anim/push-sheet-dark.svg"><img src="../.github/assets/anim/push-sheet-light.svg" width="300" alt="On a phone, Usage opens from the ⋯ menu as a pushed card while the page behind steps back"></picture>
+  <img src="../.github/assets/anim/push-sheet-dark.svg" width="300" alt="On a phone, Usage opens from the ⋯ menu as a pushed card while the page behind steps back">
 </p>
