@@ -444,7 +444,9 @@ function onMarkdownClick(event){
 :deep(.message-sent .message-header) > .reply-quote{margin-right:6px}
 :deep(.message-header) > .reply-quote:not(:first-child){margin-top:6px}
 .message-files > .reply-quote.in-files{flex:1 0 100%;margin:0 0 -4px}
-:deep(.message.relay-message .message-bubble){background:rgba(127,127,127,.12);border:1px dashed rgba(127,127,127,.45)}
+/* A dashed bubble has no tail: iOS's tail mask cut its left edge off.
+   !important: Framework7's .ios .message-received.message-tail:not(.message-typing) rule is more specific. */
+:deep(.message.relay-message .message-bubble){background:rgba(127,127,127,.12);border:1px dashed rgba(127,127,127,.45);-webkit-mask-box-image:none !important;mask:none !important;border-radius:var(--f7-message-bubble-border-radius,18px) !important}
 /* Room between bubbles, the thinking bubble included. */
 :deep(.message + .message){margin-top:28px}
 .schedule-card{align-self:center;width:min(100%,560px);box-sizing:border-box;margin:36px auto 4px !important;padding:10px 14px;border-radius:16px;border:1px solid color-mix(in srgb,#ff9f0a 45%,transparent);background:color-mix(in srgb,#ff9f0a 9%,transparent);color:var(--cc-color-text);cursor:pointer;flex-direction:column;align-items:stretch;gap:6px}
