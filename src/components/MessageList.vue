@@ -186,15 +186,28 @@ const picturesOf=m=>(m.attachments||[]).filter(f=>PICTURE.test(f.name||''));
 const attachmentUrl=file=>'/api/conversations/'+(file.conversationId||props.conversationId)+'/attachments/'+file.id;
 // An SVG thumbnail: the server sends it as plain bytes, so it is fetched once and shown from a
 // blob typed image/svg+xml, in an <img>, so nothing in it runs.
-const svgThumbs=ref({});
+// One that cannot be fetched (offline, gone, refused) is marked and not asked for again; a
+// thumbnail whose file has left the list is let go, and one that arrives after the list has
+// gone is never kept.
+const svgThumbs=ref({});const SVG_WAIT='…',SVG_FAILED='x';let listGone=false;
+const isSvg=file=>/\.svg$/i.test(file?.name||'');
 function pictureSrc(file){
- if(!/\.svg$/i.test(file.name||''))return attachmentUrl(file);
- const key=file.id;const have=svgThumbs.value[key];if(have)return have==='…'?'':have;
- svgThumbs.value={...svgThumbs.value,[key]:'…'};
- fetch(attachmentUrl(file),{credentials:'include'}).then(r=>r.ok?r.blob():Promise.reject()).then(b=>{svgThumbs.value={...svgThumbs.value,[key]:URL.createObjectURL(new Blob([b],{type:'image/svg+xml'}))};}).catch(()=>{const next={...svgThumbs.value};delete next[key];svgThumbs.value=next;});
+ if(!isSvg(file))return attachmentUrl(file);
+ const key=file.id;const have=svgThumbs.value[key];if(have)return have===SVG_WAIT||have===SVG_FAILED?'':have;
+ svgThumbs.value={...svgThumbs.value,[key]:SVG_WAIT};
+ fetch(attachmentUrl(file),{credentials:'include'}).then(r=>r.ok?r.blob():Promise.reject()).then(b=>{
+  const url=URL.createObjectURL(new Blob([b],{type:'image/svg+xml'}));
+  if(listGone||svgThumbs.value[key]!==SVG_WAIT){URL.revokeObjectURL(url);return;}
+  svgThumbs.value={...svgThumbs.value,[key]:url};
+ }).catch(()=>{if(!listGone&&svgThumbs.value[key]===SVG_WAIT)svgThumbs.value={...svgThumbs.value,[key]:SVG_FAILED};});
  return '';
 }
-onBeforeUnmount(()=>{for(const u of Object.values(svgThumbs.value))if(u&&u!=='…')URL.revokeObjectURL(u);});
+const dropSvgThumb=(next,key)=>{const u=next[key];if(u&&u!==SVG_WAIT&&u!==SVG_FAILED)URL.revokeObjectURL(u);delete next[key];};
+watch(()=>props.messages.flatMap(m=>(m.attachments||[]).filter(isSvg).map(f=>f.id)).join('\n'),ids=>{
+ const live=new Set(ids.split('\n'));const gone=Object.keys(svgThumbs.value).filter(k=>!live.has(k));
+ if(!gone.length)return;const next={...svgThumbs.value};for(const k of gone)dropSvgThumb(next,k);svgThumbs.value=next;
+});
+onBeforeUnmount(()=>{listGone=true;const all={...svgThumbs.value};for(const k of Object.keys(all))dropSvgThumb(all,k);svgThumbs.value={};});
 const preview=text=>String(text).replace(/```[^\n]*/g,'').replace(/^[ \t]*(#{1,6}|>|[-*+]|\d+\.)[ \t]+/gm,'').replace(/\*\*|__|`/g,'').replace(/\s+/g,' ').trim().slice(0,160);
 // A message a schedule sent is not the owner speaking:
 // it shows as a card of its own, the schedule's name and time, what its check found,

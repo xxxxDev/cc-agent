@@ -147,6 +147,7 @@ import routes from './routes.js';
 import InstallScreen from './components/InstallScreen.vue';
 import LoginPage from './pages/LoginPage.vue';
 import RecordingBadge from './components/RecordingBadge.vue';
+import { clearKeyboardTrace } from './js/keyboardDiagnostics.js';
 import { t } from './js/i18n.js';
 import { api, authLoading, currentUser, verifyAuth, signedInByQr } from './js/auth.js';
 import { createPresenceHeartbeat } from './js/presence-heartbeat.js';
@@ -234,6 +235,9 @@ watch(() => currentUser.value?.id || null, (id) => {
   lastSaid = id;
   if (!first) try { authChannel?.postMessage({ signedIn: !!id }); } catch {}
 });
+// A diagnostics recording is the signed-in person's: signing out or another account signing in
+// stops it and clears its samples (keyboardDiagnostics.js).
+watch(() => currentUser.value?.id || null, (id, was) => { if (was && id !== was) clearKeyboardTrace(); });
 async function askWhoIAm() {
   try { const r = await api('/auth/verify'); if (r?.user && !currentUser.value) signedInByQr(r.user); else if (!r?.user && currentUser.value) verifyAuth(); }
   catch { if (currentUser.value) verifyAuth(); }

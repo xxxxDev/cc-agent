@@ -849,6 +849,7 @@ const english = {
   "目前沒有診斷回報": "No diagnostic reports",
   "已刪除的使用者": "Deleted user",
   "交給 agent": "Hand to an agent",
+  "這份回報是 {name} 寫的內容，會交給有完整權限的 agent，確定嗎？": "This report is text written by {name} and goes to an agent with full access. Continue?",
   "標為已處理": "Mark handled",
   "刪除後無法復原。": "This cannot be undone.",
   "刪除這份診斷回報？": "Delete this diagnostic report?",

@@ -34,6 +34,13 @@ export function stopKeyboardTrace(){
  Object.assign(recording,{active:false,elapsed:Math.min(RECORDING_CAP_MS,Math.round(now-started))});
  placeholder.value='Nothing was recorded.';publish();
 }
+// Signed out, or someone else signed in (App.vue): the recording stops and what it held goes,
+// so one person's samples never go with the next person's report.
+export function clearKeyboardTrace(){
+ clearInterval(tick);clearTimeout(cap);tick=cap=null;
+ deadline=0;started=0;rows=[];last='';placeholder.value='';publish();
+ Object.assign(recording,{active:false,conversationId:null,startedAt:0,elapsed:0});
+}
 // 0:23, 4:05.
 export function recordingClock(ms){const s=Math.floor((ms||0)/1000);return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;}
 // What happened, not only where things were (such as a page jump after the + picker): taps,
