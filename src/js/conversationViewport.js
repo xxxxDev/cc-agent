@@ -117,9 +117,21 @@ export function bindConversationViewport(page,{viewport=window.visualViewport}={
   function focus(){rememberShell();const el=content();pin=Boolean(el&&el.scrollHeight-el.clientHeight-el.scrollTop<80);if(!keyboard)baseline=Math.max(window.innerHeight,visibleHeight(viewport,Boolean(input())));sync();}
   // A stuck viewport sends no resize when the keyboard goes.
   function stuckBlur(){if(viewport.height<=0)setTimeout(sync);}
+  // The composer still focused with the keyboard down (after the file picker the +
+  // opens): a tap there opens the keyboard afresh, so it takes the same parked route
+  // as a first focus. Left native, iOS revealed the caret by scrolling the whole
+  // document up under the keyboard, and in a home-screen app it keeps it there
+  // whatever the page sets. Down is measured on the
+  // viewport itself: after a native reveal innerHeight shrinks with it, so the
+  // keyboard flag reads false while the keyboard is up, and taps while typing must
+  // stay native. A viewport reporting no height leaves the tap native too.
+  const keyboardDown=()=>viewport.height>0&&page.clientHeight-viewport.height<100;
+  const reopens=el=>document.activeElement===el&&keyboardDown()&&el.hasAttribute?.('contenteditable');
   function touchFocus(event){
     const el=event.target.closest?.('[contenteditable]')||event.target;
-    if(!el.matches?.('textarea,input,[contenteditable]')||document.activeElement===el)return;
+    if(!el.matches?.('textarea,input,[contenteditable]')||document.activeElement===el&&!reopens(el))return;
+    // focus() on the focused editor would do nothing and bring no keyboard.
+    if(document.activeElement===el)el.blur?.();
     rememberShell();if(el.hasAttribute?.('contenteditable')&&page.ownerDocument?.body)lockBody(page.ownerDocument.body,page.ownerDocument);
     event.preventDefault();reveal();cancelAnimationFrame(focusFrame);
     hiddenInput=el;
@@ -144,7 +156,7 @@ export function bindConversationViewport(page,{viewport=window.visualViewport}={
   function touchStart(event){
     const el=event.target.closest?.('[contenteditable]')||event.target;
     const point=event.touches?.[0];
-    tap=event.touches?.length===1&&el.matches?.('textarea,input,[contenteditable]')&&document.activeElement!==el
+    tap=event.touches?.length===1&&el.matches?.('textarea,input,[contenteditable]')&&(document.activeElement!==el||reopens(el))
       ?{el,x:point.clientX,y:point.clientY}:null;
   }
   function touchMove(event){

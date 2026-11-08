@@ -17,7 +17,30 @@ export function useAttachmentDrafts(selected,user,busy,ct){
  function removeFile(key){if(busy.value)return;const id=selected.value,item=files.value.find(x=>x.key===key);drafts.value[id]=files.value.filter(x=>x.key!==key);pendingSend.delete(id);if(item?.uploadedId)api('/conversations/'+id+'/attachments/'+item.uploadedId,{method:'DELETE'}).catch(()=>{});resize();}
  // A file not sent yet opens with the others beside it, to step through as in a sent bubble.
  function previewDraft(item){const shown=f=>({id:f.key,name:f.name,size:f.size,local:f.file});return {...shown(item),group:files.value.map(shown)};}
- function chooseFiles(){if(!busy.value)fileInput.value?.click();}
+ // The editor lets go before iOS's own file picker opens: iOS hides the keyboard for the picker
+ // but kept the editor focused, so the next tap on it was a native focus and iOS scrolled the
+ // whole page up. Blurring inside the same tap keeps the
+ // gesture, so the picker still opens; the next tap on the editor is a fresh, guarded focus.
+ // While iOS's picker menu is up, the tap that dismisses it only dismisses it: landing on the
+ // editor it would focus it, iOS would raise the keyboard and then drop it again as the picker
+ // closes. The next tap opens the keyboard.
+ function swallowWhilePicking(){
+  const input=fileInput.value,opened=Date.now();let done=false;
+  const editorTouch=e=>{if(e.target?.closest?.('[contenteditable],textarea'))e.preventDefault();};
+  // iOS still focused the editor on that tap, so the
+  // editors are not editable while the picker is up, and come back when it answers.
+  const locked=[...(document.querySelectorAll?.('.chat-editor[contenteditable]')||[])].filter(el=>el.getAttribute('contenteditable')!=='false').map(el=>[el,el.getAttribute('contenteditable')]);
+  for(const [el] of locked)el.setAttribute('contenteditable','false');
+  const unlock=()=>{for(const [el,was] of locked)if(el.getAttribute('contenteditable')==='false')el.setAttribute('contenteditable',was);};
+  const finish=e=>{if(done||e?.type==='focus'&&Date.now()-opened<400)return;done=true;clearTimeout(giveUp);input?.removeEventListener('change',finish);input?.removeEventListener('cancel',finish);globalThis.window?.removeEventListener?.('focus',finish);
+   // Released at once: the dismissing tap ends well before the picker answers (about 750 ms on an
+   // iPhone), and a short grace swallowed the next real tap.
+   document.removeEventListener?.('touchend',editorTouch,true);unlock();};
+  document.addEventListener?.('touchend',editorTouch,{capture:true,passive:false});
+  input?.addEventListener?.('change',finish);input?.addEventListener?.('cancel',finish);globalThis.window?.addEventListener?.('focus',finish);
+  const giveUp=setTimeout(()=>finish(),60000);giveUp?.unref?.();
+ }
+ function chooseFiles(){if(busy.value)return;const a=document.activeElement;if(a&&a!==document.body&&(a.isContentEditable||/^(TEXTAREA|INPUT)$/.test(a.tagName)))a.blur();swallowWhilePicking();fileInput.value?.click();}
  async function upload(id,items){for(const item of items){if(!item.uploadedId){const r=await api('/conversations/'+id+'/attachments?name='+encodeURIComponent(item.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:item.file});item.uploadedId=r.id;}}return items.map(x=>x.uploadedId);}
  function requestId(id,text,items){const signature=JSON.stringify([text,items.map(x=>x.key)]);const previous=pendingSend.get(id);if(previous?.signature===signature)return previous.id;const value={signature,id:crypto.randomUUID()};pendingSend.set(id,value);return value.id;}
  function sent(id,items){const keys=new Set(items.map(x=>x.key));drafts.value[id]=(drafts.value[id]||[]).filter(x=>!keys.has(x.key));pendingSend.delete(id);resize();}
