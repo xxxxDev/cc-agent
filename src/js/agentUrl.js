@@ -13,6 +13,11 @@ export function reportIdFromUrl(href) {
   const id = new URL(href, BASE).searchParams.get('access-report');
   return id && new RegExp(`^${UUID}$`, 'i').test(id) ? id : null;
 }
+// Where a diagnostics report's notification lands (the same file).
+export function diagnosticIdFromUrl(href) {
+  const id = new URL(href, BASE).searchParams.get('diagnostic-report');
+  return id && new RegExp(`^${UUID}$`, 'i').test(id) ? id : null;
+}
 // Where a new schedule proposal's notification lands (server/services/pushService.js).
 export function scheduleIdFromUrl(href) {
   const id = new URL(href, BASE).searchParams.get('schedule');

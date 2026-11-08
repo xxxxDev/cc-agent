@@ -2,6 +2,7 @@ const agents=require('./agentStore');
 const attachments=require('./attachments');
 const express=require('express');
 const {verifyToken}=require('./middlewares/authMiddleware');
+const {jsonBodyErrorHandler}=require('./middlewares/requestGuards');const {DIAGNOSTIC_REPORTS_PATH}=require('./diagnosticReports');
 exports.installBridge=app=>{
 app.use('/bridge',(req,res,next)=>{res.setHeader('Cache-Control','no-store');if(req.headers.origin)return res.status(403).end();next();});
 // The answering side's key for the other machine's forced command (peer link).
@@ -116,6 +117,33 @@ app.post('/api/access-reports/:id/grant',...reviewer,async(req,res,next)=>{try{
  const {access,granted}=agents.grantAccess(report.conversationId,typeof folder==='string'?{folder}:{website},req.role);
  res.json((await named([agents.resolveAccessReport(req.params.id,{status:'resolved',resolution:'granted',granted,accessAfter:access,resolvedAt:new Date().toISOString(),resolvedBy:req.username})]))[0]);
 }catch(e){next(e);}});
+// Diagnostics sent from Agent Profile's 「回報診斷」. Anyone
+// signed in sends one, only for an agent of their own (agents.get, as every conversation
+// route); only an admin lists, reads, marks or deletes them. The body has its own parser,
+// up to 512 KB of text, read only once the sender is signed in (app.js leaves it to this
+// route, after the rate limit and the CSRF check); sending and deleting are in the audit log.
+{
+const diag=agents.diagnosticReports;
+const noStore=(req,res,next)=>{res.set('Cache-Control','private, no-store');next();};
+const UUID_=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const fromNamed=async list=>{const names=await ownerNames();return list.map(r=>({...r,fromName:names.get(r.from)||''}));};
+const auditDiag=entry=>{try{require('./services/audit').audit({source:'diagnostic-report',...entry});}catch(e){console.error('diagnostic audit:',e.message);}};
+const diagJson=express.json({limit:'640kb'});
+const diagBody=(req,res,next)=>diagJson(req,res,e=>e?jsonBodyErrorHandler(e,req,res,next):next());
+app.post(DIAGNOSTIC_REPORTS_PATH,verifyToken,diagBody,noStore,(req,res,next)=>{try{
+ const {conversationId,text,build}=req.body||{};
+ if(typeof conversationId!=='string'||!UUID_.test(conversationId))throw agents.error('找不到這個對話',404);
+ const c=agents.get(conversationId,req.userId);
+ if(c.archived)throw agents.error('找不到這個對話',404);
+ const r=diag.add({from:req.userId,conversationId:c.id,agentTitle:c.title,build,text});
+ auditDiag({action:'create',id:r.id,by:req.userId,agent:c.id,bytes:r.bytes,build:r.build});
+ res.status(201).json({id:r.id,at:r.at});
+}catch(e){next(e);}});
+app.get('/api/diagnostic-reports',...reviewer,async(req,res,next)=>{try{res.json({reports:await fromNamed(diag.list())});}catch(e){next(e);}});
+app.get('/api/diagnostic-reports/:id',...reviewer,async(req,res,next)=>{try{res.json((await fromNamed([diag.get(req.params.id)]))[0]);}catch(e){next(e);}});
+app.post('/api/diagnostic-reports/:id/status',...reviewer,async(req,res,next)=>{try{diag.setStatus(req.params.id,req.body?.status,req.username);res.json((await fromNamed([diag.get(req.params.id)]))[0]);}catch(e){next(e);}});
+app.delete('/api/diagnostic-reports/:id',...reviewer,(req,res,next)=>{try{const r=diag.remove(req.params.id);auditDiag({action:'delete',id:r.id,by:req.userId,from:r.from,agent:r.conversationId});res.json({ok:true});}catch(e){next(e);}});
+}
 app.get('/api/conversations',(req,res)=>res.json({conversations:agents.list(req.userId)}));
 // Deleted agents, which only an admin can delete:
 // the list with when each is purged, restoring one to the Agents list, and

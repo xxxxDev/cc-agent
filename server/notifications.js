@@ -15,6 +15,9 @@ function scheduleResultNotification(x){const r=x.resultPending||{};return {kind:
 // A schedule that failed twice in a row, once, until a run succeeds again. Keyed on
 // the failed run's time, so the next streak is a push of its own.
 function scheduleFailureNotification(x){return {kind:'schedule_failed',conversationId:x.conversationId,replyId:'schedule-failed:'+x.id+':'+(x.lastRun?.at||''),scheduleId:x.id,ownerUserId:x.owner,agentName:x.agentTitle||'Agent',scheduleName:x.name,detail:String(x.lastRun?.detail||'')};}
+// A diagnostics report someone sent from Agent Profile, to the
+// admins as a scope report goes: the agent's name and that it waits, never the text.
+function diagnosticNotification(r){return {kind:'diagnostic_report',conversationId:r.conversationId,replyId:'diagnostic-report:'+r.id,reportId:r.id,ownerUserId:r.from,agentName:r.agentTitle};}
 function activeAdmins(){
  const {usersDB}=require('./stores');const {isActiveUser}=require('./services/userLifecycle');
  return new Promise((resolve,reject)=>usersDB.find({role:'admin'},(error,users)=>error?reject(error):resolve(users.filter(isActiveUser).map(u=>String(u._id)))));
@@ -57,6 +60,24 @@ function startNotifications(agents,service=getDefaultPushService(),admins=active
    }
   }
  }
+ // Diagnostics reports, as scope reports: one push per sender per quiet period, the rest marked.
+ const diagnosticPush=new Map(),diagnosticFailures=new Map();
+ async function flushDiagnostics(){
+  const done=[];
+  for(const r of agents.pendingDiagnosticNotifications?.()||[]){
+   const failed=diagnosticFailures.get(r.id);if(failed&&now()<failed.retryAt)continue;
+   try{
+    const quiet=now()-(diagnosticPush.get(r.from)??-Infinity)<quietMs;
+    if(r.status==='open'&&!quiet){await service.notifyAccessReport(diagnosticNotification(r),await admins());diagnosticPush.set(r.from,now());}
+    diagnosticFailures.delete(r.id);done.push(r.id);
+   }catch{
+    const attempts=(failed?.attempts||0)+1;
+    if(attempts>=REPORT_MAX_ATTEMPTS){diagnosticFailures.delete(r.id);done.push(r.id);console.error(`Diagnostic notification ${r.id} given up after ${attempts} attempts`);}
+    else{diagnosticFailures.set(r.id,{attempts,retryAt:now()+Math.min(60_000*attempts,10*60_000)});console.error(`Diagnostic notification ${r.id} failed, attempt ${attempts}`);}
+   }
+  }
+  if(done.length)agents.markDiagnosticsNotified(done);
+ }
  async function flushReports(){
   const done=[];
   for(const r of agents.pendingReportNotifications()){
@@ -83,6 +104,7 @@ function startNotifications(agents,service=getDefaultPushService(),admins=active
    try{await flushReplies();}catch{console.error('Notification queue temporarily unavailable');}
    try{await flushReports();}catch{console.error('Report notification queue temporarily unavailable');}
    try{await flushSchedules();}catch{console.error('Schedule notification queue temporarily unavailable');}
+   try{await flushDiagnostics();}catch{console.error('Diagnostic notification queue temporarily unavailable');}
   })().finally(()=>{current=null;});
   return current;
  }
@@ -90,4 +112,4 @@ function startNotifications(agents,service=getDefaultPushService(),admins=active
  // The returned stop function also carries flush, for tests that step the queue.
  return Object.assign(()=>{clearInterval(timer);service.stop();},{flush});
 }
-module.exports={startNotifications,replyNotification,reportNotification,scheduleNotification,scheduleFailureNotification,scheduleResultNotification,REPORT_QUIET_MS,REPORT_MAX_ATTEMPTS};
+module.exports={startNotifications,replyNotification,reportNotification,diagnosticNotification,scheduleNotification,scheduleFailureNotification,scheduleResultNotification,REPORT_QUIET_MS,REPORT_MAX_ATTEMPTS};

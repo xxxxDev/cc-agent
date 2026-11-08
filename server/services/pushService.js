@@ -25,6 +25,10 @@ function buildPayload(reply) {
     if(!reply.reportId||!reply.replyId)throw new Error('Unsupported notification');
     return {title:clipPreview('範圍報告單 · '+String(reply.agentName||'Agent'),80),body:clipPreview((REPORT_KINDS[reply.reportKind]||'被擋下')+'：'+(String(reply.tool||'')||'未知工具')+'，點開審查',180),url:'/?access-report='+encodeURIComponent(reply.reportId),tag:tagOf('report-',reply.reportId)};
   }
+  if(reply?.kind==='diagnostic_report'){
+    if(!reply.reportId||!reply.replyId)throw new Error('Unsupported notification');
+    return {title:clipPreview('診斷回報 · '+String(reply.agentName||'Agent'),80),body:'有人送來診斷資訊，點開查看',url:'/?diagnostic-report='+encodeURIComponent(reply.reportId),tag:tagOf('diagnostic-',reply.reportId)};
+  }
   if(reply?.kind==='schedule_result'){
     if(!reply.scheduleId||!reply.replyId)throw new Error('Unsupported notification');
     // Always marked as a schedule's, so a script cannot dress up as a system notice.

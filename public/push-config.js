@@ -6,9 +6,9 @@
 // are in src/js/productConfig.js, the server's in server/siteConfig.js.
 self.PUSH_CONFIG = Object.freeze({
   // What a notification may open: the app, one conversation, one scope report, one
-  // proposed schedule or one group. Held to the address as sent and to the address
+  // diagnostics report, one proposed schedule or one group. Held to the address as sent and to the address
   // as the browser reads it (pathname and query).
-  url: /^\/(?:\?(?:conversation|access-report|schedule|group)=[a-f0-9-]{36})?$/,
+  url: /^\/(?:\?(?:conversation|access-report|diagnostic-report|schedule|group)=[a-f0-9-]{36})?$/,
   icon: '/agent-symbol-256.png',
   badge: '/agent-symbol-128.png',
   // Where a tap is left for a page that could not be told; the page reads the same

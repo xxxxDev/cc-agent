@@ -41,7 +41,7 @@
   <f7-block-footer v-if="!detail.sessionModel">{{ct('既有 session 沿用原設定，儲存模型設定後套用。')}}</f7-block-footer>
   </template>
   <f7-block-footer v-else>{{ct('Agent 設定由管理員調整；如需變更，請聯絡 CC Agent 管理員。')}}</f7-block-footer>
-  <AgentDiagnostics :admin="user?.role==='admin'" @trace-start="$emit('trace-start')" :detail="detail" :status="statusLabel"/>
+  <AgentDiagnostics @trace-start="$emit('trace-start')" :detail="detail" :status="statusLabel"/>
   <!-- Messages with agents of a paired machine: an admin opens the agent, ticks which agents there it may hear from and write to,
        and may let its replies go back without being read first. Saved together, by its
        own save button, not the profile's: widening it asks for the admin's password again. -->

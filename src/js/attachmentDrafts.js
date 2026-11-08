@@ -6,7 +6,10 @@ export function useAttachmentDrafts(selected,user,busy,ct){
  const files=computed(()=>drafts.value[selected.value]||[]);
  const pendingSend=new Map();
  const resize=()=>nextTick(()=>document.querySelector('.chat-page .messagebar')?.f7Messagebar?.resizePage());
- function addFiles(list){if(!selected.value||busy.value)return;const next=[...files.value];for(const file of Array.from(list||[])){if(next.length>=10){f7.dialog.alert(ct('最多 10 個附件'));break;}if(!file.size||file.size>95*1024*1024){f7.dialog.alert(ct('附件大小須為 1 byte 至 95 MB')+': '+file.name);continue;}next.push({key:crypto.randomUUID(),file,name:file.name,size:file.size,uploadedId:null});}drafts.value[selected.value]=next;pendingSend.delete(selected.value);resize();}
+ // Files into one conversation's drafts: the open one's (picked, dropped, pasted), or the one
+ // an admin hands a diagnostics report to (agent-chat.js handToAgent).
+ function addFilesTo(id,list){if(!id||busy.value)return false;const next=[...(drafts.value[id]||[])];for(const file of Array.from(list||[])){if(next.length>=10){f7.dialog.alert(ct('最多 10 個附件'));break;}if(!file.size||file.size>95*1024*1024){f7.dialog.alert(ct('附件大小須為 1 byte 至 95 MB')+': '+file.name);continue;}next.push({key:crypto.randomUUID(),file,name:file.name,size:file.size,uploadedId:null});}drafts.value[id]=next;pendingSend.delete(id);resize();return true;}
+ const addFiles=list=>addFilesTo(selected.value,list);
  function pickFiles(e){addFiles(e.target.files);e.target.value='';}
  function dropFiles(e){if(e.dataTransfer?.files?.length)addFiles(e.dataTransfer.files);}
  // A picture or file copied on the computer is pasted in as an attachment. Text copied from an office document also carries a picture of
@@ -68,5 +71,5 @@ export function useAttachmentDrafts(selected,user,busy,ct){
  function sent(id,items){const keys=new Set(items.map(x=>x.key));drafts.value[id]=(drafts.value[id]||[]).filter(x=>!keys.has(x.key));pendingSend.delete(id);resize();}
  watch(files,resize);
  watch(()=>user.value?.id,()=>{drafts.value={};pendingSend.clear();progress.value={};});
- return {files,fileInput,pickFiles,dropFiles,pasteFiles,removeFile,chooseFiles,previewDraft,upload,begin,end,status,requestId,sent};
+ return {addFiles,addFilesTo,files,fileInput,pickFiles,dropFiles,pasteFiles,removeFile,chooseFiles,previewDraft,upload,begin,end,status,requestId,sent};
 }

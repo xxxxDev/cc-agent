@@ -2,7 +2,7 @@
 // tabs' routers and the address of each, and its addresses that are not such a page.
 // js/appUrl.js (which holds the Settings tab's pages) and js/tab-session.js read it
 // and are generic; what is here is CC Agent's own.
-import {agentIdFromUrl, agentUrl, reportIdFromUrl, scheduleIdFromUrl} from './agentUrl.js';
+import {agentIdFromUrl, agentUrl, reportIdFromUrl, diagnosticIdFromUrl, scheduleIdFromUrl} from './agentUrl.js';
 
 export const ID = '[A-Za-z0-9_-]{1,64}';
 export const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
@@ -30,6 +30,8 @@ export const TAB_PAGES = {
     {route: '/user/', path: '/admin/users/:id', id: ID, parent: '/users/', admin: true},
     {route: '/access-reports/', path: '/admin/access-reports', parent: '/admin/', admin: true},
     {route: '/access-report/', path: '/admin/access-reports/:id', id: UUID, parent: '/access-reports/', admin: true},
+    {route: '/diagnostic-reports/', path: '/admin/diagnostic-reports', parent: '/admin/', admin: true},
+    {route: '/diagnostic-report/', path: '/admin/diagnostic-reports/:id', id: UUID, parent: '/diagnostic-reports/', admin: true},
     {route: '/security/', path: '/admin/security', parent: '/admin/', admin: true},
   ],
 };
@@ -51,6 +53,9 @@ export function specialScreen(url, path) {
   // A scope-report notification's link (server/services/pushService.js).
   const report = reportIdFromUrl(url.href);
   if (report) return {tab: 'view-admin', admin: true, stack: ['/access-reports/', `/access-report/?id=${report}`]};
+  // A diagnostics report's notification (the same file).
+  const diagnostic = diagnosticIdFromUrl(url.href);
+  if (diagnostic) return {tab: 'view-admin', admin: true, stack: ['/diagnostic-reports/', `/diagnostic-report/?id=${diagnostic}`]};
   // A group reply's notification: that group.
   const group = url.searchParams.get('group');
   if (group && new RegExp(`^${UUID}$`).test(group)) return {tab: 'view-groups', stack: [`/group/?id=${group}`]};

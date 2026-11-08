@@ -24,6 +24,7 @@ const {
   JSON_BODY_LIMIT,
 } = require('./middlewares/requestGuards');
 
+const {DIAGNOSTIC_REPORTS_PATH} = require('./diagnosticReports');
 const {PRODUCT, isAllowedHost, isHttpsHost, servicePort, publicOrigin} = require('./siteConfig');
 // A wrong setting stops the service at start, not at the first request.
 publicOrigin();
@@ -122,7 +123,12 @@ app.use(cors({
 // The other machine's exchange (peer link, agentStore/peerLink.js): up to 256 KB, only on
 // the lowercase path and never from Cloudflare or a page, before the site-wide limit.
 app.use('/bridge/peer', (req, res, next) => (!req.originalUrl.startsWith('/bridge/peer/') || req.headers.origin || req.headers['cf-connecting-ip'] || req.headers['cf-ray'] || req.headers['cdn-loop'] ? res.status(404).json({ message: 'Not found' }) : next()), express.json({ limit: '256kb' }));
-app.use(express.json({ limit: JSON_BODY_LIMIT }));
+// A diagnostics report (Agent Profile's 「回報診斷」) carries up to 512 KB of text: the
+// site-wide parser leaves that one request alone, and its own larger parser runs on its
+// route only after the rate limit, the CSRF check and signing in (ccAgentRoutes.js), so
+// nobody else gets a large body read.
+const siteJson = express.json({ limit: JSON_BODY_LIMIT });
+app.use((req, res, next) => (req.method === 'POST' && req.path === DIAGNOSTIC_REPORTS_PATH ? next() : siteJson(req, res, next)));
 app.use(jsonBodyErrorHandler);
 app.use(cookieParser());
 // cookie-parser turns a cookie written as j:{…} into an object. A session cookie is a

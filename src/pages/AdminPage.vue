@@ -49,6 +49,8 @@
       <!-- The peer link: pairing with another machine. -->
       <f7-list-item link class="peer-link-row" :title="ct('跨機連線')" @click.prevent="goPeerLink"><template #media><f7-icon f7="link"/></template></f7-list-item>
       <f7-list-item link :title="ct('範圍報告單')" :badge="openReports||null" badge-color="orange" @click.prevent="goReports"><template #media><f7-icon f7="lock_shield"/></template></f7-list-item>
+      <!-- What people sent from Agent Profile's 「回報診斷」. -->
+      <f7-list-item link class="diagnostic-reports-row" :title="ct('診斷回報')" :badge="openDiagnostics||null" badge-color="orange" @click.prevent="goDiagnostics"><template #media><f7-icon f7="doc_text_search"/></template></f7-list-item>
     </f7-list>
 
     <f7-block-title>{{ t('sectionAccount') }}</f7-block-title>
@@ -97,7 +99,8 @@ onUnmounted(() => stopUsage?.());
 
 const openReports=ref(0);
 // How many scope reports wait for review, shown on the row.
-async function loadOpenReports(){if(!isAdmin.value)return;try{openReports.value=((await api('/access-reports')).reports||[]).filter(r=>r.status==='open').length;}catch{}}
+const openDiagnostics=ref(0);
+async function loadOpenReports(){if(!isAdmin.value)return;try{openReports.value=((await api('/access-reports')).reports||[]).filter(r=>r.status==='open').length;}catch{}try{openDiagnostics.value=((await api('/diagnostic-reports')).reports||[]).filter(r=>r.status==='open').length;}catch{}}
 async function loadCompactPolicy(){if(!isAdmin.value)return;try{await loadAgentPreferences();}catch{}}
 // Off unless asked for: the switch only appears in a conversation once this is on.
 async function saveTranscriptSwitch(on){
@@ -243,6 +246,9 @@ function goPeerLink() {
 
 function goReports() {
   f7.views.get('#view-admin').router.navigate('/access-reports/');
+}
+function goDiagnostics() {
+  f7.views.get('#view-admin').router.navigate('/diagnostic-reports/');
 }
 
 function goUsers() {
