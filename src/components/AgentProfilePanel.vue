@@ -41,7 +41,6 @@
   <f7-block-footer v-if="!detail.sessionModel">{{ct('既有 session 沿用原設定，儲存模型設定後套用。')}}</f7-block-footer>
   </template>
   <f7-block-footer v-else>{{ct('Agent 設定由管理員調整；如需變更，請聯絡 CC Agent 管理員。')}}</f7-block-footer>
-  <AgentDiagnostics @trace-start="$emit('trace-start')" :detail="detail" :status="statusLabel"/>
   <!-- Messages with agents of a paired machine: an admin opens the agent, ticks which agents there it may hear from and write to,
        and may let its replies go back without being read first. Saved together, by its
        own save button, not the profile's: widening it asks for the admin's password again. -->
@@ -54,6 +53,7 @@
    </template>
    <f7-list-item v-if="peerDirty" link no-chevron class="agent-peer-save" :title="ct('保存跨機傳訊設定')" @click.prevent="savePeer"><template #media><f7-icon f7="checkmark_circle"/></template></f7-list-item>
   </f7-list>
+  <AgentDiagnostics @trace-start="$emit('trace-start')" :detail="detail" :status="statusLabel"/>
 
   <!-- Fields changed elsewhere while being edited here: the values typed here are kept in
        the draft; this says which to check before saving. -->
