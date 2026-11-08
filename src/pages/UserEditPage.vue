@@ -49,9 +49,12 @@
         <!-- An agent's scope, set outright: how a grant from a report is narrowed or
              taken back. At the app root, like the other overlays. -->
         <Teleport to=".framework7-root">
-          <f7-popup :opened="accessEditing !== null" class="user-agent-access" @popup:closed="accessEditing = null">
+          <!-- On a phone a pushed card, as Agent Profile is (sheetSwipe.js); its ✕, a backdrop
+               tap and a pull down ask first about unsaved changes. -->
+          <f7-popup ref="accessPopup" :opened="accessEditing !== null" class="user-agent-access" :class="{ 'sheet-swipe': sheetSwipe }" :close-by-backdrop-click="false" :swipe-to-close="sheetSwipe" :push="sheetSwipe" @popup:closed="accessEditing = null">
+            <div v-if="sheetSwipe" class="sheet-grabber" aria-hidden="true"></div>
             <f7-page v-if="accessEditing">
-              <f7-navbar :title="accessEditing.title"><f7-nav-right><f7-link @click="accessEditing = null">{{ ct('關閉') }}</f7-link></f7-nav-right></f7-navbar>
+              <f7-navbar><f7-nav-left><f7-link icon-only icon-f7="xmark" class="user-agent-access-close" :aria-label="ct('關閉')" @click="closeAccess()" /></f7-nav-left><f7-nav-title>{{ accessEditing.title }}</f7-nav-title></f7-navbar>
               <AgentProfileFields v-model="accessEditing" :admin="true" :show-access="true" :access-only="true" :allow-full="user?.role === 'admin'" />
               <f7-block><f7-button fill round large :disabled="accessSaving" @click="saveAccess">{{ ct('保存範圍') }}</f7-button></f7-block>
             </f7-page>
@@ -106,6 +109,7 @@ import { users, loadUsers, findUser } from '../js/users-store.js';
 import { adminAgain, adminProblem } from '../js/adminAgain.js';
 import GlassDropdown from '../components/GlassDropdown.vue';
 import AgentProfileFields from '../components/AgentProfileFields.vue';
+import { sheetSwipe, guardSheet, closeAsking } from '../js/sheetSwipe.js';
 
 const props = defineProps({
   f7route: { type: Object, default: () => ({}) },
@@ -133,9 +137,16 @@ async function loadAgents() {
 onMounted(() => { if (!user.value) loadUsers().catch(() => {}); loadAgents(); });
 const accessEditing = ref(null);
 const accessSaving = ref(false);
+// The scope as it stood when the sheet opened: a change asks before it closes unsaved.
+let accessOpened = '';
 function editAccess(c) {
   accessEditing.value = { id: c.id, title: c.title, access: JSON.parse(JSON.stringify(c.access || { allow: [], exclude: [], domains: [] })) };
+  accessOpened = JSON.stringify(accessEditing.value.access);
 }
+const accessDirty = () => accessEditing.value !== null && JSON.stringify(accessEditing.value.access) !== accessOpened;
+const accessPopup = ref(null);
+const closeAccess = closeAsking(accessDirty, () => { accessEditing.value = null; });
+guardSheet(accessPopup, { dirty: accessDirty, request: closeAccess });
 async function saveAccess() {
   accessSaving.value = true;
   try {

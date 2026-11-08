@@ -65,8 +65,9 @@
     </template>
 
     <!-- One address. -->
-    <f7-popup :opened="!!source" class="sec-source-popup" @popup:closed="source = null"><f7-view><f7-page>
-      <f7-navbar :title="ct('來源詳情')"><f7-nav-right><f7-link popup-close>{{ ct('關閉') }}</f7-link></f7-nav-right></f7-navbar>
+    <!-- On a phone a pushed card that closes on a pull down. -->
+    <f7-popup :opened="!!source" class="sec-source-popup" :class="{ 'sheet-swipe': sheetSwipe }" :swipe-to-close="sheetSwipe" :push="sheetSwipe" @popup:closed="source = null"><div v-if="sheetSwipe" class="sheet-grabber" aria-hidden="true"></div><f7-view><f7-page>
+      <f7-navbar><f7-nav-left><f7-link popup-close icon-only icon-f7="xmark" :aria-label="ct('關閉')" /></f7-nav-left><f7-nav-title>{{ ct('來源詳情') }}</f7-nav-title></f7-navbar>
       <template v-if="source">
         <f7-block class="sec-source-head">
           <div class="sec-ip">{{ label(source.group) }}</div>
@@ -108,6 +109,7 @@ import { t, lang } from '../js/i18n.js';
 import { ct } from '../js/agent-i18n.js';
 import { api } from '../js/auth.js';
 import { describeAgent } from '../js/qrLogin.js';
+import { sheetSwipe } from '../js/sheetSwipe.js';
 
 const data = ref(null), error = ref(''), filter = ref('all'), source = ref(null);
 const filters = [{ id: 'all', label: '全部' }, { id: 'fail', label: '失敗' }, { id: 'block', label: '封鎖' }, { id: 'qr', label: '掃碼' }];

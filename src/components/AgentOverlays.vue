@@ -51,7 +51,7 @@ import AgentProfilePanel from "./AgentProfilePanel.vue";
 import MessageSearchResults from "./MessageSearchResults.vue";
 import ChecklistPanel,{askNewChecklist} from "./ChecklistPanel.vue";
 import ContextUsagePanel from "./ContextUsagePanel.vue";
-import {inject,computed,ref,watch,onBeforeUnmount} from "vue";import {f7} from "framework7-vue";import GlassDropdown from "./GlassDropdown.vue";import {parseAgentJson} from "../js/agentImport.js";import {ct} from "../js/agent-i18n.js";
+import {inject,computed,ref,watch,onBeforeUnmount} from "vue";import {f7} from "framework7-vue";import GlassDropdown from "./GlassDropdown.vue";import {parseAgentJson} from "../js/agentImport.js";import {ct} from "../js/agent-i18n.js";import {sheetSwipe,guardSheet} from "../js/sheetSwipe.js";
 export default {components:{GlassDropdown,AgentProfileFields,AgentProfilePanel,MessageSearchResults,ChecklistPanel,ContextUsagePanel},setup(){const w=inject("workspace");
  const personal=computed(()=>w.user.value?.role==="admin");
  // A server that cannot fence an agent (Windows: Claude Code has no sandbox there, see
@@ -72,27 +72,11 @@ export default {components:{GlassDropdown,AgentProfileFields,AgentProfilePanel,M
  function stopSheetWatch(){bodyWatch?.disconnect();bodyWatch=null;newBody.value?.closest('.popup')?.style.removeProperty('--f7-popup-tablet-height');}
  watch([newBody,()=>w.newOpen.value],([el,open])=>{stopSheetWatch();if(el&&open){fitSheet();if(typeof ResizeObserver!=='undefined'){bodyWatch=new ResizeObserver(fitSheet);bodyWatch.observe(el);}}},{flush:'post'});
  onBeforeUnmount(stopSheetWatch);
- // Agent Profile's popup: framework7-vue reads closeByBackdropClick only when it mounts,
- // so the popup never closes by its backdrop itself; a tap there goes through
- // closeProfile, which asks first about unsaved changes.
- const onBackdrop=e=>{if(w.infoOpen.value&&e.target?.classList?.contains('popup-backdrop')&&document.querySelector('.popup.conversation-info.modal-in'))w.closeProfile();};
- document.addEventListener('click',onBackdrop);onBeforeUnmount(()=>document.removeEventListener('click',onBackdrop));
- // The phone sheets close with a finger pulled down, as an iOS sheet does: Framework7's
- // own swipeToClose, which pulls the sheet only while its
- // page is scrolled to the top, so a long list still scrolls. framework7-vue reads it only
- // when the popup mounts, so it is on wherever there is touch and off for a mouse, where a
- // drag in the popup a computer shows beside the terminal would close it.
- const sheetSwipe=typeof window!=='undefined'&&('ontouchstart' in window||(window.DocumentTouch&&document instanceof window.DocumentTouch))?'to-bottom':false;
- // Agent Profile with unsaved changes: Framework7 calls the popup's close right after the
- // element's popup:swipeclose, so that one call goes through closeProfile instead, which
- // asks; on 繼續編輯 the sheet springs back, on 放棄修改 it closes as from its ✕.
- // framework7-vue's own @popup:swipeclose never fires (it listens for swipeClose, Framework7
- // emits swipeclose), hence the element's event.
+ // Agent Profile closes only through closeProfile, which asks first about unsaved changes:
+ // a backdrop tap and a pull down with changes go through it too (sheetSwipe.js, shared by
+ // every sheet).
  const infoPopup=ref(null);
- function profileSwipeClose(e){const popup=e.currentTarget?.f7Modal;if(!w.profileDirty.value||!popup)return;const close=popup.close;
-  popup.close=function(){popup.close=close;popup.$el?.removeClass('swipe-close-to-bottom');w.closeProfile();return popup;};}
- watch(()=>infoPopup.value?.$el,(el,old)=>{old?.removeEventListener?.('popup:swipeclose',profileSwipeClose);el?.addEventListener?.('popup:swipeclose',profileSwipeClose);},{flush:'post',immediate:true});
- onBeforeUnmount(()=>infoPopup.value?.$el?.removeEventListener?.('popup:swipeclose',profileSwipeClose));
+ guardSheet(infoPopup,{dirty:()=>w.profileDirty.value,request:()=>w.closeProfile()});
  // Only what the JSON names is replaced. Folders are left out while full access is on:
  // the lists are hidden then, so a folder the server refuses could not be fixed.
  function applyImport(text){
@@ -114,12 +98,6 @@ export default {components:{GlassDropdown,AgentProfileFields,AgentProfilePanel,M
  menuAction(value){const c=w.menuConversation.value;if(!c)return;if(value==="rename")w.renameConversation(c);if(value==="remove")w.deleteConversation(c);w.menuConversation.value=null;}}}};
 </script>
 <style scoped>
-/* A phone sheet uses Framework7's push: it stands almost full height and the page behind
-   steps back and darkens, as an iOS card does; Framework7 places it. */
-.popup.sheet-swipe{overflow:hidden;}
-/* The grab handle of a sheet that closes by a pull down, inside the navbar's top: above the
-   view, which Framework7 lifts to z-index 5000. */
-.sheet-grabber{position:absolute;top:calc(var(--f7-safe-area-top) + 5px);left:50%;width:36px;height:5px;margin-left:-18px;border-radius:var(--cc-radius-pill);background:var(--cc-color-text-tertiary);z-index:5001;pointer-events:none;}
 .import-actions{display:flex;flex-wrap:wrap;gap:8px;padding:0 16px;margin:4px 0 12px;}
 .agent-create-body{display:flow-root;padding-bottom:12px;}
 /* The new-agent sheet's cards are one width and follow one another as Agent Profile's do. */

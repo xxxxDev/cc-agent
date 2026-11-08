@@ -1,9 +1,11 @@
 <template>
  <!-- A group's name, members and lead: a message
       that names no one goes to the lead. -->
- <f7-popup :opened="open" class="group-form-popup" @popup:closed="$emit('close')"><f7-view><f7-page>
+ <!-- On a phone a pushed card, as Agent Profile is (sheetSwipe.js); its ✕, a backdrop tap
+      and a pull down ask first about unsaved changes. -->
+ <f7-popup ref="popup" :opened="open" class="group-form-popup" :class="{'sheet-swipe':sheetSwipe}" :close-by-backdrop-click="false" :swipe-to-close="sheetSwipe" :push="sheetSwipe" @popup:closed="open&&$emit('close')"><div v-if="sheetSwipe" class="sheet-grabber" aria-hidden="true"/><f7-view><f7-page>
   <f7-navbar>
-   <f7-nav-left><f7-link popup-close>{{ct('取消')}}</f7-link></f7-nav-left>
+   <f7-nav-left><f7-link icon-only icon-f7="xmark" class="group-form-close" :aria-label="ct('關閉')" @click="request()"/></f7-nav-left>
    <f7-nav-title>{{group?ct('編輯群組'):ct('新增群組')}}</f7-nav-title>
    <f7-nav-right><f7-link class="group-save" :class="{disabled:!ready||saving}" @click="ready&&!saving&&save()">{{group?ct('保存'):ct('建立')}}</f7-link></f7-nav-right>
   </f7-navbar>
@@ -41,13 +43,21 @@ import {defaultAvatar,avatarShape} from '../js/avatarShape.js';
 import {createGroup,updateGroup} from '../js/groups.js';
 import {agentSections} from '../js/agentSections.js';
 import {listGroups} from '../js/agentPreferences.js';
+import {sheetSwipe,guardSheet,closeAsking} from '../js/sheetSwipe.js';
 const props=defineProps({open:Boolean,group:Object});
 const emit=defineEmits(['close','saved']);
 const w=inject('workspace');
 const agents=computed(()=>(w.conversations.value||[]).filter(c=>c.mode==='claude'));
 const sections=computed(()=>agentSections(agents.value,listGroups.value));
 const name=ref(''),picked=ref(new Set()),lead=ref(null),notify=ref(true),saving=ref(false),error=ref('');
-watch(()=>props.open,open=>{if(!open)return;error.value='';name.value=props.group?.name||'';picked.value=new Set(props.group?.members.map(m=>m.id)||[]);lead.value=props.group?.lead||null;notify.value=props.group?.notify!==false;});
+// What the form held when it opened, to tell an unsaved change.
+const state=()=>JSON.stringify([name.value,[...picked.value].sort(),lead.value,notify.value]);
+let opened='';
+watch(()=>props.open,open=>{if(!open)return;error.value='';name.value=props.group?.name||'';picked.value=new Set(props.group?.members.map(m=>m.id)||[]);lead.value=props.group?.lead||null;notify.value=props.group?.notify!==false;opened=state();},{immediate:true});
+const dirty=()=>props.open&&state()!==opened;
+const popup=ref(null);
+const request=closeAsking(dirty,()=>emit('close'));
+guardSheet(popup,{dirty,request});
 function toggle(id){const next=new Set(picked.value);if(next.has(id))next.delete(id);else next.add(id);picked.value=next;if(!next.has(lead.value))lead.value=[...next][0]||null;if(!lead.value&&next.size)lead.value=[...next][0];}
 const ready=computed(()=>name.value.trim()&&picked.value.size&&picked.value.has(lead.value));
 async function save(){

@@ -770,6 +770,24 @@ img[src$="/sources/anthropic-native.svg"] {
   --cc-navbar-above: 20px;
   --cc-navbar-below: 8px;
 }
+/* Every pushed sheet's grab handle (src/js/sheetSwipe.js), inside the navbar's top: above the
+ * view, which Framework7 lifts to z-index 5000. Framework7's push stands the sheet almost full
+ * height and steps the page behind back, as an iOS card does. */
+.cc-app .popup.sheet-swipe {
+  overflow: hidden;
+}
+.cc-app .sheet-grabber {
+  position: absolute;
+  top: calc(var(--f7-safe-area-top) + 5px);
+  left: 50%;
+  width: 36px;
+  height: 5px;
+  margin-left: -18px;
+  border-radius: var(--cc-radius-pill);
+  background: var(--cc-color-text-tertiary);
+  z-index: 5001;
+  pointer-events: none;
+}
 /* On a phone the outer buttons sit 20px in from each edge (iOS: 20pt on this width; F7 16px), and
  * the back chevron is iOS's: about 1pt smaller (10.7x18.7pt) and 1.7pt left of the circle's
  * centre. The page follows the buttons, as Settings does: the large title, inset lists, cards,

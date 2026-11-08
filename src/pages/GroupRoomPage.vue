@@ -37,12 +37,13 @@
    </div>
   </aside>
   <Teleport to=".framework7-root">
-   <!-- On a phone, the same two as popups. -->
-   <f7-popup :opened="popup==='checklist'" class="checklist-popup group-checklist-popup" @popup:closed="popup==='checklist'&&(panel=null)"><f7-view><f7-page>
+   <!-- On a phone, the same two as popups: pushed cards that close on a pull down, as the
+        conversation's are. -->
+   <f7-popup :opened="popup==='checklist'" :swipe-to-close="sheetSwipe" :push="sheetSwipe" class="checklist-popup group-checklist-popup" :class="{'sheet-swipe':sheetSwipe}" @popup:closed="popup==='checklist'&&(panel=null)"><div v-if="sheetSwipe" class="sheet-grabber" aria-hidden="true"/><f7-view><f7-page>
     <f7-navbar><f7-nav-left><f7-link popup-close icon-only icon-f7="xmark" :aria-label="ct('關閉待辦事項')"/></f7-nav-left><f7-nav-title>{{ct('待辦事項')}}</f7-nav-title><f7-nav-right><f7-link icon-only icon-f7="plus" class="checklist-new" :aria-label="ct('新增清單')" @click="newChecklist"/></f7-nav-right></f7-navbar>
     <ChecklistPanel v-if="popup==='checklist'&&room" :source="checklistSource"/>
    </f7-page></f7-view></f7-popup>
-   <f7-popup :opened="popup==='search'" class="message-search-popup group-search-popup" @popup:closed="popup==='search'&&(panel=null)"><f7-view><f7-page>
+   <f7-popup :opened="popup==='search'" :swipe-to-close="sheetSwipe" :push="sheetSwipe" class="message-search-popup group-search-popup" :class="{'sheet-swipe':sheetSwipe}" @popup:closed="popup==='search'&&(panel=null)"><div v-if="sheetSwipe" class="sheet-grabber" aria-hidden="true"/><f7-view><f7-page>
     <f7-navbar><f7-nav-left><f7-link popup-close icon-only icon-f7="xmark" :aria-label="ct('關閉搜尋')"/></f7-nav-left><f7-nav-title>{{ct('搜尋這個群組')}}</f7-nav-title></f7-navbar>
     <f7-list inset><f7-list-input v-model:value="searchText" type="search" :placeholder="ct('搜尋群組對話')" :aria-label="ct('搜尋群組對話')" class="message-search-input"/></f7-list>
     <MessageSearchResults v-if="popup==='search'" :query="searchText" :searcher="searcher" @pick="found"/>
@@ -69,6 +70,7 @@ import {shouldSendOnEnter} from '../js/chatKeyboard.js';
 import {useMentionMenu,caretToEnd} from '../js/mentionMenu.js';
 import {room,viewingGroup,loadRoom,sendToGroup,changeGroupChecklist,searchGroup,commandInGroup} from '../js/groups.js';
 import {useSlashMenu} from '../js/slashMenu.js';
+import {sheetSwipe} from '../js/sheetSwipe.js';
 import SlashMenu from '../components/SlashMenu.vue';
 import GroupForm from '../components/GroupForm.vue';
 import {bindConversationViewport} from '../js/conversationViewport.js';

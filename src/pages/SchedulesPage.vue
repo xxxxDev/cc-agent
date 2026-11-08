@@ -43,10 +43,13 @@
     <!-- At the app root, like the other popups here: Framework7 moves an open popup
          out of the page, which leaves Vue's page render broken after it closes. -->
     <Teleport to=".framework7-root">
-      <f7-popup :opened="sheetOpen" class="schedule-sheet" @popup:closed="closed">
+      <!-- On a phone a pushed card, as Agent Profile is (sheetSwipe.js); its ✕, a backdrop
+           tap and a pull down ask first about unsaved changes. -->
+      <f7-popup ref="sheetPopup" :opened="sheetOpen" class="schedule-sheet" :class="{ 'sheet-swipe': sheetSwipe }" :close-by-backdrop-click="false" :swipe-to-close="sheetSwipe" :push="sheetSwipe" @popup:closed="closed">
+        <div v-if="sheetSwipe" class="sheet-grabber" aria-hidden="true"></div>
         <f7-page v-if="draft">
           <f7-navbar>
-            <f7-nav-left><f7-link popup-close icon-only icon-f7="xmark" :aria-label="ct('關閉')" /></f7-nav-left>
+            <f7-nav-left><f7-link icon-only icon-f7="xmark" class="schedule-close" :aria-label="ct('關閉')" @click="closeSheet()" /></f7-nav-left>
             <f7-nav-title>{{ sheetTitle }}</f7-nav-title>
             <f7-nav-right><f7-link v-if="editable" class="schedule-save" :class="{ disabled: !ready || saving }" @click="save">{{ mode === 'approve' ? ct('核准') : ct('保存') }}</f7-link></f7-nav-right>
           </f7-navbar>
@@ -240,6 +243,7 @@ import { api } from '../js/api.js';
 import { t, lang } from '../js/i18n.js';
 import { ct } from '../js/agent-i18n.js';
 import { activeTab } from '../js/tab-session.js';
+import { sheetSwipe, guardSheet, closeAsking } from '../js/sheetSwipe.js';
 import { MAX_DOMAINS, WEEKDAYS, WEEK_ORDER, editableFrequency, frequencyFor, frequencyText, interpreterLabel, parseDomains, scheduleFocus, shortHash, shortTime, timeoutFor, untilText, validDate, validTime, weekdayLabel } from '../js/schedules.js';
 
 const workspace = inject('workspace', null);
@@ -445,6 +449,17 @@ function openNew() {
   draft.value = { id: null, kind: 'agent', checkId: '', feedUrl: '', onResult: 'push', conversationId: agents.value.length === 1 ? agents.value[0].id : '', name: '', prompt: '', reason: '', whenPaused: 'start', freq: editableFrequency(), lastRun: null, runs: [], waiting: false, ...limits() };
   sheetOpen.value = true;
 }
+// What the owner can change in the sheet, as it stood when it opened: a change asks before
+// the sheet closes without saving. What a run brings in (its history, waiting, running) is
+// not the owner's change.
+const EDITED = ['conversationId', 'name', 'prompt', 'whenPaused', 'freq', 'kind', 'checkId', 'feedUrl', 'onResult', 'domainsText', 'timeout', 'until', 'quietOn', 'quietFrom', 'quietTo'];
+const editedState = (d) => JSON.stringify(EDITED.map((k) => d?.[k] ?? null));
+let openedState = '';
+watch(sheetOpen, (open) => { if (open) openedState = editedState(draft.value); });
+const sheetDirty = () => sheetOpen.value && editable.value && !!draft.value && editedState(draft.value) !== openedState;
+const sheetPopup = ref(null);
+const closeSheet = closeAsking(sheetDirty, () => { sheetOpen.value = false; });
+guardSheet(sheetPopup, { dirty: sheetDirty, request: closeSheet });
 function closed() { sheetOpen.value = false; draft.value = null; saving.value = false; testing.value = false; trialResult.value = null; stopFollowing(); }
 function setKind(kind) {
   const d = draft.value;
