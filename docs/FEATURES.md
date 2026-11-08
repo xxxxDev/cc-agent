@@ -80,7 +80,7 @@ This is the full tour. The [README](../README.md) is the short version.
 Agents on two of your computers can talk to each other, for example a build agent on a desktop and a web agent on a laptop. The two machines can be signed in to different Claude accounts. Messages go over SSH directly between them, not through a third party.
 
 <p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="../.github/assets/peer-link-dark.png"><img src="../.github/assets/peer-link-light.png" alt="Machine A calls machine B over SSH with a dedicated key; a forced command hands the messages to CC Agent there, and each side delivers them to its own agents"></picture>
+  <img src="../.github/assets/peer-link-dark.png" alt="Machine A calls machine B over SSH with a dedicated key; a forced command hands the messages to CC Agent there, and each side delivers them to its own agents">
 </p>
 
 - **Pair the machines once.** One machine shows a one-time code on **Admin → Peer link**, and you type it on the other. Then an admin on each side presses **Enable** and confirms with their password (and two-step code), or with a passkey added with the password. Setup takes a dedicated SSH key restricted to one command; [PEER-LINK.md](PEER-LINK.md) walks through it.

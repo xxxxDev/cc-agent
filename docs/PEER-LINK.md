@@ -5,7 +5,7 @@ The peer link pairs two CC Agent installations on different machines. When an ad
 Not running CC Agent? [agent-courier](https://github.com/xxxxDev/agent-courier) does the same for plain Claude Code sessions, as an MCP server.
 
 <p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="../.github/assets/peer-link-dark.png"><img src="../.github/assets/peer-link-light.png" alt="How the peer link works: machine A calls machine B over SSH; a forced command hands messages to CC Agent there"></picture>
+  <img src="../.github/assets/peer-link-dark.png" alt="How the peer link works: machine A calls machine B over SSH; a forced command hands messages to CC Agent there">
 </p>
 
 ## What you get

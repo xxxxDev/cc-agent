@@ -80,7 +80,7 @@
 你兩台電腦上的 agent 可以互傳訊息，例如桌機上負責建置的 agent 和筆電上負責網站的 agent。兩台可以登入不同的 Claude 帳號。訊息經 SSH 在兩台之間直接傳，不經過第三方。
 
 <p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="../.github/assets/peer-link-dark.png"><img src="../.github/assets/peer-link-light.png" alt="電腦 A 用專用金鑰經 SSH 呼叫電腦 B；B 那邊限定用途的指令把訊息交給 CC Agent，兩邊各自送給自己的 agent"></picture>
+  <img src="../.github/assets/peer-link-dark.png" alt="電腦 A 用專用金鑰經 SSH 呼叫電腦 B；B 那邊限定用途的指令把訊息交給 CC Agent，兩邊各自送給自己的 agent">
 </p>
 
 - **兩台電腦配對一次。** 一台在「管理 → 跨機連線」產生一次性的配對碼，在另一台輸入。接著兩邊的管理員各按一次「啟用」，並用密碼（加驗證碼）或用密碼建立的通行密鑰確認。設定時需要一把只能執行一個指令的專用 SSH 金鑰，步驟見 [PEER-LINK.md](PEER-LINK.md)（英文）。
