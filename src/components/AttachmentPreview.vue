@@ -260,7 +260,9 @@ watch([()=>props.file,()=>props.conversationId],async()=>{
   finally{if(controller===current)loading.value=false;}
   return;
  }
- try{let blob=props.file.local;if(!blob){const r=await fetch(url.value,{credentials:'include',signal:current.signal});if(!r.ok)throw new Error();blob=await r.blob();}const own=await pngSize(blob);if(controller!==current)return;size.value=own;imageUrl.value=URL.createObjectURL(blob);}
+ try{let blob=props.file.local;if(!blob){const r=await fetch(url.value,{credentials:'include',signal:current.signal});if(!r.ok)throw new Error();blob=await r.blob();}const own=await pngSize(blob);if(controller!==current)return;size.value=own;
+ // An SVG served as plain bytes shows only when the blob says what it is; it is still drawn in an <img>, so scripts in it never run.
+ imageUrl.value=URL.createObjectURL(/\.svg$/i.test(props.file.name)&&blob.type!=='image/svg+xml'?new Blob([blob],{type:'image/svg+xml'}):blob);}
  catch(e){if(controller===current&&!current.signal.aborted)error.value=ct('無法預覽此圖片');}
  finally{if(controller===current)loading.value=false;}
 },{immediate:true});
