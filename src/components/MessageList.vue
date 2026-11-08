@@ -122,6 +122,12 @@ function senderName(m){
  const card=cardOf(m);if(card)return card.name;
  return ct('你');
 }
+// The reader's own words are quoted without 「你」 before them; another sender keeps its name.
+const quoteWho=m=>{const n=senderName(m);return n===ct('你')?'':n;};
+// An agent's own words are quoted with its small picture instead of the word Agent; another
+// machine keeps its name.
+const quoteAvatar=m=>m.role==='assistant'?(m.speaker?.avatar||props.avatar||''):'';
+const quoteOf=m=>{const avatar=quoteAvatar(m);return {id:m.id,who:avatar?'':quoteWho(m),avatar,text:quoteText(m)};};
 const quoteText=m=>preview(m.schedule?scheduleInstruction(m.text||''):m.text||'')||(m.attachments||[]).map(f=>f.name).join(', ');
 // A message the reader wrote as a reply (replyTo) always shows what it replies to, right
 // above it or not; one not loaded yet shows the words kept with it.
@@ -131,7 +137,7 @@ const quotes=computed(()=>{
  list.forEach((m,i)=>{
   if(m.role==='user'&&m.replyTo&&!cardOf(m)){
    const t=at.has(m.replyTo)?list[at.get(m.replyTo)]:null;
-   const q=t?{id:t.id,who:senderName(t),text:quoteText(t)}:{id:m.replyTo,who:'',text:m.replyPreview||''};
+   const q=t?quoteOf(t):{id:m.replyTo,who:'',text:m.replyPreview||''};
    if(q.who||q.text)out.set(m.id,[q]);
    return;
   }
@@ -142,7 +148,7 @@ const quotes=computed(()=>{
   // The same agent's earlier replies to the same message (its progress) are not in between either.
   let above=i-1;while(above>=0&&(isTitle(list[above])||(list[above].role==='assistant'&&list[above].inReplyTo===m.inReplyTo&&list[above].agentId===m.agentId)))above--;
   if(items.length===1&&list[above]?.id===items[0].id)return;
-  out.set(m.id,items.map(x=>({id:x.id,who:senderName(x),text:quoteText(x)})));
+  out.set(m.id,items.map(quoteOf));
  });
  return out;
 });
@@ -161,7 +167,7 @@ const isSent=m=>m.role==='user'&&!m.peer;
 // Replying to a message: the button beside copy with a mouse; on a phone a swipe to the
 // left, or the long-press menu (js/bubbleGestures.js). What goes to the composer is who
 // wrote it and its first words.
-function startReply(m){if(props.replyable)emit('reply',{id:m.id,who:senderName(m),text:quoteText(m)});}
+function startReply(m){if(props.replyable)emit('reply',quoteOf(m));}
 const replyableMessage=m=>!!m&&m.notice!=='login'&&!(m.role==='system'&&!cardOf(m))&&!cardOf(m);
 const listEl=ref(null);
 const gestures=useBubbleGestures({

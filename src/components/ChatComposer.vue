@@ -3,7 +3,7 @@
   <slot name="before-inner"/>
   <!-- The message being replied to: who wrote it and its first words on one line, an X
        or Escape to stop replying. -->
-  <div v-if="reply" class="reply-draft" role="status"><i class="icon f7-icons reply-draft-icon" aria-hidden="true">arrowshape_turn_up_left</i><span class="reply-draft-line"><b class="reply-draft-label">{{ct('回覆：')}}</b><span v-if="reply.who" class="reply-draft-who">{{reply.who}}</span> <span class="reply-draft-text">{{reply.text}}</span></span><button type="button" class="reply-draft-cancel" :aria-label="ct('取消回覆')" @click="$emit('cancel-reply')"><i class="icon f7-icons">xmark</i></button></div>
+  <div v-if="reply" class="reply-draft" role="status"><i class="icon f7-icons reply-draft-icon" aria-hidden="true">arrowshape_turn_up_left</i><span class="reply-draft-line" role="button" tabindex="0" :title="ct('跳到這則訊息')" @click="showReplied($event)" @keydown.enter="showReplied($event)"><b class="reply-draft-label">{{ct('回覆：')}}</b><img v-if="reply.avatar" class="reply-draft-avatar" :src="reply.avatar" alt="" aria-hidden="true"><span v-if="reply.who" class="reply-draft-who">{{reply.who+' '}}</span><span class="reply-draft-text">{{reply.text}}</span></span><button type="button" class="reply-draft-cancel" :aria-label="ct('取消回覆')" @click="$emit('cancel-reply')"><i class="icon f7-icons">xmark</i></button></div>
   <div ref="pill" class="toolbar-inner composer-pill" :class="{'composer-tall':tall}">
    <div class="toolbar-pane composer-start" :class="{'composer-empty':!$slots['inner-start']}"><slot name="inner-start"/></div>
    <div ref="area" class="messagebar-area">
@@ -31,6 +31,9 @@ import {ct} from '../js/agent-i18n.js';
 // reply: {who,text} of the message being replied to, shown over the box; null for none.
 const props=defineProps({value:{type:String,default:''},placeholder:String,highlights:{type:Array,default:()=>[]},editorId:{type:String,default:'cc-agent-prompt'},reply:{type:Object,default:null}});
 const emit=defineEmits(['update:value','keydown','cancel-reply']);
+// The line over the box names the message being answered; a tap on it shows that message in
+// this conversation or cell, as the quote line over a sent reply does. One not loaded (further back) is left alone.
+function showReplied(e){const id=props.reply?.id;if(!id)return;const root=e.currentTarget.closest('.split-cell, .page')||document;const el=root.querySelector(`.message-list [data-message-id="${CSS.escape(id)}"]`);if(!el)return;el.scrollIntoView({block:'center',behavior:'smooth'});el.classList.remove('message-found');void el.offsetWidth;el.classList.add('message-found');setTimeout(()=>el.classList.remove('message-found'),2000);}
 const editor=ref(null),area=ref(null),empty=ref(!props.value);
 let composing=false;
 // Deleting the last character leaves the browser's placeholder BR, which innerText
@@ -131,6 +134,8 @@ onBeforeUnmount(()=>{paintMentions(own,[]);resized?.disconnect();widened?.discon
 /* As the attachments waiting above the box: a line in the box's column, the glass chip's
    tint, the quoted words cut to one line. */
 .reply-draft {position:relative;z-index:2;display:flex;align-items:center;gap:8px;box-sizing:border-box;min-width:0;margin:0 calc(12px + var(--f7-safe-area-right,0px)) 8px calc(12px + var(--f7-safe-area-left,0px));padding:6px 6px 6px 12px;border-radius:var(--cc-radius-card,16px);background:var(--f7-glass-bg-color,var(--cc-glass-fill-subtle));box-shadow:var(--f7-glass-shadow,none);backdrop-filter:saturate(180%) blur(16px);-webkit-backdrop-filter:saturate(180%) blur(16px);color:var(--cc-color-text);font-size:14px;line-height:20px;}
+.reply-draft-line {cursor:pointer;}
+.reply-draft-avatar {width:16px;height:16px;margin-right:4px;border-radius:38%;object-fit:cover;vertical-align:-3px;}
 .reply-draft-icon {flex:none;font-size:16px;color:#0a84ff;}
 .reply-draft-line {flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .reply-draft-label {font-weight:600;color:#0a84ff;}

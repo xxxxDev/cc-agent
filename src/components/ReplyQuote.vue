@@ -3,7 +3,7 @@
       words on one line, and a chip for the others it answers. It sits right over the text bubble, its hook on the bubble's own edge: the
       left one on the left, the right one for the reader's own messages on the right. -->
  <div class="reply-quote" :class="{sent}" @click.stop>
-  <div v-for="(q,i) in shown" :key="q.id" class="reply-quote-row" role="button" tabindex="0" :data-quote-id="q.id" :title="q.text" @click="$emit('jump',q.id,$event)" @keydown.enter="$emit('jump',q.id,$event)"><span v-if="q.who" class="reply-quote-who">{{q.who}}</span><span class="reply-quote-text">{{q.text}}</span><button v-if="i===0&&!expanded&&items.length>1" type="button" class="reply-quote-more" :aria-label="ct('顯示所有回覆的訊息')" @click.stop="$emit('expand')">{{ct('＋{n} 則').replace('{n}',items.length-1)}}</button></div>
+  <div v-for="(q,i) in shown" :key="q.id" class="reply-quote-row" role="button" tabindex="0" :data-quote-id="q.id" :title="q.text" @click="$emit('jump',q.id,$event)" @keydown.enter="$emit('jump',q.id,$event)"><img v-if="q.avatar" class="reply-quote-avatar" :src="q.avatar" alt="" aria-hidden="true"><span v-if="q.who" class="reply-quote-who">{{q.who}}</span><span class="reply-quote-text">{{q.text}}</span><button v-if="i===0&&!expanded&&items.length>1" type="button" class="reply-quote-more" :aria-label="ct('顯示所有回覆的訊息')" @click.stop="$emit('expand')">{{ct('＋{n} 則').replace('{n}',items.length-1)}}</button></div>
  </div>
 </template>
 <script setup>
@@ -21,7 +21,9 @@ const shown=computed(()=>props.items.slice(0,props.expanded?undefined:1));
    bubble's right edge. */
 .reply-quote.sent .reply-quote-row{justify-content:flex-end}
 .reply-quote.sent .reply-quote-row::before{order:1;border-left:0;border-right:2px solid var(--cc-color-text-tertiary);border-top-left-radius:0;border-top-right-radius:8px}
-.reply-quote-row:hover .reply-quote-text,.reply-quote-row:focus-visible .reply-quote-text{color:var(--f7-message-received-text-color)}
+.reply-quote-row:focus-visible .reply-quote-text{color:var(--f7-message-received-text-color)}
+@media (hover:hover) and (pointer:fine){.reply-quote-row:hover .reply-quote-text{color:var(--f7-message-received-text-color)}}
+.reply-quote-avatar{flex:none;width:16px;height:16px;border-radius:38%;object-fit:cover}
 .reply-quote-who{flex:none;font-weight:600;color:#0a84ff}
 .reply-quote-text{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .reply-quote-more{flex:none;width:auto;margin:0;padding:0 7px;border:0;border-radius:8px;background:rgba(127,127,127,.2);color:inherit;font:inherit;font-size:11px;line-height:18px;cursor:pointer}
