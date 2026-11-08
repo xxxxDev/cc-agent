@@ -28,16 +28,16 @@
   </div></div>
   <input ref="fileInput" type="file" multiple hidden @change="pickFiles"/>
   <div ref="composer" class="split-composer" :inert="locked">
-   <ChatComposer v-if="detail" :highlights="mention.current.value.map(m=>'@'+m.title)" :editor-id="null" v-model:value="draft" :placeholder="ct('輸入訊息…')" :reply="replyDraft" @cancel-reply="replyDraft=null" @keydown="composerKeydown">
+   <ChatComposer v-if="detail" :highlights="mention.current.value.map(m=>'@'+m.title)" :editor-id="null" v-model:value="draft" :placeholder="ct('輸入訊息…')" :reply="replyDraft" :status="sendStatus" @cancel-reply="replyDraft=null" @keydown="composerKeydown">
     <template #inner-start><f7-link icon-only icon-f7="plus" class="split-attach" :aria-label="ct('加入附件')" :class="{disabled:sending}" @click="chooseFiles"/></template>
     <template #before-inner><div v-if="files.length" class="split-drafts" :aria-label="ct('附件')">
-     <f7-preloader v-if="sending" :size="18"/>
-     <div v-for="file in files" :key="file.key" class="split-draft">
+     <div v-for="file in files" :key="file.key" class="split-draft" :class="{'draft-failed':file.state==='failed'}">
       <a href="#" :title="file.name" @click.prevent="preview=previewDraft(file)"><span>{{file.name}}</span><small>{{file.size<1024?file.size+' B':(file.size/1024).toFixed(1)+' KB'}}</small></a>
-      <button type="button" :disabled="sending" :aria-label="ct('移除附件')+' '+file.name" @click="removeFile(file.key)"><i class="icon f7-icons">xmark_circle_fill</i></button>
+      <DraftUploadState :item="file"/>
+      <button v-if="!sendStatus" type="button" :disabled="sending" :aria-label="ct('移除附件')+' '+file.name" @click="removeFile(file.key)"><i class="icon f7-icons">xmark_circle_fill</i></button>
      </div>
     </div></template>
-    <template #inner-end><f7-link icon-only icon-f7="arrow_up" class="split-send" :class="{disabled:!canSend}" :aria-disabled="!canSend" :aria-label="ct('送出訊息')" @click="send"/></template>
+    <template #inner-end><f7-link v-if="sendStatus" icon-only class="split-send disabled composer-sending" aria-disabled="true" :aria-label="sendStatus"><f7-preloader :size="18"/></f7-link><f7-link v-else icon-only icon-f7="arrow_up" class="split-send" :class="{disabled:!canSend}" :aria-disabled="!canSend" :aria-label="ct('送出訊息')" @click="send"/></template>
    </ChatComposer>
   </div>
   <SlashMenu v-if="detail&&!locked&&slash.items.value.length" :items="slash.items.value" :active="slash.active.value" @hover="slash.active.value=$event" @pick="slash.complete"/>
@@ -94,6 +94,7 @@ import TerminalPromptCard from './TerminalPromptCard.vue';
 import TerminalPane from '../TerminalPane.vue';
 import AttachmentPreview from './AttachmentPreview.vue';
 import ChatComposer from './ChatComposer.vue';
+import DraftUploadState from './DraftUploadState.vue';
 import SlashMenu from './SlashMenu.vue';
 import MentionMenu from './MentionMenu.vue';
 import ChecklistPanel,{askNewChecklist} from './ChecklistPanel.vue';
@@ -151,7 +152,7 @@ watch(()=>props.conversationId,()=>{replyDraft.value=null;});
 function startReply(quote){if(!quote?.id)return;replyDraft.value=quote;nextTick(()=>{const editor=composer.value?.querySelector('.chat-editor');if(editor&&!f7.device?.ios&&!f7.device?.android)editor.focus();});}
 // The conversation page's own drafts: kept per conversation, uploaded when sent.
 const attachmentDrafts=useAttachmentDrafts(computed(()=>props.conversationId),ref(null),sending,ct);
-const {files,fileInput,pickFiles,dropFiles,pasteFiles,removeFile,chooseFiles,previewDraft}=attachmentDrafts;
+const {files,fileInput,pickFiles,dropFiles,pasteFiles,removeFile,chooseFiles,previewDraft,status:sendStatus}=attachmentDrafts;
 
 // The side column, and the Agent Profile in it, the cell's own.
 const inspectorAllowed=computed(()=>isAdmin.value&&detail.value?.mode==='claude');
@@ -322,7 +323,7 @@ async function send(){
   finally{sending.value=false;}
   return;
  }
- const requestId=attachmentDrafts.requestId(id,text,items),quote=replyDraft.value;sending.value=true;
+ const requestId=attachmentDrafts.requestId(id,text,items),quote=replyDraft.value;sending.value=true;attachmentDrafts.begin(id);
  try{
   const attachmentIds=await attachmentDrafts.upload(id,items);
   await api(`/conversations/${id}/messages`,{method:'POST',body:JSON.stringify({text,requestId,attachmentIds,mentions:mention.current.value.map(m=>m.id),...(quote?{replyTo:quote.id}:{})})});
@@ -331,7 +332,7 @@ async function send(){
   if(draft.value===text)draft.value='';
   atBottom.value=true;await refresh();toBottom();
  }catch(e){f7.dialog.alert(e.message);}
- finally{sending.value=false;}
+ finally{attachmentDrafts.end(id);sending.value=false;}
 }
 async function interrupt(){
  if(interrupting.value)return;interrupting.value=true;

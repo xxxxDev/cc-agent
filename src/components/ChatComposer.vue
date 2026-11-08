@@ -1,5 +1,8 @@
 <template>
  <div class="toolbar messagebar">
+  <!-- How far a message being sent has got: 傳送中…, or
+       the attachment going up and its percent. -->
+  <div v-if="status" class="composer-status" role="status" aria-live="polite">{{status}}</div>
   <slot name="before-inner"/>
   <!-- The message being replied to: who wrote it and its first words on one line, an X
        or Escape to stop replying. -->
@@ -29,7 +32,8 @@ import {ct} from '../js/agent-i18n.js';
 // editorId: the conversation page's own box is #cc-agent-prompt; a split-view cell's
 // boxes, several on one page, have none.
 // reply: {who,text} of the message being replied to, shown over the box; null for none.
-const props=defineProps({value:{type:String,default:''},placeholder:String,highlights:{type:Array,default:()=>[]},editorId:{type:String,default:'cc-agent-prompt'},reply:{type:Object,default:null}});
+// status: one line over the box while a message is being sent; empty for none.
+const props=defineProps({value:{type:String,default:''},placeholder:String,highlights:{type:Array,default:()=>[]},editorId:{type:String,default:'cc-agent-prompt'},reply:{type:Object,default:null},status:{type:String,default:''}});
 const emit=defineEmits(['update:value','keydown','cancel-reply']);
 // The line over the box names the message being answered; a tap on it shows that message in
 // this conversation or cell, as the quote line over a sent reply does. One not loaded (further back) is left alone.
@@ -165,6 +169,8 @@ onBeforeUnmount(()=>{clearTimeout(releaseLater);releaseEvents.forEach(([t,n,f,o]
 .reply-draft-cancel .icon {font-size:16px;}
 @media (hover:hover) and (pointer:fine) {.reply-draft-cancel:hover {background:color-mix(in srgb,currentColor 14%,transparent);}}
 @media (min-width:768px) {.reply-draft {margin:0 calc(16px + var(--f7-safe-area-right,0px)) 8px calc(16px + var(--f7-safe-area-left,0px));}}
+.composer-status {position:relative;z-index:2;display:block;width:fit-content;box-sizing:border-box;max-width:calc(100% - 24px - var(--f7-safe-area-left,0px) - var(--f7-safe-area-right,0px));margin:0 calc(12px + var(--f7-safe-area-right,0px)) 6px calc(12px + var(--f7-safe-area-left,0px));padding:2px 10px;border-radius:999px;background:var(--f7-glass-bg-color,var(--cc-glass-fill-subtle));box-shadow:var(--f7-glass-shadow,none);backdrop-filter:saturate(180%) blur(16px);-webkit-backdrop-filter:saturate(180%) blur(16px);color:var(--cc-color-text-secondary);font-size:13px;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums;}
+@media (min-width:768px) {.composer-status {margin:0 calc(16px + var(--f7-safe-area-right,0px)) 6px calc(16px + var(--f7-safe-area-left,0px));}}
 .chat-editor[data-empty="true"]::before {content:attr(data-placeholder);color:var(--f7-messagebar-textarea-placeholder-color);pointer-events:none;position:absolute;}
 </style>
 <style>

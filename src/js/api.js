@@ -39,3 +39,39 @@ export async function api(endpoint, options = {}) {
   }
   return data;
 }
+
+// A file sent as the body of a POST, with its upload progress (a message with
+// attachments looked stuck while they went up). fetch()
+// reports no upload progress, so this one request goes by XMLHttpRequest, with what
+// api() sends (the cookie, the CSRF header) and the same answer and error.
+export function apiUpload(endpoint, body, { headers = {}, onProgress } = {}) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `/api${endpoint}`);
+    xhr.withCredentials = true;
+    for (const [name, value] of Object.entries({ 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken(), ...headers })) xhr.setRequestHeader(name, value);
+    if (onProgress) xhr.upload.onprogress = (event) => { if (event.lengthComputable && event.total) onProgress(event.loaded / event.total); };
+    // As fetch() rejects when the request never got an answer.
+    xhr.onerror = () => reject(new TypeError('Failed to fetch'));
+    xhr.onabort = () => reject(new TypeError('Failed to fetch'));
+    xhr.onload = () => {
+      const text = xhr.responseText;
+      let data = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        // non-JSON body — fall through to status error, as api() does
+      }
+      if (xhr.status < 200 || xhr.status >= 300) {
+        const error = new Error(data.message || `Request failed: ${xhr.status}`);
+        error.status = xhr.status;
+        error.code = data.code;
+        error.data = data;
+        reject(error);
+        return;
+      }
+      resolve(data);
+    };
+    xhr.send(body);
+  });
+}

@@ -1,6 +1,6 @@
 import {ref,computed,nextTick,watch} from 'vue';
 import {f7} from 'framework7-vue';
-import {api} from './api.js';
+import {api,apiUpload} from './api.js';
 export function useAttachmentDrafts(selected,user,busy,ct){
  const drafts=ref({}),fileInput=ref(null);
  const files=computed(()=>drafts.value[selected.value]||[]);
@@ -41,10 +41,32 @@ export function useAttachmentDrafts(selected,user,busy,ct){
   const giveUp=setTimeout(()=>finish(),60000);giveUp?.unref?.();
  }
  function chooseFiles(){if(busy.value)return;const a=document.activeElement;if(a&&a!==document.body&&(a.isContentEditable||/^(TEXTAREA|INPUT)$/.test(a.tagName)))a.blur();swallowWhilePicking();fileInput.value?.click();}
- async function upload(id,items){for(const item of items){if(!item.uploadedId){const r=await api('/conversations/'+id+'/attachments?name='+encodeURIComponent(item.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:item.file});item.uploadedId=r.id;}}return items.map(x=>x.uploadedId);}
+ // A message on its way shows how far it got (with files to upload,
+ // only a greyed send button said anything was happening). progress holds, per
+ // conversation, the send under way: the files going up (the one at, how far) or the
+ // message itself; each file's chip shows its own state (waiting, uploading with its
+ // percent, done, failed). begin() and end() bracket a send, upload() moves it along.
+ const progress=ref({});
+ const status=computed(()=>{const p=progress.value[selected.value];if(!p)return '';if(p.phase!=='upload')return ct('傳送中…');if(p.percent>=99)return ct('上傳附件 {n}/{total}（伺服器處理中）…').replace('{n}',p.at).replace('{total}',p.total);return ct('上傳附件 {n}/{total}（{percent}%）…').replace('{n}',p.at).replace('{total}',p.total).replace('{percent}',p.percent);});
+ function begin(id){progress.value[id]={phase:'send'};}
+ // A failed file keeps its mark until the next send or its removal; the ones it held up go back to plain.
+ function end(id){delete progress.value[id];for(const item of drafts.value[id]||[])if(item.state==='waiting'||item.state==='uploading'){item.state=null;item.percent=0;}}
+ async function upload(id,items){
+  const queue=items.filter(x=>!x.uploadedId);
+  for(const item of items){item.state=item.uploadedId?'done':'waiting';item.percent=item.uploadedId?100:0;}
+  for(const [i,item] of queue.entries()){
+   progress.value[id]={phase:'upload',at:i+1,total:queue.length,percent:0};item.state='uploading';
+   try{
+    const r=await apiUpload('/conversations/'+id+'/attachments?name='+encodeURIComponent(item.name),item.file,{headers:{'Content-Type':'application/octet-stream'},onProgress:f=>{const pct=Math.min(99,Math.floor(f*100));item.percent=pct;const p=progress.value[id];if(p?.phase==='upload'&&p.at===i+1)p.percent=pct;}});
+    item.uploadedId=r.id;item.state='done';item.percent=100;
+   }catch(e){item.state='failed';throw e;}
+  }
+  if(progress.value[id])progress.value[id]={phase:'send'};
+  return items.map(x=>x.uploadedId);
+ }
  function requestId(id,text,items){const signature=JSON.stringify([text,items.map(x=>x.key)]);const previous=pendingSend.get(id);if(previous?.signature===signature)return previous.id;const value={signature,id:crypto.randomUUID()};pendingSend.set(id,value);return value.id;}
  function sent(id,items){const keys=new Set(items.map(x=>x.key));drafts.value[id]=(drafts.value[id]||[]).filter(x=>!keys.has(x.key));pendingSend.delete(id);resize();}
  watch(files,resize);
- watch(()=>user.value?.id,()=>{drafts.value={};pendingSend.clear();});
- return {files,fileInput,pickFiles,dropFiles,pasteFiles,removeFile,chooseFiles,previewDraft,upload,requestId,sent};
+ watch(()=>user.value?.id,()=>{drafts.value={};pendingSend.clear();progress.value={};});
+ return {files,fileInput,pickFiles,dropFiles,pasteFiles,removeFile,chooseFiles,previewDraft,upload,begin,end,status,requestId,sent};
 }
