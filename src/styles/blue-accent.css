@@ -1,0 +1,29 @@
+/* Blue for the accent uses of orange. Warnings stay orange: the limit and wake cards (card-warn),
+   the login card, the terminal prompt, usage bars from 70%, and the other warning labels. One file
+   over the components' own scoped rules, so the accents change in one place. */
+:root {--cc-accent-blue:#0866FF;}
+.dark {--cc-accent-blue:#6EA8FF;}
+
+/* Cards: frame, tint, title (MessageList.vue). */
+.schedule-card:not(.login-card):not(.card-warn) {border-color:color-mix(in srgb,var(--cc-accent-blue) 45%,transparent) !important;background:color-mix(in srgb,var(--cc-accent-blue) 9%,transparent) !important;}
+.schedule-card:not(.login-card):not(.card-warn) .schedule-card-head {color:var(--cc-accent-blue) !important;}
+
+/* "Working" dots (ChatListPage.vue, chatPage.css, SplitView.vue). */
+.presence-dot.working, .tag-dot.working, .nav-presence.working, .split-presence.working {background:var(--cc-accent-blue) !important;}
+
+/* Search snippet marks (MessageSearchResults.vue). */
+.message-search-snippet mark {background:color-mix(in srgb,var(--cc-accent-blue) 35%,transparent) !important;}
+
+/* A found bubble's glow (MessageList.vue). */
+.message.message-found .message-content {animation-name:accent-message-found !important;}
+@keyframes accent-message-found {0%,40% {filter:drop-shadow(0 0 2px var(--cc-accent-blue)) drop-shadow(0 0 6px var(--cc-accent-blue));} 100% {filter:none;}}
+
+/* A found card's ring (MessageList.vue). */
+.schedule-card.message-found {box-shadow:0 0 0 2px var(--cc-accent-blue) !important;}
+
+/* A schedule opened from a notification (SchedulesPage.vue). */
+.schedule-list li.schedule-focused {animation-name:accent-schedule-found !important;}
+@keyframes accent-schedule-found {0%,40% {box-shadow:inset 0 0 0 2px var(--cc-accent-blue);} 100% {box-shadow:none;}}
+
+/* The transcript inspector's chosen bubble (chatPage.css). */
+.chat-page .inspected .message-content::before {background:var(--cc-accent-blue) !important;}

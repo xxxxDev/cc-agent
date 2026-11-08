@@ -14,6 +14,7 @@ import 'swiper/css';
 import 'swiper/css/free-mode';
 import './styles/tokens.css';
 import './styles/skin.css';
+import './styles/blue-accent.css';
 import './styles/mobile.css';
 import {initTheme} from './theme.js';
 initTheme();
