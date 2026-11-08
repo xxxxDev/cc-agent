@@ -24,42 +24,52 @@ function create(stateRoot, { now = Date.now } = {}) {
     return path.join(dir, `${id}.txt`);
   };
   let reports = null;
-  // A missing index is an empty one. One that cannot be read is moved aside as
-  // reports.json.bad-<ts>, logged, and the store starts empty; its text files are kept then,
-  // for whoever recovers it. Otherwise a text file the index does not name (left by a write
-  // that stopped half way) is removed.
+  // A missing index is an empty one. One that is there but cannot be read now (EACCES, EIO and
+  // the like) leaves the store unloaded: the request is refused and the next one tries again,
+  // so nothing is swept or overwritten. One that reads but is not a list of reports is
+  // moved aside as reports.json.bad-<ts>, logged, and the store starts empty. A text file the
+  // index does not name (left by a write that stopped half way) is removed, unless a bad index
+  // is kept aside: its texts stay for whoever recovers it.
+  const unavailable = () => fail('診斷回報暫時讀不到，請稍後再試', 503);
   const load = () => {
     if (reports) return reports;
     let raw = null;
-    try { raw = fs.readFileSync(file, 'utf8'); } catch (e) { if (e.code !== 'ENOENT') console.error('diagnostic reports: cannot read the index:', e.message); }
-    if (raw === null) { reports = []; } else {
-      try {
-        const parsed = JSON.parse(raw).reports;
-        if (!Array.isArray(parsed) || !parsed.every((r) => r && typeof r === 'object' && ID.test(r.id))) throw new Error('not a list of reports');
-        reports = parsed;
-      } catch (e) {
-        const aside = `${file}.bad-${now()}`;
-        try { fs.renameSync(file, aside); } catch (moveError) { console.error('diagnostic reports: cannot move the bad index aside:', moveError.message); }
-        console.error(`diagnostic reports: the index could not be read (${e.message}); kept as ${aside}, starting empty`);
-        reports = [];
-        return reports;
-      }
+    try { raw = fs.readFileSync(file, 'utf8'); } catch (e) {
+      if (e.code !== 'ENOENT') { console.error('diagnostic reports: cannot read the index:', e.message); throw unavailable(); }
     }
-    const known = new Set(reports.map((r) => r.id));
+    if (raw === null) { reports = []; return reports; }
+    let loaded;
+    try {
+      loaded = JSON.parse(raw).reports;
+      if (!Array.isArray(loaded) || !loaded.every((r) => r && typeof r === 'object' && ID.test(r.id))) throw new Error('not a list of reports');
+    } catch (e) {
+      const aside = `${file}.bad-${now()}`;
+      // Not moved aside: starting empty would let the next save overwrite it.
+      try { fs.renameSync(file, aside); } catch (moveError) { console.error('diagnostic reports: cannot move the bad index aside:', moveError.message); throw unavailable(); }
+      console.error(`diagnostic reports: the index could not be read (${e.message}); kept as ${aside}, starting empty`);
+      reports = [];
+      return reports;
+    }
+    const known = new Set(loaded.map((r) => r.id));
     let names = [];
     try { names = fs.readdirSync(dir); } catch {}
-    for (const name of names) {
-      const m = /^(.+)\.txt$/.exec(name);
-      if (m && ID.test(m[1]) && !known.has(m[1])) dropText(m[1]);
+    if (!names.some((name) => name.startsWith('reports.json.bad-'))) {
+      for (const name of names) {
+        const m = /^(.+)\.txt$/.exec(name);
+        if (m && ID.test(m[1]) && !known.has(m[1])) dropText(m[1]);
+      }
     }
+    reports = loaded;
     return reports;
   };
   const ensureDir = () => fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-  const save = () => {
+  // Every change builds the new list, saves it, and only then becomes the store; texts the
+  // change lets go are removed after that.
+  const save = (next) => {
     ensureDir();
     const tmp = `${file}.tmp`;
     try {
-      fs.writeFileSync(tmp, JSON.stringify({ reports }, null, 1), { mode: 0o600 });
+      fs.writeFileSync(tmp, JSON.stringify({ reports: next }, null, 1), { mode: 0o600 });
       fs.renameSync(tmp, file);
     } catch (e) {
       try { fs.rmSync(tmp, { force: true }); } catch {}
@@ -110,13 +120,11 @@ function create(stateRoot, { now = Date.now } = {}) {
     // it, and a failed index save takes the new text back out.
     ensureDir();
     fs.writeFileSync(textFile(report.id), text, { mode: 0o600 });
-    const before = reports;
-    reports = kept;
-    try { save(); } catch (e) {
-      reports = before;
+    try { save(kept); } catch (e) {
       dropText(report.id);
       throw e;
     }
+    reports = kept;
     for (const r of dropped) dropText(r.id);
     return report;
   }
@@ -133,16 +141,19 @@ function create(stateRoot, { now = Date.now } = {}) {
     if (!['open', 'handled'].includes(status)) throw fail('Unknown status');
     const r = find(id);
     if (!r) throw fail('找不到這份診斷回報', 404);
-    Object.assign(r, status === 'handled' ? { status, handledAt: new Date(now()).toISOString(), handledBy: by } : { status, handledAt: null, handledBy: null });
-    save();
-    return r;
+    const changed = { ...r, ...(status === 'handled' ? { status, handledAt: new Date(now()).toISOString(), handledBy: by } : { status, handledAt: null, handledBy: null }) };
+    const next = reports.map((x) => (x.id === id ? changed : x));
+    save(next);
+    reports = next;
+    return changed;
   }
   function remove(id) {
     const r = find(id);
     if (!r) throw fail('找不到這份診斷回報', 404);
-    reports = reports.filter((x) => x.id !== id);
+    const next = reports.filter((x) => x.id !== id);
+    save(next);
+    reports = next;
     dropText(id);
-    save();
     return r;
   }
   const pending = () => list().filter((r) => r.notifyPending);
@@ -150,8 +161,14 @@ function create(stateRoot, { now = Date.now } = {}) {
     load();
     const wanted = new Set(ids);
     let changed = 0;
-    for (const r of reports) if (wanted.has(r.id) && r.notifyPending) { r.notifyPending = false; changed += 1; }
-    if (changed) save();
+    const next = reports.map((r) => {
+      if (!wanted.has(r.id) || !r.notifyPending) return r;
+      changed += 1;
+      return { ...r, notifyPending: false };
+    });
+    if (!changed) return 0;
+    save(next);
+    reports = next;
     return changed;
   }
   // Everything a deleted account sent goes with it, as its scope reports do.
@@ -159,9 +176,10 @@ function create(stateRoot, { now = Date.now } = {}) {
     load();
     const gone = reports.filter((r) => r.from === owner);
     if (!gone.length) return 0;
+    const next = reports.filter((r) => r.from !== owner);
+    save(next);
+    reports = next;
     for (const r of gone) dropText(r.id);
-    reports = reports.filter((r) => r.from !== owner);
-    save();
     return gone.length;
   }
   return { add, list, get, setStatus, remove, pending, markNotified, purgeOwner, dir };
