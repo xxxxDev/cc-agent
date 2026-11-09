@@ -20,7 +20,7 @@
     <button type="button" class="presence-choose" :class="{active:chosenByPresence(false)}" data-presence="offline" @click="chooseByPresence(false)"><span class="tag-dot"></span>{{ct('未上線')}}</button>
    </template>
    <span v-if="!search&&!mixedList" class="agent-group-add"><f7-button small round tonal icon-f7="folder_badge_plus" :aria-label="ct('新增群組')" :title="ct('新增群組')" @click="addGroup"><span class="row-button-label">{{ct('新增群組')}}</span></f7-button></span>
-   <span class="mark-all-read"><f7-button small round tonal icon-f7="envelope_open" :disabled="!unreadTotal||markingAllRead" :aria-label="ct('全部已讀')" :title="ct('全部已讀')" @click="markAllRead"><span class="row-button-label">{{ct('全部已讀')}}</span></f7-button></span>
+   <span class="mark-all-read"><f7-button small round tonal icon-f7="checkmark" :disabled="!unreadTotal||markingAllRead" :aria-label="ct('全部已讀')" :title="ct('全部已讀')" @click="markAllRead"><span class="row-button-label">{{ct('全部已讀')}}</span></f7-button></span>
   </div>
   <!-- Groups, titled like the sections of Settings.
        In All, dragging stays within each source (src/js/sourceFence.js); New group
