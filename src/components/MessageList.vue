@@ -23,6 +23,7 @@ import {avatarShape} from '../js/avatarShape.js';
 import {bubbleTime} from '../js/bubbleTime.js';
 import {renderMarkdown,renderTypedMarkdown} from '../js/markdown.js';
 import {saveFile,sharesFiles} from '../js/saveFile.js';
+import {PICTURE} from '../js/pictureFiles.js';
 import ClaudeLoginCard from './ClaudeLoginCard.vue';
 import ReplyQuote from './ReplyQuote.vue';
 import {useBubbleGestures} from '../js/bubbleGestures.js';
@@ -181,7 +182,6 @@ const gestures=useBubbleGestures({
 const bubbleMenu=gestures.menu;
 // Pictures show above their capsules, one as it is and several in a grid of four; the capsules stay for the name and download.
 // Only what every browser draws: a HEIC still has its capsule and preview.
-const PICTURE=/\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i;
 const picturesOf=m=>(m.attachments||[]).filter(f=>PICTURE.test(f.name||''));
 const attachmentUrl=file=>'/api/conversations/'+(file.conversationId||props.conversationId)+'/attachments/'+file.id;
 // An SVG thumbnail: the server sends it as plain bytes, so it is fetched once and shown from a

@@ -31,11 +31,14 @@
    <ChatComposer v-if="detail" :highlights="mention.current.value.map(m=>'@'+m.title)" :editor-id="null" v-model:value="draft" :placeholder="ct('輸入訊息…')" :reply="replyDraft" :status="sendStatus" @cancel-reply="replyDraft=null" @keydown="composerKeydown">
     <template #inner-start><f7-link icon-only icon-f7="plus" class="split-attach" :aria-label="ct('加入附件')" :class="{disabled:sending}" @click="chooseFiles"/></template>
     <template #before-inner><div v-if="files.length" class="split-drafts" :aria-label="ct('附件')">
-     <div v-for="file in files" :key="file.key" class="split-draft" :class="{'draft-failed':file.state==='failed'}">
+     <DraftPictures :files="files" :removable="!sendStatus" :disabled="sending" @open="preview=$event" @remove="removeFile"/>
+     <div v-if="!files.every(isDraftPicture)" class="split-draft-files"><template v-for="file in files" :key="file.key">
+     <div v-if="!isDraftPicture(file)" class="split-draft" :class="{'draft-failed':file.state==='failed'}">
       <a href="#" :title="file.name" @click.prevent="preview=previewDraft(file)"><span>{{file.name}}</span><small>{{file.size<1024?file.size+' B':(file.size/1024).toFixed(1)+' KB'}}</small></a>
       <DraftUploadState :item="file"/>
       <button v-if="!sendStatus" type="button" :disabled="sending" :aria-label="ct('移除附件')+' '+file.name" @click="removeFile(file.key)"><i class="icon f7-icons">xmark_circle_fill</i></button>
      </div>
+     </template></div>
     </div></template>
     <template #inner-end><f7-link v-if="sendStatus" icon-only class="split-send disabled composer-sending" aria-disabled="true" :aria-label="sendStatus"><f7-preloader :size="18"/></f7-link><f7-link v-else icon-only icon-f7="arrow_up" class="split-send" :class="{disabled:!canSend}" :aria-disabled="!canSend" :aria-label="ct('送出訊息')" @click="send"/></template>
    </ChatComposer>
@@ -93,6 +96,8 @@ import MessageList from './MessageList.vue';
 import TerminalPromptCard from './TerminalPromptCard.vue';
 import TerminalPane from '../TerminalPane.vue';
 import AttachmentPreview from './AttachmentPreview.vue';
+import DraftPictures from './DraftPictures.vue';
+import {isDraftPicture} from '../js/pictureFiles.js';
 import ChatComposer from './ChatComposer.vue';
 import DraftUploadState from './DraftUploadState.vue';
 import SlashMenu from './SlashMenu.vue';
@@ -399,7 +404,9 @@ onUnmounted(()=>{disposed=true;agent.dispose();clearInterval(timer);sizeWatch?.d
    rule (ChatComposer.vue) is for a .chat-page and so missed the cell. */
 .split-composer :deep(.toolbar.messagebar > .toolbar-inner.composer-pill:not(.composer-tall)) {column-gap:4px;}
 .split-composer :deep(.toolbar-inner.composer-pill:not(.composer-tall) > .composer-start:not(.composer-empty) + .messagebar-area .chat-editor) {padding-left:2px;}
-.split-drafts {display:flex;align-items:center;gap:8px;overflow-x:auto;padding:8px 10px;}
+/* Pictures in a row of thumbnails, other files in a row of chips below. */
+.split-drafts {display:flex;flex-direction:column;gap:8px;padding:8px 10px;}
+.split-draft-files {display:flex;align-items:center;gap:8px;overflow-x:auto;}
 .split-draft {display:flex;align-items:center;gap:6px;flex:0 0 auto;max-width:220px;border-radius:var(--cc-radius-card,16px);padding:6px 6px 6px 10px;background:var(--cc-glass-fill-subtle);color:var(--cc-color-text);font-size:13px;}
 .split-draft a {flex:1 1 auto;min-width:0;display:flex;flex-direction:column;color:inherit;text-decoration:none;}
 .split-draft span {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}

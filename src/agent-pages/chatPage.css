@@ -148,7 +148,11 @@
 .chat-page[data-chat~="switchless"]:not([data-chat~="has-progress"]) > .transcript-inspector {top:calc(var(--f7-navbar-height) + var(--f7-safe-area-top,0px));}
 .chat-page[data-chat~="switchless"]:not([data-chat~="has-progress"]) > .profile-panel {top:calc(var(--f7-navbar-height) + var(--f7-safe-area-top,0px));}
 
-.attachment-drafts {position:relative;z-index:2;display:flex;gap:8px;overflow-x:auto;padding:8px 12px;max-height:100px;box-sizing:border-box;}
+/* Pictures in a row of thumbnails (DraftPictures.vue), other files in a row of chips below;
+   each row scrolls sideways on its own. */
+.attachment-drafts {position:relative;z-index:2;display:flex;flex-direction:column;gap:8px;padding:8px 12px;box-sizing:border-box;}
+.attachment-draft-files {display:flex;gap:8px;overflow-x:auto;max-height:84px;}
+@media (min-width:768px) {.attachment-drafts {padding:8px 16px;}}
 .attachment-chip {display:flex;align-items:center;gap:8px;flex:0 0 auto;max-width:260px;border-radius:var(--cc-radius-card,16px);padding:8px 10px;background:var(--cc-glass-fill-subtle);color:var(--cc-color-text);}
 .attachment-chip span {min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 /* A file chosen for the next message opens its preview on a tap. */

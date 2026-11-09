@@ -5,7 +5,7 @@ const KEY='cc-agent-viewport-reload',WAIT_MS=60000;
 // What would be lost: a chat's draft or chosen files, an open dialog, a field in use. A field
 // filled in on a page kept behind others (Settings, Schedules) does not count.
 const typed=()=>[...document.querySelectorAll('.chat-editor')].some(el=>el.textContent.trim())
- ||!!document.querySelector('.attachment-chip,.modal-in,:focus:is(input,textarea,[contenteditable])');
+ ||!!document.querySelector('.attachment-chip,.draft-picture,.modal-in,:focus:is(input,textarea,[contenteditable])');
 function check(){
  if(document.visibilityState!=='visible'||!(window.visualViewport?.height<=0)||typed())return;
  try{
