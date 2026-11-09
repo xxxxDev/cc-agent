@@ -300,7 +300,7 @@ const english = {
   "自動收合電腦版選單":"Auto-collapse the menu on a computer",
   "選單平常收成一排圖示，滑鼠移上去才展開，移開就收回。只影響這台裝置。":"The menu stays a row of icons and opens while the mouse is on it. This device only.",
   
-"新增群組":"New group",
+"新增群組":"New group","全部已讀":"Mark all read",
 "群組名稱":"Group name",
 "刪除群組":"Delete group","收合群組":"Collapse group","群聊通知":"Group notifications","成員討論出結果、在群裡 @你 時才會通知你。":"You are notified only when a member calls on you with @ in the group, once it has a result.","開啟通知":"Turn on notifications for","關閉通知":"Turn off notifications for","通知已關":"Notifications off","更多":"More","昨天":"Yesterday","編輯群組順序":"Edit group order","搜尋群組或成員":"Search groups or members","沒有符合的群組":"No matching groups","移除這個時間":"Remove this time","再加一個時間":"Add another time","展開群組":"Expand group",
 "點一下改名":"Tap to rename",

@@ -11,14 +11,16 @@
   <GlassDropdown :open="sourcesOpen" :point="sourcesPoint" :items="listSources" :selected="listSource" @close="sourcesOpen=false" @select="chooseSource"/>
   <f7-block v-if="error" role="alert">{{error}}</f7-block>
   <!-- New group sits at the right of Select all, in reach as Edit opens; a member, who has no Select all, sees it alone. -->
-  <div v-if="editMode&&(user?.role==='admin'&&filtered.length||!search&&!mixedList)" class="select-all-row">
+  <!-- Mark all read closes the row at its right end, for every account: each has its own unread counts. -->
+  <div v-if="editMode" class="select-all-row" :class="{crowded:user?.role==='admin'&&filtered.length}">
    <template v-if="user?.role==='admin'&&filtered.length">
     <f7-button class="agent-select" :icon-f7="allChosen?'checkmark_circle_fill':'circle'" role="checkbox" :aria-checked="String(allChosen)" :aria-label="ct('全選')" @click="toggleAllChosen"/>
     <span class="select-all-label" @click="toggleAllChosen">{{allChosen?ct('取消全選'):ct('全選')}}</span>
     <button type="button" class="presence-choose" :class="{active:chosenByPresence(true)}" data-presence="online" @click="chooseByPresence(true)"><span class="tag-dot online"></span>{{ct('在線')}}</button>
     <button type="button" class="presence-choose" :class="{active:chosenByPresence(false)}" data-presence="offline" @click="chooseByPresence(false)"><span class="tag-dot"></span>{{ct('未上線')}}</button>
    </template>
-   <span v-if="!search&&!mixedList" class="agent-group-add"><f7-button small round tonal icon-f7="folder_badge_plus" @click="addGroup">{{ct('新增群組')}}</f7-button></span>
+   <span v-if="!search&&!mixedList" class="agent-group-add"><f7-button small round tonal icon-f7="folder_badge_plus" :aria-label="ct('新增群組')" :title="ct('新增群組')" @click="addGroup"><span class="row-button-label">{{ct('新增群組')}}</span></f7-button></span>
+   <span class="mark-all-read"><f7-button small round tonal icon-f7="envelope_open" :disabled="!unreadTotal||markingAllRead" :aria-label="ct('全部已讀')" :title="ct('全部已讀')" @click="markAllRead"><span class="row-button-label">{{ct('全部已讀')}}</span></f7-button></span>
   </div>
   <!-- Groups, titled like the sections of Settings.
        In All, dragging stays within each source (src/js/sourceFence.js); New group
@@ -121,8 +123,9 @@ import {inject,ref,computed} from "vue";import GlassDropdown from "../components
 .agent-select {flex-shrink:0;width:28px;min-width:28px;padding:0;margin-right:4px;color:var(--cc-color-text-secondary);}
 .agent-select[aria-checked="true"] {color:#34c759;}
 /* In the list's column, its circle under the rows' circles: the list is 828px wide
-   and centred on a desktop, 16px in from each side on a phone. */
-.select-all-row {display:flex;align-items:center;gap:6px;margin:0 max(var(--f7-list-inset-side-margin,16px),calc((100% - 828px) / 2)) -8px;padding:4px 16px 4px 26px;font-size:14px;color:var(--cc-color-text-secondary);}
+   and centred on a desktop, 16px in from each side on a phone. Its last button ends
+   where the rows' cards and drag handles end, 10px in from the column in Edit mode. */
+.select-all-row {display:flex;align-items:center;gap:6px;margin:0 max(var(--f7-list-inset-side-margin,16px),calc((100% - 828px) / 2)) -8px;padding:4px 10px 4px 26px;font-size:14px;color:var(--cc-color-text-secondary);container-type:inline-size;}
 .select-all-label {cursor:pointer;user-select:none;white-space:nowrap;}
 .presence-choose {display:inline-flex;width:auto;align-items:center;gap:5px;flex:0 0 auto;margin-left:4px;padding:4px 10px;border:1px solid transparent;border-radius:999px;background:rgba(120,120,128,.16);color:inherit;font:inherit;font-size:13px;white-space:nowrap;cursor:pointer;}
 .presence-choose.active {border-color:#34c759;background:rgba(52,199,89,.18);color:var(--f7-text-color, inherit);}
@@ -232,6 +235,19 @@ import {inject,ref,computed} from "vue";import GlassDropdown from "../components
 .list.conversation-list:not(.editing) > ul > li.in-source {margin-left:18px;}
 .list.conversation-list > ul > li.agent-source-title + li.agent-group-row {margin-top:22px;}
 .agent-group-add :deep(.button) {display:inline-flex;gap:6px;width:auto;padding:0 12px;}
+.mark-all-read {margin-left:auto;flex:0 0 auto;}
+.agent-group-add + .mark-all-read {margin-left:0;}
+.mark-all-read :deep(.button) {display:inline-flex;gap:6px;width:auto;padding:0 12px;white-space:nowrap;}
+/* Too narrow for every name on one line (a phone, a split cell): New group and Mark
+   all read keep their icons, their names in the tooltip, and the row stays one line. */
+@container (max-width:520px){
+ .crowded .agent-group-add :deep(.button),.crowded .mark-all-read :deep(.button) {width:32px;padding:0;justify-content:center;}
+ .crowded .row-button-label {display:none;}
+}
+@container (max-width:240px){
+ .agent-group-add :deep(.button),.mark-all-read :deep(.button) {width:32px;padding:0;justify-content:center;}
+ .row-button-label {display:none;}
+}
 /* A picture chosen in Agent Profile: a photo fills the tile, an icon with a
    transparent background sits in it at the default logo's size (avatarShape.js). */
 .agent-avatar-photo {width:100%;height:100%;object-fit:cover;border-radius:inherit;}

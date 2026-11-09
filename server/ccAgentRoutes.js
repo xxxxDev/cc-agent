@@ -206,6 +206,8 @@ app.post('/api/conversations/search',(req,res,next)=>{try{
  const conversationId=typeof req.body?.conversationId==='string'&&req.body.conversationId?req.body.conversationId:undefined;
  res.json(agents.searchMessages(req.userId,req.body?.q,{conversationId}));
 }catch(e){next(e);}});
+// Every one of the caller's own agents read at once.
+app.post('/api/conversations/read-all',(req,res,next)=>{try{res.json(agents.markAllRead(req.userId));}catch(e){next(e);}});
 app.post('/api/conversations/reorder',(req,res,next)=>{try{res.json({conversations:agents.reorder(req.userId,req.body.ids,req.body.groups)});}catch(e){next(e);}});
 // ?limit= and ?before= page the bubbles: the newest ones on open, older ones when
 // the reader scrolls back.
