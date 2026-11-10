@@ -31,6 +31,8 @@ const PRICES = {
   // Fable 5.1 is 10/50 with cache reads at 0.25, Sonnet 5 and
   // Sonnet 5.5 are 2/10, Haiku 5.5 is 0.1/0.5.
   'claude-fable-5-1': [10, 50, 0.25],
+  // Claude Code 2.1.321's catalog (tier_8_40_cache_read_0_20).
+  'claude-fable-5-2': [8, 40, 0.2],
   'claude-sonnet-5-5': [2, 10],
   'claude-sonnet-5': [2, 10],
   'claude-haiku-5-5': [0.1, 0.5],

@@ -13,7 +13,11 @@ const agentAccess=require('./agentAccess');
 // it, as any setting already on an agent stays saveable (below).
 // The choices are the newest of each family and nothing older: Sonnet 5.5 and Haiku 5.5 came with Claude Code 2.1.293.
 const MODELS=['claude-opus-5-5','claude-sonnet-5-5','claude-haiku-5-5'];
-const ADMIN_MODELS=['claude-fable-5-1',...MODELS];
+// Fable 5.2 came with Claude Code 2.1.321 and replaced Fable 5.1 in the choices; an agent still
+// on Fable 5.1 keeps it, as Claude Code still serves it.
+const ADMIN_MODELS=['claude-fable-5-2',...MODELS];
+// No longer offered but still served by Claude Code: a subagent setting saved on one stays saveable.
+const KEPT_MODELS=['claude-fable-5-1'];
 // What a member's new agent, or one with no model saved, runs on.
 const DEFAULT_MODEL='claude-sonnet-5-5';
 const EFFORTS=['medium','high'];
@@ -53,4 +57,4 @@ function validate(input={},base={},callerRole){
  if(!models.includes(p.model)||!efforts.includes(p.effort))throw Object.assign(new Error('Invalid model or effort'),{status:400});
  return p;
 }
-module.exports={profile,validate,successor,fit,DEFAULT_MODEL,MODELS,EFFORTS,ADMIN_MODELS,ADMIN_EFFORTS};
+module.exports={profile,validate,successor,fit,DEFAULT_MODEL,MODELS,EFFORTS,ADMIN_MODELS,KEPT_MODELS,ADMIN_EFFORTS};

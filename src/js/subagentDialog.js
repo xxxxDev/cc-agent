@@ -5,7 +5,7 @@ import {f7} from 'framework7-vue';
 import {ct} from './agent-i18n.js';
 import {modelLabel,effortLabel} from './agent-models.js';
 
-const MODELS=['claude-fable-5-1','claude-opus-5-5','claude-sonnet-5-5','claude-haiku-5-5'];
+const MODELS=['claude-fable-5-2','claude-opus-5-5','claude-sonnet-5-5','claude-haiku-5-5'];
 const EFFORTS=['low','medium','high','xhigh','max'];
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
 
@@ -20,7 +20,7 @@ export function subagentLabel(s){
 export function editSubagents({title,text,value,own,save,okText}){
  const v={model:'',lock:false,effort:'',...(value||{})};
  const option=(id,label,sel)=>`<option value="${esc(id)}"${id===sel?' selected':''}>${esc(label)}</option>`;
- const models=option('',ct('不指定'),v.model)+MODELS.map(m=>option(m,modelLabel(m),v.model)).join('');
+ const models=option('',ct('不指定'),v.model)+(v.model&&!MODELS.includes(v.model)?[v.model,...MODELS]:MODELS).map(m=>option(m,modelLabel(m),v.model)).join('');
  const efforts=option('',ct('不指定'),v.effort)+EFFORTS.map(e=>option(e,effortLabel(e),v.effort)).join('');
  const dialog=f7.dialog.create({title:esc(title),text:esc(text),cssClass:'handoff-dialog subagent-dialog',
   content:`<div class="handoff-fields">

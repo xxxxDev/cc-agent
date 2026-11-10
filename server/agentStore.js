@@ -2244,7 +2244,7 @@ function subagentDefault(){return subagentClean(state.agentSettings?.subagents);
 function subagentSetting(c){return c.subagents?subagentClean(c.subagents):subagentDefault();}
 function subagentCheck(v){
  if(!v||typeof v!=='object'||Array.isArray(v))throw error('子代理設定格式不正確');
- if(v.model!==undefined&&(typeof v.model!=='string'||(v.model&&!agentProfile.ADMIN_MODELS.includes(v.model))))throw error('子代理模型不正確');
+ if(v.model!==undefined&&(typeof v.model!=='string'||(v.model&&!agentProfile.ADMIN_MODELS.includes(v.model)&&!agentProfile.KEPT_MODELS.includes(v.model))))throw error('子代理模型不正確');
  if(v.effort!==undefined&&(typeof v.effort!=='string'||(v.effort&&!agentProfile.ADMIN_EFFORTS.includes(v.effort))))throw error('子代理 Effort 不正確');
  if(v.lock!==undefined&&typeof v.lock!=='boolean')throw error('鎖定模型必須是開或關');
  return subagentClean(v);

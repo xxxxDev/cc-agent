@@ -80,7 +80,11 @@ async function loadWebgl(){
 }
 onMounted(()=>{term=new Terminal({cursorBlink:true,fontSize:13,fontFamily:'Menlo, monospace',scrollback:5000,theme:{background:'#121212',foreground:'#ececec'},allowProposedApi:false});fit=new FitAddon();term.loadAddon(fit);term.open(host.value);
  loadWebgl();
- cleanupTouch=bindTerminalTouch(host.value,term);term.onData(data=>{if(ws?.readyState===1)ws.send(JSON.stringify({type:'input',data}));});observer=new ResizeObserver(resize);observer.observe(host.value);connect(true);
+ cleanupTouch=bindTerminalTouch(host.value,term);term.onData(data=>{if(ws?.readyState===1)ws.send(JSON.stringify({type:'input',data}));});
+ // Shift+Enter is a new line in Claude Code: xterm sends a bare Enter for both, so it goes as
+ // Esc+Enter (what Option+Enter sends), which Claude Code reads as a line break. Not while an input
+ // method is composing.
+ term.attachCustomKeyEventHandler(e=>{if(e.key!=='Enter'||!e.shiftKey||e.ctrlKey||e.altKey||e.metaKey||e.isComposing)return true;if(e.type==='keydown'&&ws?.readyState===1)ws.send(JSON.stringify({type:'input',data:'\x1b\r'}));return false;});observer=new ResizeObserver(resize);observer.observe(host.value);connect(true);
  watchdog=setInterval(checkLine,5000);document.addEventListener('visibilitychange',onVisible);window.addEventListener('focus',onVisible);});
 onUnmounted(()=>{disposed=true;clearTimeout(resizeTimer);clearTimeout(retryTimer);clearTimeout(webglRetry);clearInterval(watchdog);document.removeEventListener('visibilitychange',onVisible);window.removeEventListener('focus',onVisible);cleanupTouch?.();observer?.disconnect();ws?.close();try{webgl?.dispose();}catch{}webgl=null;term?.dispose();});
 </script>
