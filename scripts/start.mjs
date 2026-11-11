@@ -29,9 +29,9 @@ const lock=path.join(data,'server.lock');
 // password would be made beside them, so the start is refused before anything is
 // written.
 if(fs.existsSync(path.join(data,'auth','users.db'))&&!fs.existsSync(path.join(data,'local-access.json')))throw new Error('Auth exists without its secret; refusing bootstrap.');
-try {fs.writeFileSync(lock,String(process.pid),{flag:'wx',mode:0o600});}catch{
- const pid=Number(fs.readFileSync(lock,'utf8'));let live=true;try{process.kill(pid,0);}catch(e){if(e.code==='ESRCH')live=false;}
- if(live)throw new Error('Another CC Agent process (a running server, or rotate-push-keys.js) is using this data folder.');fs.unlinkSync(lock);fs.writeFileSync(lock,String(process.pid),{flag:'wx',mode:0o600});
+// One left by a process that is gone is taken over (server/services/dataFolderLock.js).
+try{createRequire(import.meta.url)('../server/services/dataFolderLock.js').takeDataFolderLock(lock);}catch(e){
+ if(String(e.code).startsWith('DATA_FOLDER_LOCK_'))throw new Error('Another CC Agent process (a running server, or rotate-push-keys.js) is using this data folder.');throw e;
 }
 // Removed at exit only while it is still the file this process made: not a link, the same
 // file, and still naming this process. One replaced meanwhile, by another start that
