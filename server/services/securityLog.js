@@ -495,11 +495,12 @@ function create({ file, now = Date.now, timers = realTimers } = {}) {
 }
 
 // Only the service names the data folder it is kept in (scripts/start.mjs sets the setting
-// dirEnv names); any other process keeps its own in a temporary folder, as audit.js does,
-// never the live one. The setting, the file and the folder's prefix are the product's
-// (siteConfig.js).
+// dirEnv names); any other process keeps its own in a new temporary folder, as audit.js does,
+// never the live one. mkdtemp makes it with an unguessable name and only this account's
+// access, so no other user can make it first. The setting, the file and the folder's prefix
+// are the product's (siteConfig.js).
 const stateRoot = process.env[PRODUCT.securityLog.dirEnv]
-  || path.join(require('node:os').tmpdir(), `${PRODUCT.tempPrefix}-security-${process.pid}`);
+  || fs.mkdtempSync(path.join(require('node:os').tmpdir(), `${PRODUCT.tempPrefix}-security-`));
 const security = create({ file: path.join(stateRoot, PRODUCT.securityLog.file) });
 // What the last two seconds (or the last minute of guard counts) left unwritten is
 // written as the process goes: a restart must not lose a block just made.

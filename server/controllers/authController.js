@@ -736,8 +736,7 @@ exports.logout = (req, res) => {
     .then((phone) => { if (phone) { qrRequests.revokeDevice(phone._id); return loginDevices.remove(phone.userId, phone._id); } })
     .catch(() => {})
     .finally(() => {
-      // Also a row still holding the token itself (a start-up conversion that failed):
-      // by its hash alone it stayed, and worked again once a later start converted it.
+      // The session row is kept by the token's hash only, never the token.
       sessionsDB.remove({ tokenHash: hashSessionToken(token) }, { multi: true }, () => {
         compactQuietly(sessionsDB, 'sessions');
         // Its other open pages (other tabs) told at once (server/liveUpdates.js).

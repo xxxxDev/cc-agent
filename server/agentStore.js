@@ -612,10 +612,14 @@ function interrupt(c) {
 // ~/.config/cc-agent beside the others (scripts/start.mjs names it for the service), used
 // only if it is a plain file of this account that nobody else can read; never shown, never
 // sent to the other machine. Any other process that loads this file keeps one of its own
-// in a temporary folder, so it never reads or makes the account's real key.
-const peerKeyFile=process.env.CC_AGENT_PEER_KEY_FILE||path.join(require('node:os').tmpdir(),`cc-agent-peer-${process.pid}`,'peer-key');
+// in a new temporary folder (mkdtemp: an unguessable name no other user can make first), so
+// it never reads or makes the account's real key.
+const peerKeyFileSet=process.env.CC_AGENT_PEER_KEY_FILE||null;
+let peerKeyFallback=null;
+function peerKeyPath(){return peerKeyFileSet||(peerKeyFallback??=path.join(fs.mkdtempSync(path.join(require('node:os').tmpdir(),'cc-agent-peer-')),'peer-key'));}
 function peerKey(){
  const crypto=require('node:crypto');
+ const peerKeyFile=peerKeyPath();
  try{
   const st=fs.lstatSync(peerKeyFile);
   if(st.isFile()&&(typeof process.getuid!=='function'||st.uid===process.getuid())&&!(st.mode&0o077)){const k=fs.readFileSync(peerKeyFile,'utf8').trim();if(/^ccp_[A-Za-z0-9_-]{40,}$/.test(k))return k;}
