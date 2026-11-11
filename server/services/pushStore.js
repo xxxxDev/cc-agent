@@ -417,23 +417,6 @@ function createPushStore({
     const immutableChecksum = checksum(immutable);
     let existing = await findOne(deliveriesDB, { deliveryKey });
     if (!existing) existing = await findOne(deliveriesDB, { deliveryId });
-    // A row without deliveryKey (and so without a rotation-stable deliveryId) is
-    // one Web Push row per (event, device), so adopt that exact row once and stamp
-    // the stable key for every future replay.
-    // Only when exactly one such row exists: with several, which one stood for this
-    // delivery cannot be told, and none is adopted (taking whichever came
-    // first could adopt the wrong one).
-    if (!existing) {
-      const legacy = await findMany(deliveriesDB, {
-        ...events.eventQuery(reply),
-        deviceId: subscription.deviceId,
-        deliveryKey: { $exists: false },
-      });
-      if (legacy.length === 1) existing = legacy[0];
-      // Several: fail closed. Nothing is adopted and nothing new is
-      // made, so what may already have been sent is not sent again.
-      else if (legacy.length > 1) return { created: false, delivery: legacy[0], ambiguous: true };
-    }
     if (existing) {
       const existingLogicalChecksum = checksum({
         ...events.storedEventFields(existing),

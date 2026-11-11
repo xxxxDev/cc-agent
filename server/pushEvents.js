@@ -11,8 +11,6 @@ module.exports = Object.freeze({
   // The event's own fields on a delivery row, from the event and from a stored row.
   eventFields: (event) => ({ conversationId: event.conversationId, replyId: event.replyId }),
   storedEventFields: (row) => ({ conversationId: row.conversationId, replyId: row.replyId }),
-  // How a row stored before deliveries had keys is found for this event.
-  eventQuery: (event) => ({ replyId: event.replyId }),
   // Its category, which a preference can turn off.
   eventCategory: () => 'reply',
 });

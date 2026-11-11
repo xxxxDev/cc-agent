@@ -1,25 +1,7 @@
 // Generic service start. The product's launcher (scripts/start.mjs) sets its environment and data up, seeds
-// what it seeds, then calls migrateSessions() and startService(). What the product
-// runs beside the web service it starts in `product(server)`.
+// what it seeds, then calls startService(). What the product runs beside the web
+// service it starts in `product(server)`.
 const path = require('node:path');
-
-// Logins are stored as token hashes; any row still holding a raw
-// token is converted, and the push subscriptions bound to it re-pointed, before
-// serving. A push key that cannot be read stops the rewrite part-way (it goes row by
-// row). The site still comes up: rows left holding a raw token have no hash and so
-// sign nobody in until a later start gets through, which is better than a service
-// that restarts for ever.
-async function migrateSessions({ sessionsDB, subscriptionsDB }) {
-  let migrated = { sessions: 0, subscriptions: 0 };
-  try {
-    migrated = await require('./services/sessionTokens').migrateRawSessionTokens({ sessionsDB, subscriptionsDB });
-  } catch (error) {
-    console.error('sessions: old rows were not rewritten:', error.message);
-    return { ...migrated, failed: true };
-  }
-  if (migrated.sessions) console.log(`sessions: now stored as hashes (${migrated.sessions} login(s), ${migrated.subscriptions} push subscription(s) re-pointed)`);
-  return migrated;
-}
 
 // app: the Express app. port: servicePort() of siteConfig.js; it listens on this
 // machine only (the tunnel or a proxy brings the public address here).
@@ -61,4 +43,4 @@ function startService({ app, port, live: liveOptions = {}, onListening = () => {
   return { server, stop };
 }
 
-module.exports = { migrateSessions, startService };
+module.exports = { startService };

@@ -53,10 +53,8 @@ if(!fs.existsSync(pushKeys)){
 const savedPushKeys=JSON.parse(fs.readFileSync(pushKeys,'utf8'));
 if(savedPushKeys.VAPID_SUBJECT==='https://localhost'){savedPushKeys.VAPID_SUBJECT=site.publicOrigin();fs.writeFileSync(pushKeys,JSON.stringify(savedPushKeys),{mode:0o600});}
 Object.assign(process.env,savedPushKeys);
-const {usersDB,sessionsDB,pushSubscriptionsDB}=require('../server/stores.js');const bcrypt=require('bcryptjs');
-// Logins still holding a raw token are converted before serving (server/serviceStart.js).
+const {usersDB}=require('../server/stores.js');const bcrypt=require('bcryptjs');
 const service=require('../server/serviceStart.js');
-await service.migrateSessions({sessionsDB,subscriptionsDB:pushSubscriptionsDB});
 // Only the first admin is seeded; members are created by an admin, each with a
 // password of their own.
 for(const [username,name,role] of [['admin','Admin','admin']]){

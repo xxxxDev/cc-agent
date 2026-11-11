@@ -738,7 +738,7 @@ exports.logout = (req, res) => {
     .finally(() => {
       // Also a row still holding the token itself (a start-up conversion that failed):
       // by its hash alone it stayed, and worked again once a later start converted it.
-      sessionsDB.remove({ $or: [{ tokenHash: hashSessionToken(token) }, { token: String(token) }] }, { multi: true }, () => {
+      sessionsDB.remove({ tokenHash: hashSessionToken(token) }, { multi: true }, () => {
         compactQuietly(sessionsDB, 'sessions');
         // Its other open pages (other tabs) told at once (server/liveUpdates.js).
         require('../liveUpdates').endSignIn(hashSessionToken(token));

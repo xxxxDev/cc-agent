@@ -362,37 +362,25 @@ function decryptWithKey(value, key) {
   return validateSubscription(JSON.parse(plaintext));
 }
 
-// v2: key is chosen by keyId. An unknown keyId is a distinct, fail-closed error
-//     (PUSH_KEY_UNAVAILABLE, 503) — never conflated with corrupt ciphertext,
-//     because the correct action is "restore the key", not "discard the row".
-// v1: legacy rows carry no keyId; trial-decrypt current then previous — the GCM
-//     tag authenticates the right key, so a wrong-key attempt simply fails.
+// The key is chosen by keyId. An unknown keyId is a distinct, fail-closed error
+// (PUSH_KEY_UNAVAILABLE, 503) — never conflated with corrupt ciphertext,
+// because the correct action is "restore the key", not "discard the row".
 function decryptSubscription(value, env = process.env) {
-  if (!value || (value.version !== 1 && value.version !== 2)) {
+  if (!value || value.version !== 2) {
     throw pushError('PUSH_SUBSCRIPTION_CORRUPT', 'Encrypted push subscription is invalid', 500);
   }
   const keys = encryptionKeySet(env);
-  if (value.version === 2) {
-    let key = null;
-    if (value.keyId === keys.current.id) key = keys.current.key;
-    else if (keys.previous && value.keyId === keys.previous.id) key = keys.previous.key;
-    if (!key) {
-      throw pushError('PUSH_KEY_UNAVAILABLE', 'Encryption key for this record is unavailable', 503);
-    }
-    try {
-      return decryptWithKey(value, key);
-    } catch (_error) {
-      throw pushError('PUSH_SUBSCRIPTION_CORRUPT', 'Encrypted push subscription is invalid', 500);
-    }
+  let key = null;
+  if (value.keyId === keys.current.id) key = keys.current.key;
+  else if (keys.previous && value.keyId === keys.previous.id) key = keys.previous.key;
+  if (!key) {
+    throw pushError('PUSH_KEY_UNAVAILABLE', 'Encryption key for this record is unavailable', 503);
   }
-  const candidates = [keys.current.key];
-  if (keys.previous) candidates.push(keys.previous.key);
-  for (const key of candidates) {
-    try {
-      return decryptWithKey(value, key);
-    } catch (_error) { /* wrong key or corrupt — try the next candidate */ }
+  try {
+    return decryptWithKey(value, key);
+  } catch (_error) {
+    throw pushError('PUSH_SUBSCRIPTION_CORRUPT', 'Encrypted push subscription is invalid', 500);
   }
-  throw pushError('PUSH_SUBSCRIPTION_CORRUPT', 'Encrypted push subscription is invalid', 500);
 }
 
 module.exports = {

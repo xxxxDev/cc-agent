@@ -34,7 +34,6 @@ const tmuxSocket = require('../channel/tmuxSocket.cjs')(stateRoot);
 // (bridge credentials, resumed-session uniqueness, notification sweeps); only the
 // writing is split, and only the owners that actually changed are written.
 const usersRoot = path.join(stateRoot, 'users');
-const legacyFile = path.join(stateRoot, 'conversations.json');
 const settingsFile = path.join(stateRoot, 'agent-settings.json');
 const ownerFile = owner => path.join(usersRoot, owner, 'conversations.json');
 // Several code paths call save() defensively after doing nothing, so the same
@@ -57,11 +56,6 @@ function load() {
   for (const owner of fs.readdirSync(usersRoot)) {
    try { conversations.push(...(JSON.parse(fs.readFileSync(ownerFile(owner), 'utf8')).conversations || [])); } catch {}
   }
- } else if (fs.existsSync(legacyFile)) {
-  // Not split yet: read the old shape so an unmigrated copy still boots.
-  const old = JSON.parse(fs.readFileSync(legacyFile, 'utf8'));
-  conversations.push(...(old.conversations || []));
-  if (!Object.keys(agentSettings).length && old.agentSettings) agentSettings = old.agentSettings;
  }
  return {conversations, agentSettings};
 }
@@ -560,11 +554,8 @@ function launch(c) {
  // Only these keys: channel/runner.mjs refuses any unsupported launch key.
  const config={tmuxSocket,...(platform.isWin?{tmux:g.tmux}:{}),agentStarter:agentStarter(c),peerSend:peerToolsFor(c),reference:referenceDir(c),attachments:attachDir,conversationId:c.id,sessionId:g.sessionId,token:g.token,generation:g.number,server:'http://127.0.0.1:'+require('./siteConfig').servicePort(),root:ROOT,cwd:dir,resume:g.number===1&&!!c.resumeSessionId,memory:c.memory,profile:agentProfile.profile(c),model,effort:agentProfile.profile(c).effort,handoff:c.handoff||null,access,...(ownerIsActiveAdmin(c.owner)?{}:{mcpTickedOnly:true}),...(subagentsApply(c)&&Object.keys(subagentEnv(c)).length?{subagentEnv:subagentEnv(c)}:{}),...(autoCompactApply(c)&&Object.keys(autoCompactEnv(c)).length?{autoCompactEnv:autoCompactEnv(c)}:{}),contextStatus:true};
  const control=controlDir(c,g);fs.mkdirSync(control,{recursive:true,mode:0o700});
- // Earlier launches kept these in the workspace; nothing reads them there any more.
- // A marker left there still means the session has started: carried over as a new
- // file, never moved, since the agent could have made it a link.
- const legacyMarker=path.join(dir,'started.marker');
- if(fs.existsSync(legacyMarker)&&!fs.existsSync(path.join(control,'started.marker')))writeFresh(path.join(control,'started.marker'),g.sessionId);
+ // The launch files live in the control folder, outside what the agent can write; copies
+ // of them in its workspace (where Claude Code would read a .mcp.json) are removed.
  for(const f of ['runtime.json','settings.json','.mcp.json','started.marker'])fs.rmSync(path.join(dir,f),{force:true});
  // Written to a new file and renamed into place, so a link made to an earlier copy
  // never sees this one.
