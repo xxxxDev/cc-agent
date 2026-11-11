@@ -19,6 +19,6 @@ CC Agent is a self-hosted app that starts Claude Code sessions on your computer,
 
 ## Reporting a vulnerability
 
-Please do not open a public issue for a security problem. Email support@v-ax.com instead, with steps to reproduce and the version you saw it in (Settings, at the bottom of the page).
+Please do not open a public issue for a security problem. Email [support@v-ax.com](mailto:support@v-ax.com) instead. You can also use GitHub's **Report a vulnerability** button on this repository.
 
-We will acknowledge the report, work on a fix, and credit you in the release notes unless you prefer otherwise.
+Include steps to reproduce and the version you saw it in (Settings, at the bottom of the page).
