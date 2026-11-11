@@ -16,10 +16,7 @@ npm run dev                 # the web app with hot reload
 CC_AGENT_DEV=1 npm start    # the server, trusting the dev server's page
 ```
 
-The server trusts the dev server's port only with `CC_AGENT_DEV=1` (and `NODE_ENV` not
-`production`); without it, no page on another port of this machine is a trusted origin.
-Set it on the command line only: a `CC_AGENT_DEV` line in `server/.env` is ignored, so
-the live service never picks it up by accident.
+The server trusts the dev server's port only with `CC_AGENT_DEV=1` (and `NODE_ENV` not `production`); without it, no page on another port of this machine is a trusted origin. Set it on the command line only: a `CC_AGENT_DEV` line in `server/.env` is ignored, so the live service never picks it up by accident.
 
 The project's test suite is maintained separately and is not part of this repository. In your pull request, describe how you checked the change: what you ran, on which platform, and what you saw. Never test against a Claude Code session or data you care about.
 
@@ -29,6 +26,7 @@ The project's test suite is maintained separately and is not part of this reposi
 - Explain any behaviour you change, especially sign-in, permissions, an agent's access and anything that writes data, so it can be checked.
 - Product values (the name, icons, storage keys) belong in `server/siteConfig.js`, `src/js/productConfig.js` and `public/push-config.js`, not in shared code.
 - Text shown to people goes through the existing translation helpers, in English and Traditional Chinese.
+- Code comments are in English and say why, not what.
 - Don't commit anything from `.local/`, any `.env` file, or real keys and tokens.
 
 By contributing, you agree that your contribution is released under the [MIT License](LICENSE).

@@ -24,13 +24,8 @@ import {startViewportRecovery} from './js/viewportRecovery.js';
 
 Framework7.use(Framework7Vue);
 import safeDialogs from './js/safeDialog.js';
-import { PRODUCT } from './js/productConfig.js';
 import { tipDirective } from './js/hoverTip.js';
 Framework7.use(safeDialogs);
-
-// Build marker: log the build id on every load so the running build can be confirmed
-// from devtools on any page/device (entry, app, desktop) — not only the Settings footer.
-console.log(`[${PRODUCT.name}] build ${__BUILD_ID__}`);
 
 const app = createApp(App);
 app.use(createPinia());
