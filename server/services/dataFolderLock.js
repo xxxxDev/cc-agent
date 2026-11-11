@@ -13,9 +13,11 @@ const path = require('node:path');
 // links). A takeover lock whose process is gone (it died inside) is removed only inside a
 // third lock named for that very file, server.lock.takeover.break-<inode>, made with
 // O_EXCL: two processes that judged it at once cannot both remove it, so neither removes
-// the takeover lock the other has just made. A process removes no lock but its own on the
-// way out. A lock naming this process's own pid that this process did not make was left
-// by an earlier process with the same pid (after a reboot, say), and is gone too.
+// the takeover lock the other has just made. A break file whose process is gone (it died
+// inside) is removed the same way, inside a break file of its own, and the takeover lock
+// is then judged again. A process removes no lock but its own on the way out. A lock
+// naming this process's own pid that this process did not make was left by an earlier
+// process with the same pid (after a reboot, say), and is gone too.
 
 const TAKEOVER_SUFFIX = '.takeover';
 const BREAK_SUFFIX = '.break-';
@@ -161,33 +163,57 @@ function removeOwnLock(filename, owned, pid) {
   madeHere.delete(fileKey(owned));
 }
 
+// How deep break files of break files go: each level is there only when a process died
+// inside the one before it, so a deeper one is left for a person (DATA_FOLDER_LOCK_BUSY).
+const MAX_BREAK_DEPTH = 3;
+
 // Removes a lock whose process is gone (judged: as it was read), inside a breaker lock
 // named for that very file. Only the process that makes the breaker removes it, and only
 // while it is still the file judged and names the same process, still gone: no other can
 // remove or replace it meanwhile. True when it is gone; false when another process is
-// breaking it, or it changed (judged again from the top).
-function breakDeadLock(filename, judged, pid, isAlive) {
-  let breaker;
+// breaking it, or it changed (judged again from the top). A breaker left by a process that
+// died inside it is broken the same way, inside a breaker of its own, holding nothing
+// meanwhile; the lock it guarded is then judged again inside a breaker made afresh. One
+// that stays empty throws DATA_FOLDER_LOCK_UNREADABLE with its name.
+function breakDeadLock(filename, judged, pid, isAlive, depth = 0) {
   const breakerName = `${filename}${BREAK_SUFFIX}${judged.ino}`;
-  try { breaker = createLock(breakerName, pid); } catch (error) {
-    if (error.code === 'EEXIST') return false;
-    throw error;
-  }
-  try {
-    let now;
-    try { now = readLock(filename); } catch (error) {
-      if (error.code === 'DATA_FOLDER_LOCK_UNREADABLE') return false;
-      throw error;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    let breaker;
+    try { breaker = createLock(breakerName, pid); } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      const other = readLock(breakerName);
+      if (!other) continue; // done meanwhile
+      if (held(other, pid, isAlive) || depth >= MAX_BREAK_DEPTH) return false;
+      if (!breakDeadLock(breakerName, other, pid, isAlive, depth + 1)) return false;
+      continue;
     }
-    if (!now) return true;
-    if (now.ino !== judged.ino || now.dev !== judged.dev || now.pid !== judged.pid || held(now, pid, isAlive)) return false;
-    try { fs.unlinkSync(filename); } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
+    try {
+      let now;
+      try { now = readLock(filename); } catch (error) {
+        if (error.code === 'DATA_FOLDER_LOCK_UNREADABLE') return false;
+        throw error;
+      }
+      if (!now) return true;
+      if (now.ino !== judged.ino || now.dev !== judged.dev || now.pid !== judged.pid || held(now, pid, isAlive)) return false;
+      try { fs.unlinkSync(filename); } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+      }
+      return true;
+    } finally {
+      removeOwnLock(breakerName, breaker, pid);
     }
-    return true;
-  } finally {
-    removeOwnLock(breakerName, breaker, pid);
   }
+  return false;
+}
+
+// Whether breakDeadLock could remove a lock whose process is gone (judged), read the same
+// way and writing nothing: false where it would meet a live breaker (or one too deep).
+function breakable(filename, judged, pid, isAlive, depth = 0) {
+  const breakerName = `${filename}${BREAK_SUFFIX}${judged.ino}`;
+  const other = readLock(breakerName);
+  if (!other) return true;
+  if (held(other, pid, isAlive) || depth >= MAX_BREAK_DEPTH) return false;
+  return breakable(breakerName, other, pid, isAlive, depth + 1);
 }
 
 // Enters the takeover lock: its fstat, or null while another live process is inside or
@@ -210,13 +236,21 @@ function enterTakeover(guard, pid, isAlive) {
 // the pid range, a lock naming this process's own pid that it did not make is stale) and
 // writes nothing: no lock, no takeover lock, a stale one left in place. null when there
 // is none; otherwise { pid, held }: held while its process is alive, false when the lock
-// was left by a process that is gone and a start would take it over. Throws
-// DATA_FOLDER_LOCK_UNREADABLE (with the file) for one nobody can say is stale. For a check
-// that must not write (a dry run): a start can still take the lock a moment after.
+// was left by a process that is gone and a start would take it over. A stale one is judged
+// further as a start judges it: the takeover lock beside it, and the break files beside a
+// dead takeover lock. Throws DATA_FOLDER_LOCK_UNREADABLE (with the file) for one nobody can
+// say is stale, and DATA_FOLDER_LOCK_BUSY where a start would meet a live process taking
+// it over. For a check that must not write (a dry run): a start can still take the lock a
+// moment after.
 function inspectDataFolderLock(lock, { pid = process.pid, isAlive = processAlive } = {}) {
   const holder = readLock(lock);
   if (!holder) return null;
-  return { pid: holder.pid, held: held(holder, pid, isAlive) };
+  if (held(holder, pid, isAlive)) return { pid: holder.pid, held: true };
+  const inside = readLock(`${lock}${TAKEOVER_SUFFIX}`);
+  if (inside && (held(inside, pid, isAlive) || !breakable(`${lock}${TAKEOVER_SUFFIX}`, inside, pid, isAlive))) {
+    throw lockError('The data folder lock is being taken over', 'DATA_FOLDER_LOCK_BUSY');
+  }
+  return { pid: holder.pid, held: false };
 }
 
 // Takes the lock for this process, or throws DATA_FOLDER_LOCK_HELD (a live process has
