@@ -2446,7 +2446,9 @@ function terminalTurnFiles(c,e){
  return out;
 }
 // Agent Profile follows a /model typed in the agent's own terminal (2026-11-10; the rules
-// are modelFollow.decide's). Run at each heartbeat of a live Claude session. What the session
+// are modelFollow.decide's): a change of the status line alone, with no /model or /effort in
+// the transcript since the last one followed, only moves what the session is shown to run
+// (2026-11-11). Run at each heartbeat of a live Claude session. What the session
 // runs now (g.model, g.effort: what it was launched with until then) moves to what it reports;
 // the profile is saved only with a model and effort its owner's role may hold, as a save in
 // Agent Profile would check them (agentProfile.validate), with profileVersion bumped, so an
@@ -2459,8 +2461,12 @@ function followSessionModel(c){
  const main=contextUsage.view({dir:controlDir(c,g),alive:true,launchedAt:g.launchedAt}).main;
  const saved=agentProfile.profile(c),role=ownerIsActiveAdmin(c.owner)?'admin':'member';
  const check=want=>{try{const p=agentProfile.validate({model:want.model,effort:want.effort},c,role);return p.model===want.model&&p.effort===want.effort;}catch{return false;}};
- const r=modelFollow.decide({report:main&&{model:main.model,effort:main.effort,at:Date.parse(main.at),stale:main.stale},session:{model:g.model,effort:g.effort},saved:{model:saved.model,effort:saved.effort},launchedAt:g.launchedAt,check});
- if(r.kind==='none')return false;
+ // Saved only after a /model or /effort typed in its terminal since the last one followed
+ // (g.modelTypedAt; transcript.typedSettings, read from where the transcript reader is).
+ const typed=main?transcript.typedSettings(stateRoot,c):{};
+ const r=modelFollow.decide({report:main&&{model:main.model,effort:main.effort,at:Date.parse(main.at),stale:main.stale},session:{model:g.model,effort:g.effort},saved:{model:saved.model,effort:saved.effort},launchedAt:g.launchedAt,check,typed,since:g.modelTypedAt||0});
+ if(r.followed)g.modelTypedAt=r.followed;
+ if(r.kind==='none'){if(r.followed)save(c);return false;}
  g.model=r.session.model;g.effort=r.session.effort;
  if(r.kind==='save'){
   const from={model:saved.model,effort:saved.effort};

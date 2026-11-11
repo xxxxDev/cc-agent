@@ -101,6 +101,7 @@ const blank = () => ({
   quotaReset: null,
   compactions: [],
   terminal: terminalTurns.blank(),
+  typed: {model: 0, effort: 0},
 });
 
 // Hook feedback is the same turn continuing, so it does not reset the count.
@@ -257,6 +258,22 @@ function zeroUsageError(record) {
     && (usage.iterations == null || (Array.isArray(usage.iterations) && usage.iterations.length === 0));
 }
 
+// When /model or /effort was last run in the session's own terminal: Claude Code writes a
+// local slash command as a user record of its own, <command-name>/model</command-name> and
+// its arguments (seen in 2.1.268 transcripts; /effort the same way). Only these records,
+// never a prompt that merely mentions one (a web message comes wrapped in <channel>), say
+// a model was picked there (agentStore.followSessionModel; 2026-11-11).
+const SETTING_COMMAND = /^<command-name>\/(model|effort)<\/command-name>/;
+function trackTyped(state, record) {
+  if (record.type !== 'user' || record.isSidechain) return;
+  const content = record.message?.content;
+  const text = typeof content === 'string' ? content : Array.isArray(content) && content[0]?.type === 'text' ? content[0].text : '';
+  const m = typeof text === 'string' ? SETTING_COMMAND.exec(text.trimStart()) : null;
+  if (!m) return;
+  const at = Date.parse(record.timestamp);
+  if (Number.isFinite(at) && at > state.typed[m[1]]) state.typed[m[1]] = at;
+}
+
 function absorb(state, record) {
   // A usage limit that stopped the session records when it resets (quotaLimits,
   // Claude Code 2.1.286), for CC Agent to wake the agent then.
@@ -277,6 +294,7 @@ function absorb(state, record) {
   trackRelays(state, record);
   // Prompts typed in the terminal and their answers, for the chat (terminalTurns.js).
   terminalTurns.track(state.terminal, record);
+  trackTyped(state, record);
   const message = record.message;
   if (!message) return;
   // A prompt is activity too: a turn that has only just opened is in it.
@@ -885,7 +903,7 @@ function history(stateRoot, conversation, skipped = new Set()) {
 // The prompts typed in the current run's terminal and the answers to them, as
 // terminalTurns.track kept them, oldest first (agentStore.mirrorTerminal), with the run's
 // number. Only the active run's own transcript, located by its workspace and session.
-function terminalEvents(stateRoot, conversation) {
+function currentRun(stateRoot, conversation) {
   if (conversation?.mode !== 'claude') return null;
   const run = (conversation.runs || []).at(-1);
   if (!run) return null;
@@ -897,7 +915,16 @@ function terminalEvents(stateRoot, conversation) {
   const own = path.join(PROJECTS, cwd.replace(/[^a-zA-Z0-9]/g, '-'), run.sessionId + '.jsonl');
   const file = fs.existsSync(own) ? own : located.get(run.sessionId)?.file || null;
   const state = file ? read(file) : null;
-  return state ? {generation: run.number, events: state.terminal.events} : null;
+  return state ? {run, state} : null;
+}
+function terminalEvents(stateRoot, conversation) {
+  const r = currentRun(stateRoot, conversation);
+  return r ? {generation: r.run.number, events: r.state.terminal.events} : null;
+}
+// When the current run's terminal last ran /model and /effort (ms; 0 for never).
+function typedSettings(stateRoot, conversation) {
+  const r = currentRun(stateRoot, conversation);
+  return r ? {...r.state.typed} : {model: 0, effort: 0};
 }
 
 // The current run's skills, for the slash menu.
@@ -999,4 +1026,4 @@ function subagents(stateRoot, conversation) {
   return out.sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt))).slice(0, SUBAGENT_MAX);
 }
 
-module.exports = {terminalEvents, turnEndedSince, workedSince, subagents, lastCompaction, usage, progress, currentWork, quotaReset, waiting, skills, connectors, relays, segment, history, messageCost, priceOf, PRICES, WEB_SEARCH_USD};
+module.exports = {terminalEvents, typedSettings, turnEndedSince, workedSince, subagents, lastCompaction, usage, progress, currentWork, quotaReset, waiting, skills, connectors, relays, segment, history, messageCost, priceOf, PRICES, WEB_SEARCH_USD};
