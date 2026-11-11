@@ -42,6 +42,12 @@
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .page-content {
     scrollbar-width: none;
   }
+  /* The navbar's buttons line up with the search row and the rows, 10px from each edge
+   * (2026-11-11: Edit and + sat 6px further in than the rows). */
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .navbar {
+    --f7-navbar-inner-padding-left: 10px;
+    --f7-navbar-inner-padding-right: 10px;
+  }
   /* Compact rows in the column: a smaller picture, the name and one line of the latest. */
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .page-content > :is(.list.inset, .agent-search-row, .select-all-row) {
     max-width: calc(100% - 20px);
