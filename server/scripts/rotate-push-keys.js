@@ -14,7 +14,7 @@ const nedbModel = require('@seald-io/nedb/lib/model');
 const {
   NEDB_LINE_HOOKS, escapeRawNedbLineBreaks, privateDatastoreOptions, repairRawNedbLineBreaks,
 } = require('../services/privateFiles');
-const { takeDataFolderLock } = require('../services/dataFolderLock');
+const { takeDataFolderLock, lockPid } = require('../services/dataFolderLock');
 const {
   planPushKeyRotation,
   rotatePushKeys,
@@ -117,8 +117,8 @@ function refuseWhileServiceRuns(dbDir) {
     if (error.code === 'ENOENT') return;
     throw rotationError('The service lock cannot be read', 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: SERVICE_LOCK });
   }
-  const pid = Number(text.trim());
-  if (!Number.isInteger(pid) || pid <= 0) {
+  const pid = lockPid(text);
+  if (pid === null) {
     throw rotationError('The service lock is unreadable; stop the service, then remove it', 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: SERVICE_LOCK });
   }
   try { process.kill(pid, 0); } catch (error) {
@@ -140,8 +140,11 @@ function holdServiceLock(dbDir) {
     if (error.code === 'DATA_FOLDER_LOCK_HELD') {
       throw rotationError('The service is running on this data folder; stop it first', 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: SERVICE_LOCK, pid: error.pid ?? undefined });
     }
+    // The lock that cannot be read may be server.lock or the takeover lock beside it: the
+    // one named is the one to remove (its file name only, as the other details are).
     if (error.code === 'DATA_FOLDER_LOCK_UNREADABLE') {
-      throw rotationError('The service lock is unreadable; stop the service, then remove it', 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: SERVICE_LOCK });
+      const unreadable = path.basename(error.file || lock);
+      throw rotationError(`The service lock ${unreadable} is unreadable; stop the service, then remove ${unreadable}`, 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: unreadable });
     }
     if (error.code === 'DATA_FOLDER_LOCK_BUSY') {
       throw rotationError('Something else took the service lock; try again', 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: SERVICE_LOCK });

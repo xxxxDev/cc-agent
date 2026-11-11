@@ -3,8 +3,9 @@ const path = require('node:path');
 
 // The lock one process at a time holds on a data folder (server.lock: scripts/start.mjs,
 // and server/scripts/rotate-push-keys.js while it writes the stores). It is made with
-// O_EXCL, names its process and is synced. One naming a process that is gone is taken
-// over only inside a second lock beside it, server.lock.takeover, made the same way: in
+// O_EXCL, names its process and is synced where the filesystem allows. One naming a
+// process that is gone is taken over only inside a second lock beside it,
+// server.lock.takeover, made the same way: in
 // there the lock is read again and, if it still names a process that is gone, removed and
 // made afresh with O_EXCL. One process at a time is inside, so none removes a lock another
 // has just taken over, and nothing is renamed or linked (some filesystems have no hard
@@ -45,26 +46,53 @@ function held(lock, pid, isAlive) {
   return isAlive(lock.pid);
 }
 
-// The pid a lock file names and its inode, or null when it is gone. A file that names
-// no pid (or cannot be read as a regular file) is refused: nobody can say it is stale.
-// The error names the file.
-function readLock(filename) {
+// The pid a lock's text names, or null when it names none: digits only (after trimming),
+// 1 to 2^31-1. A larger number is no process (process.kill refuses it, and every error but
+// ESRCH reads as alive, so it would be held forever).
+const MAX_PID = 2 ** 31 - 1;
+function lockPid(text) {
+  const trimmed = String(text).trim();
+  if (!/^[0-9]+$/.test(trimmed)) return null;
+  const pid = Number(trimmed);
+  return pid >= 1 && pid <= MAX_PID ? pid : null;
+}
+
+function unreadable(filename) {
+  return lockError('The data folder lock is unreadable', 'DATA_FOLDER_LOCK_UNREADABLE', { file: filename });
+}
+
+// One read of a lock file: { pid, ino, dev }, null when it is gone, or { pid: null } when
+// it is a regular file naming no pid.
+function readLockOnce(filename) {
   let descriptor;
   try {
     descriptor = fs.openSync(filename, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
   } catch (error) {
     if (error.code === 'ENOENT') return null;
-    throw lockError('The data folder lock is unreadable', 'DATA_FOLDER_LOCK_UNREADABLE', { file: filename });
+    throw unreadable(filename);
   }
   try {
     const info = fs.fstatSync(descriptor);
-    const pid = Number(fs.readFileSync(descriptor, 'utf8').trim());
-    if (!info.isFile() || !Number.isInteger(pid) || pid <= 0) {
-      throw lockError('The data folder lock is unreadable', 'DATA_FOLDER_LOCK_UNREADABLE', { file: filename });
-    }
-    return { pid, ino: info.ino, dev: info.dev };
+    if (!info.isFile()) throw unreadable(filename);
+    return { pid: lockPid(fs.readFileSync(descriptor, 'utf8')), ino: info.ino, dev: info.dev };
   } finally {
     fs.closeSync(descriptor);
+  }
+}
+
+// The pid a lock file names and its inode, or null when it is gone. A lock is made with
+// O_EXCL before its pid is written, so one read empty (or naming no pid) may be another
+// process's lock a moment old: it is read again every BUSY_WAIT_MS for UNREADABLE_AFTER_MS
+// (by the clock: a sleep can run long). One that still names no pid then (or is not a
+// regular file) is refused: nobody can say it is stale. The error names the file.
+const UNREADABLE_AFTER_MS = 200;
+function readLock(filename) {
+  const deadline = Date.now() + UNREADABLE_AFTER_MS;
+  for (;;) {
+    const lock = readLockOnce(filename);
+    if (!lock || lock.pid !== null) return lock;
+    if (Date.now() >= deadline) throw unreadable(filename);
+    sleep(BUSY_WAIT_MS);
   }
 }
 
@@ -107,7 +135,10 @@ function createLock(filename, pid) {
       if (count <= 0) throw lockError('The data folder lock could not be written', 'DATA_FOLDER_LOCK_WRITE');
       written += count;
     }
-    fs.fsyncSync(descriptor);
+    // Synced where the filesystem allows it: some (FUSE, network mounts) refuse fsync.
+    try { fs.fsyncSync(descriptor); } catch (error) {
+      if (error.code !== 'EINVAL' && error.code !== 'ENOTSUP') throw error;
+    }
     syncFolder(filename);
     return fs.fstatSync(descriptor);
   } catch (error) {
@@ -209,4 +240,4 @@ function takeDataFolderLock(lock, { pid = process.pid, isAlive = processAlive, a
   throw lockError('The data folder lock kept changing', 'DATA_FOLDER_LOCK_BUSY');
 }
 
-module.exports = { takeDataFolderLock, processAlive };
+module.exports = { takeDataFolderLock, processAlive, lockPid };
