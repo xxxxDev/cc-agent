@@ -1,4 +1,4 @@
-// A file dropped or pasted on the agent's terminal (2026-11-10): kept
+// A file dropped or pasted on the agent's terminal: kept
 // in the chat's attachments where the agent can read it, and its path typed at Claude's
 // prompt without Enter, as a desktop terminal does. Claude Code turns a picture's path into
 // [Image #n].

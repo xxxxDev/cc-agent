@@ -1,4 +1,4 @@
-// Agent Profile follows the terminal (2026-11-10): a model, and an
+// Agent Profile follows the terminal: a model, and an
 // effort when one is reported, picked with /model in the agent's own terminal is saved into
 // its profile, so the profile says what the session runs and its next start runs it too.
 //
@@ -20,7 +20,7 @@
 //   weighed against the profile, so a change the status line showed a moment before the
 //   command reached the transcript is still saved;
 // - a reported effort of null (not reported) changes nothing about the effort;
-// - only what was picked in the terminal is saved (2026-11-11): the status
+// - only what was picked in the terminal is saved: the status
 //   line also moves by itself (a fallback model when one is overloaded, opusplan between its
 //   two models), so the profile changes only when the session's transcript has a /model
 //   (model and effort) or /effort (effort) typed since the last follow point (typed, since:

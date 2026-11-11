@@ -1,4 +1,4 @@
-/* ---- The Agents list beside the conversation (2026-11-10) ----
+/* ---- The Agents list beside the conversation ----
  * <html>.list-detail-on: the setting 清單在左、聊天在右 is on (src/js/listDetail.js); it takes
  * effect from the same width as LIST_DETAIL_WIDE there. The list's page stays where Framework7
  * leaves it, under the conversation (.page-previous), and becomes the left column while the
@@ -13,7 +13,7 @@
   }
   /* The list takes its column at once, with the conversation's own entrance as the motion: a
    * narrowing width let the conversation arrive first and the column's buttons and row edges
-   * settle a third of a second later (2026-11-11). */
+   * settle a third of a second later. */
   html.list-detail-on #view-chat > .page[data-name="chats"] {
     transition: none;
   }
@@ -40,19 +40,19 @@
   }
 
   /* A computer that shows scroll bars all the time (a mouse attached) takes their width off the
-   * column's right side only, so the rows sat further left than right
-   * (2026-11-11); the column still scrolls by wheel and trackpad. */
+   * column's right side only, so the rows sat further left than right;
+   * the column still scrolls by wheel and trackpad. */
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .page-content {
     scrollbar-width: none;
   }
   /* The navbar's buttons line up with the search row and the rows, 10px from each edge
-   * (2026-11-11: Edit and + sat 6px further in than the rows). */
+   * (Edit and + sat 6px further in than the rows). */
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .navbar {
     --f7-navbar-inner-padding-left: 10px;
     --f7-navbar-inner-padding-right: 10px;
   }
   /* Scrolled, Framework7 brings the small "Agents" title into the navbar, centred; in the narrow
-   * column it ran under the buttons (2026-11-11), so the column keeps none. */
+   * column it ran under the buttons, so the column keeps none. */
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .navbar .title {
     display: none;
   }
@@ -113,7 +113,7 @@
     margin-right: 0;
     font-size: 13px;
   }
-  /* The agent shown beside the column, a soft lift (dimmed, 2026-11-11). */
+  /* The agent shown beside the column, a soft lift (dimmed). */
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .conversation-list > ul > li.row-current {
     background: color-mix(in srgb, var(--f7-list-bg-color) 88%, var(--dp-color-text, #fff));
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dp-color-text, #fff) 16%, transparent);

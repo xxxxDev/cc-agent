@@ -341,7 +341,7 @@ if(ownerConfig){
     Object.assign(env,subagentEnv);
     if(Object.keys(env).length)next.env=env;else delete next.env;
     // A status line the workspace's own .claude/settings.json sets is kept too: ours in the
-    // local file would win over it (independent review L1, 2026-11-07).
+    // local file would win over it.
     let project={};try{project=JSON.parse(fs.readFileSync(path.join(root,'.claude','settings.json'),'utf8'))||{};}catch{}
     for(const key of ['statusLine','subagentStatusLine']){if(next[key]&&!ourStatus(next[key])){if(key==='statusLine'&&statusSettings[key])ownStatusLine=true;}else if(project[key]&&!ourStatus(project[key])){delete next[key];if(key==='statusLine'&&statusSettings[key])ownStatusLine=true;}else if(statusSettings[key])next[key]=statusSettings[key];else delete next[key];}
    }

@@ -42,8 +42,8 @@
       <f7-list-item v-if="desktop" :title="ct('自動收合電腦版選單')" :footer="ct('選單平常收成一排圖示，滑鼠移上去才展開，移開就收回。只影響這台裝置。')" class="sidebar-auto">
         <template #media><f7-icon f7="sidebar_left"/></template><template #after><label class="toggle"><input type="checkbox" :aria-label="ct('自動收合電腦版選單')" :checked="sidebarAuto" @change="setSidebarAuto($event.target.checked)"/><span class="toggle-icon"></span></label></template>
       </f7-list-item>
-      <!-- The Agents list kept in a column beside the conversation on a wide window
-           (2026-11-10); a computer only, kept on each device (listDetail.js). -->
+      <!-- The Agents list kept in a column beside the conversation on a wide window;
+           a computer only, kept on each device (listDetail.js). -->
       <f7-list-item v-if="desktop" :title="ct('清單在左、聊天在右')" :footer="ct('視窗夠寬時（1280 px 以上），點 Agent 後清單縮到左邊，聊天室開在右邊，點另一個 Agent 直接切換。只影響這台裝置。')" class="list-detail-setting">
         <template #media><f7-icon f7="square_split_2x1"/></template><template #after><label class="toggle"><input type="checkbox" :aria-label="ct('清單在左、聊天在右')" :checked="listDetailOn" @change="setListDetail($event.target.checked)"/><span class="toggle-icon"></span></label></template>
       </f7-list-item>

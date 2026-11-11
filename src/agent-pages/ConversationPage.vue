@@ -131,7 +131,7 @@ function pickMore(value){
  else if(value==='profile')workspace.openProfile();
 }
 const fileDrag=useFileDrag();
-// The terminal takes files too (2026-11-10): dropped or pasted on it, a file is uploaded
+// The terminal takes files too: dropped or pasted on it, a file is uploaded
 // to this chat's attachments as any other and its path typed at Claude's
 // prompt without Enter (js/terminalDrop.js); anywhere else it goes to the chat as before.
 // Only an admin has the terminal, and only where the agent can read the file (the server's

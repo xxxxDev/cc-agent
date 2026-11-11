@@ -1217,7 +1217,7 @@ function updateUserNow(req, res) {
       if (update.username === existingUser.username) { delete update.username; delete update.normalizedUsername; }
       const signInsChange = Boolean(update.username) || (update.role !== undefined && update.role !== existingUser.role);
       // Written with the change and cleared when the sign-ins are gone: "the same request
-      // again finishes it" holds though that request now changes nothing (review, 2026-11-03).
+      // again finishes it" holds though that request now changes nothing.
       const endSignIns = signInsChange || existingUser.signInsCleanupDue === true;
       if (signInsChange) update.signInsCleanupDue = true;
       usersDB.update({ ...nonTombstoneUserMutationQuery(id), ...(stillAdmin ? { role: 'admin' } : {}) }, { $set: update, ...(Object.keys(unset).length ? { $unset: unset } : {}) }, {}, (err, updated) => {

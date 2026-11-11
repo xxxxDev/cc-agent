@@ -1,5 +1,5 @@
-// The Agents list beside the conversation on a wide computer window
-// (2026-11-10): with 清單在左、聊天在右 on, a tap on an agent narrows the list into a column
+// The Agents list beside the conversation on a wide computer window:
+// with 清單在左、聊天在右 on, a tap on an agent narrows the list into a column
 // on the left and opens the conversation beside it; a tap on another agent in that column
 // changes the conversation without a page push. The list and the conversation are the
 // same two pages of #view-chat as always (ChatListPage under ConversationPage); the
@@ -34,7 +34,7 @@ export function listIsColumn(pageEl) {
   return listDetailActive.value && !!pageEl?.classList?.contains('page-previous') && pageEl.nextElementSibling?.dataset?.name === 'conversation';
 }
 
-// The column's width, dragged at its edge (2026-11-11): kept on the device;
+// The column's width, dragged at its edge: kept on the device;
 // null is the built-in width. Never narrower than LIST_MIN, nor so wide that the
 // conversation keeps less than CHAT_KEEP; a double click goes back to the built-in width.
 const WIDTH_KEY = PRODUCT.storageKeys.listColumn;

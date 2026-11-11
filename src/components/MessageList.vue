@@ -347,7 +347,7 @@ function onMarkdownClick(event){
 /* Turns pulled from the session are history, not part of this conversation's own
    exchange: same shape, less contrast, so they read as background. */
 .message.imported-turn {opacity:.82;}
-/* Typed in the terminal, or the answer to that (2026-11-10): the usual bubble, marked in its footer. */
+/* Typed in the terminal, or the answer to that: the usual bubble, marked in its footer. */
 .terminal-mark {white-space:nowrap;}
 .terminal-mark :deep(.icon) {vertical-align:-1px;}
 /* Older pages arrive above the reader; the control sits where they will appear. */

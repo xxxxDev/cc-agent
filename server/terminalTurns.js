@@ -1,5 +1,5 @@
 // What an agent's owner types straight into its terminal, and the agent's answer to it,
-// shown in the chat too (2026-11-10). transcript.js feeds every record
+// shown in the chat too. transcript.js feeds every record
 // of a session's transcript, in order, to track(); agentStore.mirrorTerminal takes the events
 // it keeps and adds them to the conversation, flagged via:'terminal'.
 //

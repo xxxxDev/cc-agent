@@ -191,7 +191,7 @@ const NOTE_MAX = 300;
 const AGENT_WAKE = /^Another Claude session sent a message:\s*<(agent-message|cross-session-message)\b[^>]*>[\s\S]*?<\/\1>(?:\s|$)/;
 // Claude Code 2.1.321 resumes a turn by itself when a usage limit resets, with a meta
 // prompt of its own: the turn never opened and the page showed the agent idle while
-// it worked (2026-11-11).
+// it worked.
 const LIMIT_RESUME = /^Your claude\.ai usage limit has reset\. Continue the task/;
 function trackTurn(state, record) {
   if (record.type === 'system' && TURN_END.has(record.subtype)) { state.turnOpen = false; if (record.timestamp) state.turnEndedAt = record.timestamp; return; }
@@ -262,7 +262,7 @@ function zeroUsageError(record) {
 // local slash command as a user record of its own, <command-name>/model</command-name> and
 // its arguments (seen in 2.1.268 transcripts; /effort the same way). Only these records,
 // never a prompt that merely mentions one (a web message comes wrapped in <channel>), say
-// a model was picked there (agentStore.followSessionModel; 2026-11-11).
+// a model was picked there (agentStore.followSessionModel).
 const SETTING_COMMAND = /^<command-name>\/(model|effort)<\/command-name>/;
 function trackTyped(state, record) {
   if (record.type !== 'user' || record.isSidechain) return;

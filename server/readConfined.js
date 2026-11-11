@@ -3,8 +3,7 @@
 // the read to that folder itself, whatever its path names by now: process.cwd() reports
 // where this process really is, so a parent folder swapped for a link is seen, and the
 // file is then opened relative to the folder, past no parent at all, and not through a
-// link (security audit, 2026-11-03: the agent could swap the name between the service's
-// check and its read). The bytes go to stdout. Exit 3: not that file. Exit 4: wrong size.
+// link (the agent could swap the name between the service's check and its read). The bytes go to stdout. Exit 3: not that file. Exit 4: wrong size.
 const fs = require('node:fs');
 const [dir, name, singleName, limit] = process.argv.slice(2);
 const max = Number(limit);
@@ -23,7 +22,7 @@ try {
   if (!size || size > max) process.exit(4);
   // Asked last, of the name and the open file together. A second name of a file outside the
   // agent's folders looks like a file inside them, and removing that name right after the
-  // open would hide the count from the open file alone (independent review, 2026-11-03).
+  // open would hide the count from the open file alone.
   const open = fs.fstatSync(fd, {bigint: true}), named = fs.lstatSync(name, {bigint: true});
   if (named.dev !== open.dev || named.ino !== open.ino || (singleName === '1' && (open.nlink !== 1n || named.nlink !== 1n))) process.exit(3);
   for (let sent = 0; sent < size;) sent += fs.writeSync(1, buffer, sent, size - sent);

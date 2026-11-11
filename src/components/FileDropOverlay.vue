@@ -1,6 +1,6 @@
 <template>
   <Transition name="file-drop">
-    <!-- The terminal beside the chat (2026-11-10): two places to let go,
+    <!-- The terminal beside the chat: two places to let go,
          each over its own part; the one under the pointer is framed, the other only named. -->
     <div v-if="show&&split" class="file-drop file-drop-split" aria-hidden="true" :data-target="to">
       <div class="file-drop-zone file-drop-chat" :class="{on:to==='chat'}" :style="{right:split.width+'px'}">

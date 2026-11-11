@@ -1,4 +1,4 @@
-// A file dropped or pasted on an agent's terminal (2026-11-10) is kept
+// A file dropped or pasted on an agent's terminal is kept
 // in that chat's own attachment folder, exactly as a chat attachment is (the same upload, its
 // owner check, size limits and unsent quota: attachments.put), and its path is typed into the
 // terminal, as a desktop terminal does with a dropped file. Only where the agent can read it:

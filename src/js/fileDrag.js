@@ -4,8 +4,8 @@
 import {ref} from 'vue';
 
 export function useFileDrag() {
-  // target: the part under the pointer, for a page with the terminal beside the chat (2026-11-10:
-  // dropped on the terminal, it goes to the terminal).
+  // target: the part under the pointer, for a page with the terminal beside the chat
+  // (dropped on the terminal, it goes to the terminal).
   const dragging = ref(false), count = ref(0), target = ref(null);
   let timer = null;
   function over(e, enabled, at = null) {

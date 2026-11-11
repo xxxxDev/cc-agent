@@ -16,7 +16,7 @@ import {retryDelay,strikesAfterLoss,WEBGL_RETRY_MS} from './js/terminalRetry.js'
 import {ref,onMounted,onUnmounted} from 'vue';
 import {Terminal} from '@xterm/xterm';import {FitAddon} from '@xterm/addon-fit';import '@xterm/xterm/css/xterm.css';
 const props=defineProps({conversationId:String,acceptFiles:Boolean});
-// A picture or file pasted here goes to the terminal as its path (2026-11-10; the page
+// A picture or file pasted here goes to the terminal as its path (the page
 // keeps it, ConversationPage.vue), not to the chat's message box. Text
 // copied from an office document also carries a picture of itself: there the text is meant,
 // and xterm pastes it as before.

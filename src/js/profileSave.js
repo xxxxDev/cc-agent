@@ -50,7 +50,7 @@ export function askSaveFirst(){
 }
 // The host's side: false when the operation is not to run; otherwise {later}, which a
 // restart calls when its own confirmation is cancelled, so a saved change that waits for
-// a restart is still asked about (review). Compact and read ask about it at once; start
+// a restart is still asked about. Compact and read ask about it at once; start
 // and restart put it into effect; pause and handoff have a dialog of their own, so a toast
 // says it instead.
 const ASK={compact:true,import:true,pause:'hint',handoff:'hint',start:false,restart:false};

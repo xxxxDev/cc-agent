@@ -262,10 +262,10 @@ app.get('/api/conversations/:id/attachments/:fileId/page',own,(req,res,next)=>{t
  stream.on('error',e=>res.headersSent?res.destroy(e):next(e));
  stream.on('open',()=>{res.set('Cache-Control','private, no-store, no-transform');res.set('Content-Security-Policy',PAGE_CSP);res.set('X-Frame-Options','SAMEORIGIN');res.set('Content-Type','text/html; charset=utf-8');stream.pipe(res);});
 }catch(e){next(e);}});
-// Where a file just uploaded for the agent's terminal lies, to type there (2026-11-10):
+// Where a file just uploaded for the agent's terminal lies, to type there:
 // the terminal is an admin's, the conversation the caller's own (own),
 // and only where the agent can read it (agentStore.attachTerminalFile). A POST, since it marks
-// the file (the origin and CSRF checks apply; review, 2026-11-11).
+// the file (the origin and CSRF checks apply).
 app.post('/api/conversations/:id/attachments/:fileId/terminal-path',own,(req,res,next)=>{try{if(req.role!=='admin')throw agents.error('Admin only',403);res.set('Cache-Control','private, no-store');res.json(agents.attachTerminalFile(req.conversation,req.params.fileId));}catch(e){next(e);}});
 app.delete('/api/conversations/:id/attachments/:fileId',own,(req,res,next)=>{try{attachments.remove(agents.stateRoot,req.conversation,req.params.fileId);res.json({ok:true});}catch(e){next(e);}});
 // An agent's picture: whoever can open the agent sees it, only an admin changes it. The address carries a version, so it is kept.

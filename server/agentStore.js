@@ -544,7 +544,7 @@ function referenceInfo(c){
  return files.length?{folder:referenceDir(c),files,note:'Reference files the administrator placed for this agent. Read them when relevant; they are read-only.'}:null;
 }
 function launch(c) {
- // Deleted is an admin's decision and only an admin's restore undoes it (security audit, 2026-11-03).
+ // Deleted is an admin's decision and only an admin's restore undoes it.
  if(c.archived)throw error('Agent archived',409);
  const g=active(c);
  if(c.mode==='demo'){g.ready=true;g.phase='ready';g.heartbeat=Date.now();save(c);return;}
@@ -912,7 +912,7 @@ const peerView=c=>({on:c.peerLink?.on===true,allow:c.peerLink?.allow||[],autoRep
 // not need someone to press Start afterwards. Named in the service's own data
 // (agent-starters.json) by conversation id; the agent must
 // itself be a live admin's full-access Claude agent (a scoped one can be written to from
-// a watched chat; review). It starts through launch, as 啟動 does, so the
+// a watched chat). It starts through launch, as 啟動 does, so the
 // started agent gets its own profile and scope, never the starter's environment.
 function agentStarter(c){
  let ids=[];try{ids=JSON.parse(fs.readFileSync(path.join(stateRoot,'agent-starters.json'),'utf8')).conversationIds;}catch{}
@@ -935,7 +935,7 @@ function starterOps(c,action,data){
  const by=c.title||c.name||'agent';
  return {results:ids.map(id=>{
   const x=targets.find(t=>t.id===id);if(!x)return {id,result:'not-found'};
-  // One paused for an update stays paused until the update brings it back (review).
+  // One paused for an update stays paused until the update brings it back.
   if(x.pausedForUpdate)return {...view(x),result:'held-for-update'};
   const now=starterState(x);if(now!=='stopped')return {...view(x),result:now==='unresponsive'?'refused-unresponsive':'already-running'};
   const held=!!x.pausedByOwner;
@@ -1003,7 +1003,7 @@ function send(c,text,key,attachmentIds=[],extra={}) {
   // Words from another machine stay out of the owner's own channel event: the agent
   // gets only the id and reads them with history.
   // The agent's words to or for an outside chat count as outside too, as user_history withholds
-  // them (review L1, 2026-11-08).
+  // them.
   if(target)Object.assign(extra,{replyTo:target.id,replyPreview:replyPreviewOf(target),...(target.peer||target.role==='relay'||target.outbound||target.role==='assistant'&&[target.inReplyTo,target.nudgeFor].some(id=>id&&c.messages.find(x=>x.id===id)?.external)?{replyOutside:true}:{})});
  }
  // Started only once the message is known good, so a refused one starts nothing.
@@ -2086,7 +2086,7 @@ function sweepRetention({now=Date.now()}={}){
     let data;try{data=JSON.parse(fs.readFileSync(meta,'utf8'));}catch{continue;}
     if(sent.has(data.id))continue;
     // One handed to the terminal that no typed prompt took (its paste failed, the tab closed):
-    // kept TERMINAL_KEEP_DAYS from then, not forever (review, 2026-11-11).
+    // kept TERMINAL_KEEP_DAYS from then, not forever.
     if(data.terminal===true?!((data.sentAt??data.createdAt)<now-TERMINAL_KEEP_DAYS*86400000):!(data.createdAt<now-UNSENT_ATTACHMENT_HOURS*3600000))continue;
     try{fs.rmSync(path.join(dir,id,data.file),{force:true});fs.rmSync(meta,{force:true});files+=1;}catch{}
    }
@@ -2107,7 +2107,7 @@ function stopAgentsOf(owner){
  for(const c of state.conversations){
   if(c.owner!==owner)continue;
   // One waiting for its first message (a lazy handoff) is held too, so neither a message
-  // nor a schedule starts it once the account is back (independent review).
+  // nor a schedule starts it once the account is back.
   if(active(c).dormant){delete active(c).dormant;c.pausedByOwner=true;save(c);continue;}
   if(active(c).phase==='stopped')continue;
   c.pausedByOwner=true;
@@ -2381,7 +2381,7 @@ function setAutoCompact(c,value){
 }
 // The yes to that question for one agent, the same restart the subagents' setting uses.
 function applyAgentAutoCompact(c){return autoCompactPending(c)?applySubagents(c):'none';}
-// A file dropped or pasted on the agent's terminal (2026-11-10; terminalFiles.js says where
+// A file dropped or pasted on the agent's terminal (terminalFiles.js says where
 // it may go). The file itself was uploaded to this chat's attachments as any other (the
 // route's owner check, attachments.put's limits); this only says whether the agent can read
 // it there and, if so, gives the path to type. Whether it has full access is what its next
@@ -2398,7 +2398,7 @@ function attachTerminalFile(c,fileId){
  return {path:at};
 }
 // What the agent's owner types straight into its terminal, and the agent's answer, shown in
-// the chat as well (2026-11-10). The transcript reader keeps them
+// the chat as well. The transcript reader keeps them
 // (terminalTurns.js decides what is a typed prompt and what answers it); this adds the new
 // ones to the conversation, run at each heartbeat and just after a turn ends. Stored as any
 // message, flagged via:'terminal' and sourceUuid (the record's, as importHistory keys its
@@ -2425,7 +2425,7 @@ function mirrorTerminal(c){
   if(e.kind==='prompt'){
    const files=terminalTurnFiles(c,e);
    // Nothing to show (a picture alone that could not be kept): looked at once, not again at
-   // every heartbeat (2026-11-11); terminalTurnFiles said why.
+   // every heartbeat; terminalTurnFiles said why.
    if(!e.text&&!files.length){seen.add(e.uuid);c.terminalMirror.seen=[...(c.terminalMirror.seen||[]),e.uuid].slice(-TERMINAL_SEEN_MAX);changed=true;continue;}
    add(c,'user',e.text,{via:'terminal',sourceUuid:e.uuid,generation:found.generation,...(files.length?{attachments:files}:{})});
   }else if(e.kind==='answer'){
@@ -2469,10 +2469,10 @@ function terminalTurnFiles(c,e){
  }
  return out;
 }
-// Agent Profile follows a /model typed in the agent's own terminal (2026-11-10; the rules
+// Agent Profile follows a /model typed in the agent's own terminal (the rules
 // are modelFollow.decide's): a change of the status line alone, with no /model or /effort in
-// the transcript since the last one followed, only moves what the session is shown to run
-// (2026-11-11). Run at each heartbeat of a live Claude session. What the session
+// the transcript since the last one followed, only moves what the session is shown to run.
+// Run at each heartbeat of a live Claude session. What the session
 // runs now (g.model, g.effort: what it was launched with until then) moves to what it reports;
 // the profile is saved only with a model and effort its owner's role may hold, as a save in
 // Agent Profile would check them (agentProfile.validate), with profileVersion bumped, so an
@@ -2539,14 +2539,13 @@ function relaunchMarked(){
 setInterval(relaunchMarked,30_000).unref();
 // An agent whose Claude still runs (its runner's heartbeat goes on) while its channel has
 // stopped asking for messages: nothing reaches it from the chat, and it shows as not
-// connected for good. Seen 2026-10-29: two agents started during a busy restart lost
-// their channel process ten seconds in and stayed offline for four days (the owner's
-// report). It is started again with its conversation when nothing is in hand: not in a
+// connected for good: two agents started during a busy restart once lost their channel
+// process ten seconds in and stayed offline for days. It is started again with its conversation when nothing is in hand: not in a
 // turn, no message handed over and unanswered, no terminal prompt or web terminal open.
 // A message still waiting to be handed over waits through the restart. Silent on two
 // checks in a row; one agent a check, the longest silent first, none while another
 // start is fresh; at most once in ten minutes for one agent. A channel that does not
-// come back after a restart is not tried again: the agent shows why (the review).
+// come back after a restart is not tried again: the agent shows why.
 const CHANNEL_SILENT_MS=3*60000,CHANNEL_REVIVE_GAP_MS=10*60000,CHANNEL_START_GAP_MS=2*60000,serviceStartedAt=Date.now();
 const CHANNEL_LOST='頻道中斷，自動重新連線後仍沒有回來。請按重新連線再試一次。';
 const tmuxClients=(g)=>{try{return execFileSync('tmux',['-L',tmuxSocket,'list-clients','-t',g.tmux],{encoding:'utf8',timeout:2000,stdio:['ignore','pipe','ignore']}).trim()!=='';}catch{return false;}};

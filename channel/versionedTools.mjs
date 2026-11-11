@@ -18,7 +18,7 @@ const definitions=config=>[
  {name:'peer_status',description:'What became of your peer_send messages and your replies to other machines: one by its id, or your latest ten. status is queued, draft (waiting for the owner to send it), delivered, expired, refused or unsent, with the reason.',inputSchema:schema({id:str})},
 ]:[]),
  ...(config.agentStarter?[
- // Only for an agent named in agent-starters.json; CC Agent refuses every other one (2026-10-30).
+ // Only for an agent named in agent-starters.json; CC Agent refuses every other one.
  {name:'agent_list',description:'List the Claude agents of every active account that you may start: id, name, account, state (stopped, running, busy, unresponsive) and whether the owner paused it. No conversation content.',inputSchema:schema({})},
  {name:'agent_start',description:'Start stopped agents by id (at most 20), through CC Agent\'s normal launch, the same as the owner pressing 啟動: each runs with its own profile and scope. One the owner paused is started too and no longer paused. A running, busy or unresponsive one, or one paused for an update, is left alone. The started agent\'s chat says you started it. Start an agent only for work the owner gave you.',inputSchema:{...schema({ids:{type:'array',items:str}}),required:['ids']}},
 ]:[])
