@@ -21,6 +21,9 @@ This is the full tour. The [README](../README.md) is the short version.
 - **Pictures.** Give an agent its own picture.
 - **Order and groups.** Tap **Edit** and each row gets a drag handle. In **All**, the default list, drag an agent to a new place within its source, into or out of a group (an empty group shows a place to drop it), or move a whole group by its handle. Let go outside the agent's source, such as on the source's title, and it goes back with a small shake, with nothing saved. **Recent** keeps its activity order and does not drag. **New group** is in a source's own list.
 - **Swipe for actions.** Outside Edit, swipe a row to the left for round buttons: pause, or start when the agent is stopped, and, for an admin, delete. Delete always asks first, and so does pausing an agent that is answering.
+- **Mark all read.** In Edit, the select-all row ends with a checkmark that marks every one of your own agents read.
+- **Pin.** In Edit, a tap on a row chooses it, and the pin button left of **Mark all read** pins the chosen agents. They move into a **Pinned** section at the top, in the order you pinned them, newest last, and outside Edit show a small pin after the name. When every chosen agent is already pinned, the same button is **Unpin**, and each goes back to its group and its place. Pins are kept for each account. Every account chooses its own agents, to pin them or mark them read; pausing, starting, restarting and deleting several at once stay with admins. In Edit, each row's red delete button sits at the right, before the drag handle.
+- **List on the left, chat on the right.** On a computer, switch it on in Settings (this device only). In a window at least 1280px wide, a tap on an agent narrows the list into a column on the left and opens the chat on the right; a tap on another agent in the column switches the chat, and the back arrow widens the list again. Drag the column's edge to size it, as split view's dividers drag: an accent line shows on hover, the column stays at least 260px wide and always leaves 560px to the chat, the width is remembered on the device, and a double click puts it back. Edit works inside the column, with the chat still open.
 
 
 <p align="center">
@@ -32,6 +35,30 @@ This is the full tour. The [README](../README.md) is the short version.
   <img src="../.github/assets/anim/agent-swipe-actions-dark.svg" width="300" alt="A row swiped left shows pause and delete, a stopped agent's row shows start and delete; each swiped back shut">
 </p>
 
+<p align="center">
+  <img src="../.github/assets/screens/phones-pins-dark.png" alt="On a phone: Edit with two agents chosen and the pin and Mark all read buttons at the end of the select-all row; then the Pinned section at the top, each pinned agent with a small pin after its name">
+</p>
+
+<p align="center">
+  <img src="../.github/assets/anim/agent-pins-dark.svg" width="300" alt="Edit, a tap on two rows chooses them, the pin button pins them, Done: they stand in the Pinned section at the top">
+</p>
+
+<p align="center">
+  <img src="../.github/assets/screens/desktop-list-detail-setting-dark.png" alt="Settings on a computer with List on the left, chat on the right switched on">
+</p>
+
+<p align="center">
+  <img src="../.github/assets/anim/list-detail-dark.svg" alt="A click on an agent narrows the list into a column with the chat beside it, a click on another agent switches the chat, and the back arrow widens the list again">
+</p>
+
+<p align="center">
+  <img src="../.github/assets/anim/list-column-resize-dark.svg" width="540" alt="The column's edge shows an accent line under the mouse, is dragged wider, then narrower, and a double click puts it back">
+</p>
+
+<p align="center">
+  <img src="../.github/assets/screens/desktop-list-column-edit-dark.png" alt="Edit inside the Agents column, two agents chosen, with the chat still open beside it">
+</p>
+
 ## Chat
 
 - **Messages and files both ways.** Send text and attachments (up to 10 files a message, 95 MB each) and get files back from the agent (up to 5 a reply, 25 MB each), with previews. On a computer, drag files onto the chat to attach them.
@@ -40,6 +67,7 @@ This is the full tour. The [README](../README.md) is the short version.
 - **What a reply answers.** An agent's reply names the message it answers on a line above it, with its first words, when that helps: something else came between, or it answered several at once (a **+N more** chip opens the rest). The agent's words carry its small picture, an agent on another machine its name, and your own words no name at all. Your own replies always show the line. Tap it to jump to that message.
 - **Long-press menu.** On a phone, a long press lifts the bubble a little over a dimmed page, with round buttons under it: copy, select text and reply. **Select text** hands the words to the phone's own selection, all selected, so its handles can pick part of them. A tap elsewhere closes it. The dim, the lift and the buttons fade in and out together.
 - **Upload progress.** While a message with files goes, the send button turns into a spinner, and each file shows whether it is waiting, uploading with its percent, or done, with a line over the box such as **Uploading 2 of 3 (45%)…**. From 99% a file shows **Processing** until the server has it, since a phone's browser hands the whole file to the network at once. A file that fails is marked, and you can keep typing meanwhile.
+- **Pictures waiting to send.** Pictures in the box show above it as 68px thumbnails, each with an ✕ in its corner and, once you send, its own progress. A tap opens a preview that steps through the draft's pictures.
 - **The phone's file picker.** On an iPhone, the box lets go of the keyboard before the **+** file picker opens, so the keyboard no longer jumps up and away behind it. While the picker is open, a tap on the box only closes the picker; tap again to type.
 - **Messages between agents** show as dashed bubbles: what agents send one another in a group, or to and from another machine, stands apart from what they say to you.
 - **Slash commands.** Type `/` for Claude Code's own commands, such as `/compact`, `/context`, `/mcp`, `/usage`, `/status` and `/diff`. They run in the agent's terminal.
@@ -66,6 +94,10 @@ This is the full tour. The [README](../README.md) is the short version.
 
 <p align="center">
   <img src="../.github/assets/screens/phones-upload-dark.png" alt="Upload progress on a phone: a file at 45%, a file processing, and the sent message">
+</p>
+
+<p align="center">
+  <img src="../.github/assets/screens/phones-draft-pictures-dark.png" alt="Three pictures as thumbnails over the box with an ✕ each, a preview stepping through them, and each with its own progress once sent">
 </p>
 
 <p align="center">
@@ -135,6 +167,10 @@ Agents on two of your computers can talk to each other, for example a build agen
 
 - **Live progress** in the chat: the tool the agent is using, which step it is on and how long it has worked, and whether it is still working in the background.
 - **Terminal view.** Switch to the agent's real Claude Code terminal, beside the chat on a computer. An admin turns the switch on in the Admin tab.
+- **Terminal and chat in step.** With the terminal open beside the chat on a computer (admins):
+  - **Where a file goes.** While you drag a file, the overlay shows two places, **Drop into the chat** and **Drop into the terminal**. A file let go on the terminal is saved where the agent can read it, and its path is typed at Claude's prompt without pressing Enter. If the agent cannot read that folder, the overlay says so and the file goes to the chat.
+  - **What you type there shows in the chat.** What you type straight into the terminal, and the agent's answer to it, also show in the chat, marked **from the terminal**.
+  - **/model and /effort.** A `/model` or `/effort` typed in the terminal updates Agent Profile. A model change Claude Code makes by itself is only shown, not saved.
 - **Transcript inspector.** Tap any message to see what that exchange sent to the model and got back, with tool calls, tokens and an estimated cost from API reference prices (not a bill), and the subagents the agent started. Admins only, turned on in the Admin tab.
 - **Context ring and usage view.** On a computer, a ring beside the To-dos button shows how full the agent's context is. It opens **Usage**: the context window (how much is used, where it auto-compacts, the model and effort), unfolding to each running subagent's context; your plan's 5-hour and weekly limits; the agent's auto-compact timing, which an admin can open in Agent Profile from there; and the agent's total tokens and estimated cost. A refresh button asks again. On a phone, **Usage** is in the ⋯ menu.
 - **Where the numbers come from.** Claude Code reports them through its status line, which CC Agent sets for each agent. Your own status line is kept: for a full-access agent, CC Agent's command also runs the status line in your Claude Code user settings and shows what it prints in the terminal. If an agent's workspace settings already have a status line of their own, it is left alone, and the usage view says its usage can't be shown.
@@ -149,6 +185,14 @@ Agents on two of your computers can talk to each other, for example a build agen
 
 <p align="center">
   <img src="../.github/assets/screens/desktop-terminal-dark.png" alt="A chat beside the agent's live terminal">
+</p>
+
+<p align="center">
+  <img src="../.github/assets/screens/desktop-terminal-mirror-dark.png" alt="A question typed in the terminal and the agent's answer, shown in the chat too and marked from the terminal">
+</p>
+
+<p align="center">
+  <img src="../.github/assets/screens/desktop-terminal-drop-dark.png" alt="A file dragged over the terminal: the overlay shows Drop into the chat and Drop into the terminal, the terminal framed">
 </p>
 
 <p align="center">
