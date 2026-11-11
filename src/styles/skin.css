@@ -962,3 +962,27 @@ html .ios .toast.toast-bottom {bottom:var(--viewport-overflow,0px);}
     padding-bottom: calc(16px + var(--f7-safe-area-bottom, 0px));
   }
 }
+
+/* Notices at the top centre as one pill on every width (App.vue toast params): Framework7 draws
+ * a phone's as a full-width bar under the status bar and a computer's as a 568px bar. Here it
+ * sizes to its text, centred, below the safe area, sliding down from above. */
+html .ios .toast.toast-top {
+  left: 50%;
+  right: auto;
+  width: max-content;
+  max-width: min(var(--f7-toast-max-width), calc(100vw - 32px));
+  margin: 0;
+  top: calc(var(--f7-safe-area-top) + 10px);
+  border-radius: var(--f7-toast-border-radius);
+  transform: translate3d(-50%, calc(-100% - var(--f7-safe-area-top) - 20px), 0);
+}
+html .ios .toast.toast-top.modal-in {
+  transform: translate3d(-50%, 0, 0);
+}
+html .ios .toast.toast-top .toast-content {
+  padding-top: var(--f7-toast-padding-vertical);
+}
+@media (min-width: 569px) {
+  html .ios .toast.toast-top { top: 16px; }
+}
+
