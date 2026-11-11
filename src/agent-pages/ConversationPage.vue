@@ -1,5 +1,5 @@
 <template>
- <f7-page  name="conversation" @page:beforeout="cancelOpening" @dragover.prevent="fileOver($event,!agentLocked&&!!detail)" @drop.prevent="fileDragEnd();!agentLocked&&dropFiles($event)" @paste="!agentLocked&&pasteFiles($event)" @page:afterin="enterConversation" class="chat-page" :data-chat="[progressInBar?'has-progress':'','switchless',inspectorVisible?'inspector-open':'',profilePanelVisible?'profile-open':'',inspectorVisible||profilePanelVisible||checklistPanelVisible||usagePanelVisible?'side-open':'',terminalSide?'terminal-side':'',terminalSide&&chatHidden?'terminal-full':''].filter(Boolean).join(' ')" :style="terminalSide?{'--terminal-width':terminalWidthCss}:null" :page-content="false" :with-subnavbar="showSubnavbar">
+ <f7-page  name="conversation" @page:beforeout="cancelOpening" @dragover.prevent="dragOver" @drop.prevent="dropAt" @paste="!agentLocked&&pasteFiles($event)" @page:afterin="enterConversation" class="chat-page" :data-chat="[progressInBar?'has-progress':'','switchless',inspectorVisible?'inspector-open':'',profilePanelVisible?'profile-open':'',inspectorVisible||profilePanelVisible||checklistPanelVisible||usagePanelVisible?'side-open':'',terminalSide?'terminal-side':'',terminalSide&&chatHidden?'terminal-full':''].filter(Boolean).join(' ')" :style="terminalSide?{'--terminal-width':terminalWidthCss}:null" :page-content="false" :with-subnavbar="showSubnavbar">
   <f7-navbar><f7-nav-left><f7-link v-if="!embedded" class="back" icon-only  :aria-label="ct('返回對話清單')" @click="toList"><i class="icon icon-back"/></f7-link></f7-nav-left><f7-nav-title sliding><span class="nav-agent-name">{{detail?.title||'Chat'}}</span><span v-if="detail" class="nav-presence" :class="presence" role="img" :aria-label="ct(presence==='working'?'Agent 正在處理':presence==='online'?'Agent 在線':'Agent 離線')" :title="ct(presence==='working'?'Agent 正在處理':presence==='online'?'Agent 在線':'Agent 離線')"/></f7-nav-title><f7-nav-right><!-- On a phone one button opens the rest as a menu, so a long name still shows; a computer keeps them in a row. -->
 <template v-if="!wideScreen&&!embedded&&detail"><f7-link v-if="showTerminalSwitch" icon-only class="view-toggle" :icon-f7="terminalOpen?'bubble_left_bubble_right':'chevron_left_slash_chevron_right'" :aria-label="terminalOpen?ct('回到聊天室'):ct('開啟 Claude 終端機')" :aria-pressed="String(terminalOpen)" @click="terminalOpen=!terminalOpen"/><f7-link icon-only icon-f7="ellipsis" class="conversation-more" :aria-label="ct('更多')" @click="openMore"/></template><template v-else><ContextRing v-if="!embedded&&detail?.contextUsage" v-tip="ct('用量統計')" :usage="detail.contextUsage" :on="usagePanelVisible" @toggle="toggleUsage"/><f7-link v-if="!embedded&&detail" icon-only icon-f7="checkmark_square" class="checklist-open" :class="{'inspector-on':checklistPanelVisible}" :aria-pressed="String(checklistOpen)" :aria-label="ct('待辦事項')" v-tip="ct('待辦事項')" @click="toggleChecklist"/><f7-link v-if="!embedded" icon-only icon-f7="search" class="conversation-search-open" :class="{'inspector-on':searchPanelVisible}" :aria-pressed="String(searchPanelVisible)" :aria-label="ct('搜尋對話')" v-tip="ct('搜尋對話')" @click="toggleSearch"/><f7-link v-if="showTerminalSwitch" icon-only class="view-toggle" :icon-f7="terminalOpen?'bubble_left_bubble_right':'chevron_left_slash_chevron_right'" :aria-label="terminalOpen?ct('回到聊天室'):ct('開啟 Claude 終端機')" v-tip="terminalOpen?ct('回到聊天室'):ct('開啟 Claude 終端機')" :aria-pressed="String(terminalOpen)" @click="terminalOpen=!terminalOpen"/><f7-link v-if="showInspectorButton&&!embedded" icon-only icon-f7="ant" class="ant-icon" :class="{'inspector-on':inspectorOpen}" :aria-label="ct('Transcript 檢視')" v-tip="ct('Transcript 檢視')" :aria-pressed="String(inspectorOpen)" :disabled="agentLocked" @click="!agentLocked&&toggleInspector()"/><f7-link v-if="!embedded" icon-only icon-f7="info" :aria-label="'Agent Profile'" v-tip="'Agent Profile'" :class="{'inspector-on':profilePanelVisible}" :aria-pressed="wideScreen&&!terminalOpen?String(profilePanelVisible):undefined" @click="openProfile()"/></template></f7-nav-right><f7-subnavbar v-if="showSubnavbar" class="view-switch" :inert="agentLocked"><div class="subnavbar-stack"><div v-if="progressInBar" class="agent-progress"><f7-preloader :size="14"/><span role="status" aria-live="polite" :title="progressInBar">{{progressInBar}}</span><button v-if="canInterrupt" type="button" class="interrupt-turn" :disabled="interrupting" :aria-label="ct('中斷這一輪')" :title="ct('中斷這一輪')" @click="interruptTurn"><i class="icon f7-icons">stop_fill</i></button></div></div></f7-subnavbar></f7-navbar><GlassDropdown :open="moreOpen" :point="morePoint" :items="moreItems" @close="moreOpen=false" @select="pickMore"/>
   <ChatComposer :highlights="mention.current.value.map(m=>'@'+m.title)" :key="detail?.id" :inert="agentLocked" v-if="detail&&(!terminalOpen||terminalSide&&!chatHidden)" v-model:value="draft" :placeholder="ct('輸入訊息…')" :reply="replyDraft" :status="sendStatus" @cancel-reply="cancelReply" @keydown="composerKeydown"><template #inner-start><f7-link icon-only icon-f7="plus" :aria-label="ct('加入附件')" :class="{disabled:busy}" @click="chooseFiles"/></template><template #before-inner><div v-if="files.length" class="attachment-drafts" :aria-label="ct('附件')"><DraftPictures :files="files" :removable="!sendStatus" :disabled="busy" @open="previewFile=$event" @remove="removeFile"/><div v-if="!files.every(isDraftPicture)" class="attachment-draft-files"><template v-for="file in files" :key="file.key"><div v-if="!isDraftPicture(file)" class="attachment-chip" :class="{'draft-failed':file.state==='failed'}"><a class="attachment-draft-open" href="#" :title="file.name" @click.prevent="previewFile=previewDraft(file)"><span>{{file.name}} <small>{{file.size<1024?file.size+' B':(file.size/1024).toFixed(1)+' KB'}}</small></span></a><DraftUploadState :item="file"/><f7-link v-if="!sendStatus" icon-only icon-f7="xmark_circle_fill" :aria-label="ct('移除附件')+' '+file.name" :class="{disabled:busy}" @click="removeFile(file.key)"/></div></template></div></div></template><template #inner-end><f7-link v-if="sendStatus" icon-only class="disabled composer-sending" aria-disabled="true" :aria-label="sendStatus"><f7-preloader :size="20"/></f7-link><f7-link v-else icon-only icon-f7="arrow_up" :class="{disabled:!canSend}" :aria-disabled="!canSend" :aria-label="ct('送出訊息')" @click="send"/></template></ChatComposer>
@@ -7,7 +7,7 @@
   <div :inert="agentLocked&&!(terminalOpen&&!terminalSide)" ref="scroll" class="page-content messages-content" @scroll.passive="onMessagesScroll" @wheel.passive="onHistoryWheel" @touchstart.passive="onHistoryTouchStart" @touchmove.passive="onHistoryTouchMove" @touchend.passive="onHistoryTouchEnd" @touchcancel="onHistoryTouchCancel" :class="{'terminal-content':terminalOpen&&!terminalSide&&user?.role==='admin','paging-back':pagingBack}">
    <f7-block v-if="error||agentOperationError" role="alert">{{agentOperationError||error}}</f7-block>
    <template v-if="detail">
-    <TerminalPane v-if="terminalOpen&&!terminalSide&&user.role==='admin'" :key="detail.sessionId" :conversation-id="detail.id" :session-id="detail.sessionId"/>
+    <TerminalPane v-if="terminalOpen&&!terminalSide&&user.role==='admin'" ref="terminalPane" :accept-files="terminalTakes" @files="filesToTerminal" :key="detail.sessionId" :conversation-id="detail.id" :session-id="detail.sessionId"/>
     <template v-else>
      <f7-block v-if="detail.lastError">{{detail.lastError}}<f7-button @click="action('stop').then(()=>action('start'))">{{ct('重新連線')}}</f7-button></f7-block>
      <f7-block v-for="permission in detail.permissions||[]" :key="permission.request_id"><p>{{permission.description}}</p><pre>{{permission.input_preview}}</pre><f7-button @click="action('permission',{request_id:permission.request_id,generation:permission.generation,behavior:'allow'})">{{ct('允許這一次')}}</f7-button><f7-button @click="action('permission',{request_id:permission.request_id,generation:permission.generation,behavior:'deny'})">{{ct('拒絕')}}</f7-button></f7-block>
@@ -26,7 +26,7 @@
   <!-- The shield covers the conversation only: the terminal and Agent Profile stay
        open beside it, or instead of it, while the agent is busy compacting or
        starting. -->
-  <FileDropOverlay :show="fileDragging" :name="detail?.title" :count="fileDragCount"/>
+  <FileDropOverlay :show="fileDragging" :name="detail?.title" :count="fileDragCount" :split="terminalSplit" :over="fileDragTarget" :terminal-ok="terminalTakes"/>
   <div v-if="agentLocked&&(!terminalOpen||terminalSide&&!chatHidden)" class="agent-operation-overlay" role="status" aria-live="polite" aria-busy="true">
    <div class="dialog dialog-preloader agent-operation-card"><div class="dialog-inner">
     <div class="dialog-title">{{agentOperationTitle}}</div>
@@ -40,7 +40,7 @@
   <!-- Agent Profile beside the conversation on a desktop width; the popup elsewhere. -->
   <!-- The terminal beside the conversation on a desktop, with a divider to set their
        widths; on a phone it takes the page instead. -->
-  <aside v-if="terminalSide&&user?.role==='admin'&&detail" class="terminal-column" :aria-label="ct('Claude 終端機')"><div class="terminal-divider" role="separator" aria-orientation="vertical" :aria-label="ct('拖曳調整聊天室與終端機寬度')" :title="ct('拖曳調整聊天室與終端機寬度')" @pointerdown.stop="startTerminalResize" @mousedown.stop @touchstart.stop/><TerminalPane :key="detail.sessionId" :conversation-id="detail.id" :session-id="detail.sessionId"/></aside>
+  <aside v-if="terminalSide&&user?.role==='admin'&&detail" class="terminal-column" :aria-label="ct('Claude 終端機')"><div class="terminal-divider" role="separator" aria-orientation="vertical" :aria-label="ct('拖曳調整聊天室與終端機寬度')" :title="ct('拖曳調整聊天室與終端機寬度')" @pointerdown.stop="startTerminalResize" @mousedown.stop @touchstart.stop/><TerminalPane ref="terminalPane" :accept-files="terminalTakes" @files="filesToTerminal" :key="detail.sessionId" :conversation-id="detail.id" :session-id="detail.sessionId"/></aside>
   <aside v-if="searchPanelVisible" class="profile-panel search-panel" :aria-label="ct('搜尋對話')">
    <header class="pp-head"><f7-link icon-only icon-f7="xmark" :aria-label="ct('關閉搜尋')" @click="searchOpen=false"/><div class="pp-title">{{ct('搜尋對話')}}</div><span class="pp-spacer"/></header>
    <div class="pp-body">
@@ -83,7 +83,7 @@ import AgentProfilePanel from "../components/AgentProfilePanel.vue";import Messa
 import SlashMenu from "../components/SlashMenu.vue";
 import GlassDropdown from "../components/GlassDropdown.vue";
 import MentionMenu from "../components/MentionMenu.vue";
-import ChecklistPanel,{askNewChecklist} from "../components/ChecklistPanel.vue";import ContextRing from "../components/ContextRing.vue";import ContextUsagePanel from "../components/ContextUsagePanel.vue";import FileDropOverlay from "../components/FileDropOverlay.vue";import {useFileDrag} from "../js/fileDrag.js";import TerminalPromptCard from "../components/TerminalPromptCard.vue";import {ref,computed,inject,watch,nextTick,Teleport,TransitionGroup,onMounted,onBeforeUnmount} from "vue";import {bindConversationViewport} from "../js/conversationViewport.js";import TerminalPane from "../TerminalPane.vue";export default {components:{DraftUploadState,DraftPictures,ContextRing,ContextUsagePanel,FileDropOverlay,GlassDropdown,MentionMenu,TerminalPromptCard,ChecklistPanel,ChatComposer,TerminalPane,TransitionGroup,Teleport,AttachmentPreview,MessageList,TranscriptInspector,AgentProfilePanel,SlashMenu,MessageSearchResults},setup(){const workspace=inject("workspace");let cleanup,cleanupComposer,cleanupTrace,stopOrphanWatch;onMounted(()=>{const page=workspace.scroll.value?.closest(".page");cleanupTrace=bindKeyboardTrace(page);cleanupComposer=bindConversationComposer(page);cleanup=bindConversationViewport(page);// Losing the agent (expired session, aborted open, interrupted back gesture)
+import ChecklistPanel,{askNewChecklist} from "../components/ChecklistPanel.vue";import ContextRing from "../components/ContextRing.vue";import ContextUsagePanel from "../components/ContextUsagePanel.vue";import FileDropOverlay from "../components/FileDropOverlay.vue";import {useFileDrag} from "../js/fileDrag.js";import {dropTarget,typedPaths,pastedName} from "../js/terminalDrop.js";import {api,apiUpload} from "../js/api.js";import {f7} from "framework7-vue";import TerminalPromptCard from "../components/TerminalPromptCard.vue";import {ref,computed,inject,watch,nextTick,Teleport,TransitionGroup,onMounted,onBeforeUnmount} from "vue";import {bindConversationViewport} from "../js/conversationViewport.js";import TerminalPane from "../TerminalPane.vue";export default {components:{DraftUploadState,DraftPictures,ContextRing,ContextUsagePanel,FileDropOverlay,GlassDropdown,MentionMenu,TerminalPromptCard,ChecklistPanel,ChatComposer,TerminalPane,TransitionGroup,Teleport,AttachmentPreview,MessageList,TranscriptInspector,AgentProfilePanel,SlashMenu,MessageSearchResults},setup(){const workspace=inject("workspace");let cleanup,cleanupComposer,cleanupTrace,stopOrphanWatch;onMounted(()=>{const page=workspace.scroll.value?.closest(".page");cleanupTrace=bindKeyboardTrace(page);cleanupComposer=bindConversationComposer(page);cleanup=bindConversationViewport(page);// Losing the agent (expired session, aborted open, interrupted back gesture)
 // used to leave this page stranded with an empty body and no way forward.
 workspace.recoverOrphanedConversation();
 stopOrphanWatch=watch(workspace.selected,id=>{if(!id)nextTick(workspace.recoverOrphanedConversation);});});
@@ -131,7 +131,40 @@ function pickMore(value){
  else if(value==='profile')workspace.openProfile();
 }
 const fileDrag=useFileDrag();
-return {...workspace,isDraftPicture,fileDragging:fileDrag.dragging,fileDragCount:fileDrag.count,fileOver:fileDrag.over,fileDragEnd:fileDrag.end,previewFile:ref(null),newChecklist:()=>askNewChecklist(workspace),moreOpen,morePoint,openMore,moreItems,pickMore};}};
+// The terminal takes files too (2026-11-10): dropped or pasted on it, a file is uploaded
+// to this chat's attachments as any other and its path typed at Claude's
+// prompt without Enter (js/terminalDrop.js); anywhere else it goes to the chat as before.
+// Only an admin has the terminal, and only where the agent can read the file (the server's
+// terminalFiles); otherwise the overlay says so and it goes to the chat.
+const terminalPane=ref(null),terminalSplit=ref(null);
+const terminalTakes=computed(()=>workspace.user.value?.role==='admin'&&workspace.detail.value?.mode==='claude'&&!!workspace.detail.value?.terminalFiles?.ok);
+function dragOver(e){
+ const page=e.currentTarget,pane=page?.querySelector?.('.terminal-pane'),t=dropTarget(e.target,terminalTakes.value);
+ if(pane&&workspace.user.value?.role==='admin'){const p=page.getBoundingClientRect(),r=pane.getBoundingClientRect();terminalSplit.value={width:Math.round(p.right-r.left),top:Math.max(0,Math.round(r.top-p.top))};}else terminalSplit.value=null;
+ fileDrag.over(e,!!workspace.detail.value&&(t.to==='terminal'||!workspace.agentLocked.value),terminalSplit.value?t.over:null);
+}
+function dropAt(e){
+ fileDrag.end();
+ const list=Array.from(e.dataTransfer?.files||[]);
+ if(list.length&&dropTarget(e.target,terminalTakes.value).to==='terminal')return filesToTerminal(list);
+ if(!workspace.agentLocked.value)workspace.dropFiles(e);
+}
+const MAX_TERMINAL_FILES=10,MAX_BYTES=95*1024*1024;
+async function filesToTerminal(list){
+ const id=workspace.detail.value?.id;if(!id)return;
+ if(list.length>MAX_TERMINAL_FILES){f7.dialog.alert(workspace.ct('最多 10 個附件'));list=list.slice(0,MAX_TERMINAL_FILES);}
+ const paths=[],stamp=new Date();
+ for(const [i,file] of list.entries()){
+  if(!file.size||file.size>MAX_BYTES){f7.dialog.alert(workspace.ct('附件大小須為 1 byte 至 95 MB')+': '+file.name);continue;}
+  try{
+   const saved=await apiUpload('/conversations/'+id+'/attachments?name='+encodeURIComponent(pastedName(file,i,stamp)),file,{headers:{'Content-Type':'application/octet-stream'}});
+   paths.push((await api('/conversations/'+id+'/attachments/'+saved.id+'/terminal-path')).path);
+  }catch(err){f7.dialog.alert(workspace.ct('無法放到終端機')+': '+(err?.message||file.name));}
+ }
+ const text=typedPaths(paths);
+ if(text&&!terminalPane.value?.paste(text))f7.dialog.alert(workspace.ct('終端機尚未連線，路徑沒有打進去'));
+}
+return {...workspace,terminalPane,terminalSplit,terminalTakes,dragOver,dropAt,filesToTerminal,fileDragTarget:fileDrag.target,isDraftPicture,fileDragging:fileDrag.dragging,fileDragCount:fileDrag.count,fileOver:fileDrag.over,fileDragEnd:fileDrag.end,previewFile:ref(null),newChecklist:()=>askNewChecklist(workspace),moreOpen,morePoint,openMore,moreItems,pickMore};}};
 </script>
 
 <style scoped src="./chatPage.css"></style>

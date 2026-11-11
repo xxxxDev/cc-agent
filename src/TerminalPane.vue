@@ -15,7 +15,17 @@ import {bindTerminalTouch} from './js/terminalTouch.js';
 import {retryDelay,strikesAfterLoss,WEBGL_RETRY_MS} from './js/terminalRetry.js';
 import {ref,onMounted,onUnmounted} from 'vue';
 import {Terminal} from '@xterm/xterm';import {FitAddon} from '@xterm/addon-fit';import '@xterm/xterm/css/xterm.css';
-const props=defineProps({conversationId:String});
+const props=defineProps({conversationId:String,acceptFiles:Boolean});
+// A picture or file pasted here goes to the terminal as its path (2026-11-10; the page
+// keeps it, ConversationPage.vue), not to the chat's message box. Text
+// copied from an office document also carries a picture of itself: there the text is meant,
+// and xterm pastes it as before.
+const emit=defineEmits(['files']);
+function pasteFiles(e){if(!props.acceptFiles)return;const data=e.clipboardData,list=Array.from(data?.files||[]);if(!list.length)return;const types=Array.from(data.types||[]);if(types.includes('text/plain')&&(types.includes('text/html')||types.includes('text/rtf')))return;e.preventDefault();e.stopPropagation();emit('files',list);}
+// Text typed at Claude's prompt as a paste (bracketed when Claude asked for it, as a desktop
+// terminal pastes a dropped file's path), never with Enter. False when the line is not open.
+function paste(text){if(!term||ws?.readyState!==1||!text)return false;term.paste(text);return true;}
+defineExpose({paste});
 const KEYS=[{label:'Esc',name:'Esc',seq:'\x1b'},{label:'Tab',name:'Tab',seq:'\t'},{label:'⇧Tab',name:'Shift+Tab',seq:'\x1b[Z'},{label:'↑',name:'Up',seq:'\x1b[A'},{label:'↓',name:'Down',seq:'\x1b[B'},{label:'←',name:'Left',seq:'\x1b[D'},{label:'→',name:'Right',seq:'\x1b[C'},{label:'^C',name:'Ctrl+C',seq:'\x03'}];
 const touch=typeof matchMedia==='function'&&matchMedia('(pointer: coarse)').matches;
 function press(seq){if(ws?.readyState===1)ws.send(JSON.stringify({type:'input',data:seq}));}const host=ref(null),status=ref('正在附接終端…');let term,fit,ws,observer,cleanupTouch,disposed=false;
@@ -80,13 +90,13 @@ async function loadWebgl(){
 }
 onMounted(()=>{term=new Terminal({cursorBlink:true,fontSize:13,fontFamily:'Menlo, monospace',scrollback:5000,theme:{background:'#121212',foreground:'#ececec'},allowProposedApi:false});fit=new FitAddon();term.loadAddon(fit);term.open(host.value);
  loadWebgl();
- cleanupTouch=bindTerminalTouch(host.value,term);term.onData(data=>{if(ws?.readyState===1)ws.send(JSON.stringify({type:'input',data}));});
+ cleanupTouch=bindTerminalTouch(host.value,term);host.value.addEventListener('paste',pasteFiles,true);term.onData(data=>{if(ws?.readyState===1)ws.send(JSON.stringify({type:'input',data}));});
  // Shift+Enter is a new line in Claude Code: xterm sends a bare Enter for both, so it goes as
  // Esc+Enter (what Option+Enter sends), which Claude Code reads as a line break. Not while an input
  // method is composing.
  term.attachCustomKeyEventHandler(e=>{if(e.key!=='Enter'||!e.shiftKey||e.ctrlKey||e.altKey||e.metaKey||e.isComposing)return true;if(e.type==='keydown'&&ws?.readyState===1)ws.send(JSON.stringify({type:'input',data:'\x1b\r'}));return false;});observer=new ResizeObserver(resize);observer.observe(host.value);connect(true);
  watchdog=setInterval(checkLine,5000);document.addEventListener('visibilitychange',onVisible);window.addEventListener('focus',onVisible);});
-onUnmounted(()=>{disposed=true;clearTimeout(resizeTimer);clearTimeout(retryTimer);clearTimeout(webglRetry);clearInterval(watchdog);document.removeEventListener('visibilitychange',onVisible);window.removeEventListener('focus',onVisible);cleanupTouch?.();observer?.disconnect();ws?.close();try{webgl?.dispose();}catch{}webgl=null;term?.dispose();});
+onUnmounted(()=>{disposed=true;host.value?.removeEventListener('paste',pasteFiles,true);clearTimeout(resizeTimer);clearTimeout(retryTimer);clearTimeout(webglRetry);clearInterval(watchdog);document.removeEventListener('visibilitychange',onVisible);window.removeEventListener('focus',onVisible);cleanupTouch?.();observer?.disconnect();ws?.close();try{webgl?.dispose();}catch{}webgl=null;term?.dispose();});
 </script>
 
 <style scoped>
