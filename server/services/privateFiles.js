@@ -39,6 +39,22 @@ function hardenExistingPrivateFile(filename) {
   return true;
 }
 
+// NeDB ends a line of its data file at \n and also at \r, \v, \f, U+0085, U+2028 and
+// U+2029 (lib/byline.js). JSON.stringify escapes all of those except the last three, so a
+// document with one of them in a string (a User-Agent, a name, a notice's text) was
+// written as one line and read back as broken pieces: dropped quietly, or the whole store
+// refused once a tenth of its lines broke. They are written as JSON escapes instead.
+// Reading needs no undoing, since JSON.parse turns the escapes back into the characters,
+// so files written before this read as they always did.
+const NEDB_LINE_BREAKS = /[\u0085\u2028\u2029]/g;
+function escapeNedbLineBreaks(line) {
+  return line.replace(NEDB_LINE_BREAKS, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`);
+}
+const NEDB_LINE_HOOKS = Object.freeze({
+  afterSerialization: escapeNedbLineBreaks,
+  beforeDeserialization: (line) => line,
+});
+
 function privateDatastoreOptions(filename) {
   const resolved = path.resolve(filename);
   ensurePrivateDirectory(path.dirname(resolved));
@@ -49,6 +65,7 @@ function privateDatastoreOptions(filename) {
     filename: resolved,
     autoload: true,
     modes: { ...DATASTORE_MODES },
+    ...NEDB_LINE_HOOKS,
   };
 }
 
@@ -82,7 +99,9 @@ module.exports = {
   PRIVATE_DIR_MODE,
   PRIVATE_FILE_MODE,
   appendPrivateJsonLine,
+  NEDB_LINE_HOOKS,
   ensurePrivateDirectory,
+  escapeNedbLineBreaks,
   hardenExistingPrivateFile,
   privateDatastoreOptions,
 };
