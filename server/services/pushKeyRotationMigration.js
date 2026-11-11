@@ -64,11 +64,15 @@ function validatePrivateFileForRead(filename) {
     });
   }
   // NeDB ignores the half-finished rewrite while the store itself is there, so removing it
-  // loses nothing; a restore removes it too.
+  // loses nothing. A restore removes it too, but only beside the two push stores it puts
+  // back, so it is suggested for those alone.
   if (fs.existsSync(`${result.resolved}~`)) {
     const leftover = `${path.basename(result.resolved)}~`;
+    const restorable = BACKUP_FILES.includes(path.basename(result.resolved));
     throw migrationError(
-      `A leftover ${leftover} from an interrupted write sits beside the store: remove it, then run again, or run --restore with your backup`,
+      restorable
+        ? `A leftover ${leftover} from an interrupted write sits beside the store: remove it, then run again, or run --restore with your backup`
+        : `A leftover ${leftover} from an interrupted write sits beside the store: remove it and run again`,
       { file: leftover },
     );
   }
