@@ -63,7 +63,7 @@
 <script setup>
 import {ref,computed,watch,nextTick,onMounted,onBeforeUnmount,inject,Teleport} from 'vue';
 import {f7} from 'framework7-vue';
-import {ct} from '../js/agent-i18n.js';
+import {ct,listJoin} from '../js/agent-i18n.js';
 import {defaultAvatar} from '../js/avatarShape.js';
 import {activeTab} from '../js/tab-session.js';
 import {shouldSendOnEnter} from '../js/chatKeyboard.js';
@@ -101,13 +101,13 @@ const titleOf=(agentId,fallback)=>member(agentId)?.title||fallback||(w.conversat
 // The server's messages as bubbles: each member's under its name and picture, the
 // ones members send one another marked as such, and to whom the owner's went.
 const bubbles=computed(()=>(room.value?.id===id?room.value.messages:[]).map(m=>{
- if(m.role==='user'){const to=(m.targets||[]).map(t=>titleOf(t)+(Object.values(m.deliveries||{}).length&&m.deliveries[t]?.status==='failed'?ct('（未送達）'):'')).join('、');return {...m,footnote:to?ct('給 ')+to:''};}
+ if(m.role==='user'){const to=listJoin((m.targets||[]).map(t=>titleOf(t)+(Object.values(m.deliveries||{}).length&&m.deliveries[t]?.status==='failed'?ct('（未送達）'):'')));return {...m,footnote:to?ct('給 ')+to:''};}
  if(m.role==='system')return m;
  const a=member(m.agentId),avatar=a?.avatar||defaultAvatar(a||{});
  if(m.role==='relay')return {...m,role:'assistant',speaker:{label:titleOf(m.agentId,m.agentTitle)+' → '+titleOf(m.to,m.toTitle),to:true,avatar}};
  return {...m,speaker:{label:titleOf(m.agentId,m.agentTitle)+(m.agentId===room.value.lead?' · '+ct('主負責'):''),avatar}};
 }));
-const working=computed(()=>{const busy=(room.value?.members||[]).filter(m=>m.busy).map(m=>m.title);return busy.length?busy.join('、')+' '+ct('正在處理'):'';});
+const working=computed(()=>{const busy=(room.value?.members||[]).filter(m=>m.busy).map(m=>m.title);return busy.length?listJoin(busy)+' '+ct('正在處理'):'';});
 const canSend=computed(()=>!!draft.value.trim()&&!sending.value);
 // "@" offers the members, the lead first; the other agents are shown greyed out.
 const mention=useMentionMenu({draft,agents:computed(()=>{

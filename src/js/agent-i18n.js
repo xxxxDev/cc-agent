@@ -888,6 +888,11 @@ const english = {
 // settings texts need no product name of their own.
 // Nothing (null, undefined) is nothing, not the words "null" or "undefined".
 export function ct(text) { if (text == null) return ''; return String(lang.value === 'zh-TW' ? text : (english[text] ?? text)).replaceAll('{product}', PRODUCT.name); }
+// Names in running text: 「、」 in Chinese, a comma in English (ct('、') reads " and ", which suits
+// two or three field names but not a list of agents).
+export function listJoin(items) { return items.join(lang.value === 'zh-TW' ? '、' : ', '); }
+// A name, then what happened to it: 「名稱：原因」 in Chinese, "name: reason" in English.
+export function labelled(name, text) { return name + (lang.value === 'zh-TW' ? '：' : ': ') + text; }
 export function duration(seconds) {
   const zh = lang.value === 'zh-TW';
   if (seconds < 60) return zh ? `${seconds} 秒` : `${seconds}s`;

@@ -8,7 +8,7 @@ import {agentActivity} from './agentActivity.js';
 import {measureComposer} from './conversationComposer.js';
 import {useAttachmentDrafts} from './attachmentDrafts.js';
 import {shouldSendOnEnter} from './chatKeyboard.js';
-import {ct,generation} from './agent-i18n.js';
+import {ct,generation,listJoin,labelled} from './agent-i18n.js';
 import {timeLocale} from './i18n.js';
 import * as agentOperation from './agentOperation.js';
 import {afterProfileSave,askDiscard,guardOperation as guardProfile,staleProfile,resolveStale,busyNotice} from './profileSave.js';
@@ -116,7 +116,7 @@ async function everyAgent(kind){
   // Restart is a pause and a start, so it also ends a turn still running; start alone refuses a busy agent.
   try{if(kind==='restart'&&!['stopped','error'].includes(c.phase))await api('/conversations/'+c.id+'/stop',{method:'POST',body:'{}'});
    await api('/conversations/'+c.id+'/'+(kind==='restart'?'start':kind),{method:'POST',body:'{}'});done+=1;}
-  catch(e){failed.push(c.title+'：'+e.message);}
+  catch(e){failed.push(labelled(c.title,e.message));}
  }
  bulkBusy.value='';
  await attempt(refresh);
@@ -125,7 +125,7 @@ async function everyAgent(kind){
  if(failed.length)f7.dialog.alert(failed.join('\n'));
 }
 // Dialogs show plain text (js/safeDialog.js escapes it), a line break included.
-const chosenNames=()=>chosenList.value.map(c=>c.title).join('、');
+const chosenNames=()=>listJoin(chosenList.value.map(c=>c.title));
 function pauseEveryAgent(){
  if(chosenList.value.length)f7.dialog.confirm(chosenNames()+'\n'+ct('執行中的回覆會中斷，聊天紀錄保留。'),ct('暫停選取的 Agent'),()=>everyAgent('stop'));
  else f7.dialog.confirm(ct('暫停所有 Agent？執行中的回覆會中斷，聊天紀錄保留。'),ct('全部暫停'),()=>everyAgent('stop'));

@@ -50,6 +50,7 @@ import { computed, inject, ref } from 'vue';
 import { f7 } from 'framework7-vue';
 import { api } from '../js/api.js';
 import { ct } from '../js/agent-i18n.js';
+import { lang } from '../js/i18n.js';
 import { reportTime } from '../js/access-reports.js';
 import GlassDropdown from '../components/GlassDropdown.vue';
 import { handOffName, handOffTargets, handOffText } from '../js/diagnosticHandOff.js';
@@ -128,7 +129,7 @@ function handTo(agentId) {
   // Checked again on the list as it is now: an agent opened to outside people since stays out.
   const target = targets().find((c) => c.id === agentId);
   if (!report || !target || !workspace?.handToAgent) return;
-  const send = () => workspace.handToAgent(agentId, [new File([handOffText(report)], handOffName(report), { type: 'text/plain' })]);
+  const send = () => workspace.handToAgent(agentId, [new File([handOffText(report, lang.value)], handOffName(report), { type: 'text/plain' })]);
   if (!target.access?.full) return send();
   // The dialogs show plain text (safeDialog.js); a function, so a $ in the name stays as it is.
   const who = String(report.fromName || ct('已刪除的使用者')).replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, ' ');
