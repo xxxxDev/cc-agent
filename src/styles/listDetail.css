@@ -36,6 +36,12 @@
     display: none;
   }
 
+  /* A computer that shows scroll bars all the time (a mouse attached) takes their width off the
+   * column's right side only, so the rows sat further left than right
+   * (2026-11-11); the column still scrolls by wheel and trackpad. */
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .page-content {
+    scrollbar-width: none;
+  }
   /* Compact rows in the column: a smaller picture, the name and one line of the latest. */
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .page-content > :is(.list.inset, .agent-search-row, .select-all-row) {
     max-width: calc(100% - 20px);
