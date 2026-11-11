@@ -100,7 +100,9 @@ function escapeRawNedbLineBreaks(buffer) {
   return { buffer: Buffer.concat(parts), characters, total };
 }
 
-function writeDurablePrivateFile(filename, buffer) {
+// Makes filename (it must not exist) with these bytes, mode 600, synced. A file it made
+// but could not finish is removed again, so a full disk leaves nothing behind.
+function writeNewPrivateFile(filename, buffer) {
   const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL
     | (fs.constants.O_NOFOLLOW || 0);
   const descriptor = fs.openSync(filename, flags, PRIVATE_FILE_MODE);
@@ -113,8 +115,23 @@ function writeDurablePrivateFile(filename, buffer) {
       pending = pending.subarray(written);
     }
     fs.fsyncSync(descriptor);
-  } finally {
+  } catch (error) {
     fs.closeSync(descriptor);
+    try { fs.unlinkSync(filename); } catch (_cleanupError) { /* gone */ }
+    throw error;
+  }
+  fs.closeSync(descriptor);
+}
+
+// Writes the bytes to `temporary`, synced, then renames it to filename: a file under
+// filename is always whole. On any error the temporary file is removed.
+function writeDurablePrivateFile(filename, buffer, temporary) {
+  writeNewPrivateFile(temporary, buffer);
+  try {
+    fs.renameSync(temporary, filename);
+  } catch (error) {
+    try { fs.unlinkSync(temporary); } catch (_cleanupError) { /* gone */ }
+    throw error;
   }
 }
 
@@ -141,10 +158,13 @@ function nedbFileToLoad(filename) {
 }
 
 // Escapes the raw characters in the file a store is about to load. The original is kept
-// first, byte for byte, beside it (a new name, mode 600, synced); the escaped copy is then
-// written to a temporary file, synced, and renamed over the store, so a crash leaves the
-// store either as it was or repaired, and the backup in both cases. Only when nothing
-// changed the file meanwhile is it replaced. A file without any is not touched.
+// first, byte for byte, beside it (a new name, mode 600, written under a temporary name,
+// synced, then renamed to it); the escaped copy is then written to a temporary file,
+// synced, and renamed over the store, so a crash leaves the store either as it was or
+// repaired, and the backup in both cases. Only when nothing changed the file meanwhile is
+// it replaced. An error before the store is replaced removes this run's files, the backup
+// too, since the store is as it was: a full disk at every start adds nothing. A file
+// without any is not touched.
 function repairRawNedbLineBreaks(filename) {
   const resolved = path.resolve(filename);
   const target = nedbFileToLoad(resolved);
@@ -166,9 +186,10 @@ function repairRawNedbLineBreaks(filename) {
   const tag = `${Date.now()}-${process.pid}-${crypto.randomBytes(6).toString('hex')}`;
   const backup = path.join(directory, `${file}.before-line-break-repair-${tag}`);
   const temporary = path.join(directory, `.${file}.line-break-repair-${tag}`);
-  writeDurablePrivateFile(backup, original);
+  writeDurablePrivateFile(backup, original, path.join(directory, `.${path.basename(backup)}`));
   try {
-    writeDurablePrivateFile(temporary, buffer);
+    syncDirectory(directory);
+    writeNewPrivateFile(temporary, buffer);
     const now = fs.lstatSync(target);
     if (now.ino !== before.ino || now.dev !== before.dev || now.size !== before.size || now.mtimeMs !== before.mtimeMs) {
       throw privateStorageError('private storage file changed while it was being repaired', target);
@@ -176,6 +197,7 @@ function repairRawNedbLineBreaks(filename) {
     fs.renameSync(temporary, target);
   } catch (error) {
     try { fs.unlinkSync(temporary); } catch (_cleanupError) { /* not made, or renamed */ }
+    try { fs.unlinkSync(backup); } catch (_cleanupError) { /* gone */ }
     throw error;
   }
   syncDirectory(directory);
