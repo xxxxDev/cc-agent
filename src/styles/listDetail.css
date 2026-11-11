@@ -102,10 +102,10 @@
     margin-right: 0;
     font-size: 13px;
   }
-  /* The agent shown beside the column. */
+  /* The agent shown beside the column, a soft lift (dimmed, 2026-11-11). */
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .conversation-list > ul > li.row-current {
-    background: color-mix(in srgb, var(--f7-list-bg-color) 72%, var(--dp-color-text, #fff));
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dp-color-text, #fff) 28%, transparent);
+    background: color-mix(in srgb, var(--f7-list-bg-color) 88%, var(--dp-color-text, #fff));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dp-color-text, #fff) 16%, transparent);
   }
   /* Source and group titles kept, closer together. */
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .conversation-list > ul > li.agent-source-title {
