@@ -52,7 +52,7 @@ This is the full tour. The [README](../README.md) is the short version.
 </p>
 
 <p align="center">
-  <img src="../.github/assets/anim/list-column-resize-dark.svg" width="540" alt="The column's edge shows an accent line under the mouse, is dragged wider, then narrower, and a double click puts it back">
+  <img src="../.github/assets/anim/list-column-resize-dark.svg" width="640" alt="The column's edge shows an accent line under the mouse, is dragged wider, then narrower, and a double click puts it back">
 </p>
 
 <p align="center">

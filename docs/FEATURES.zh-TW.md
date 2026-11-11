@@ -52,7 +52,7 @@
 </p>
 
 <p align="center">
-  <img src="../.github/assets/anim/list-column-resize-dark.svg" width="540" alt="滑鼠移到左欄邊緣出現強調色的線，拖寬、拖窄，再雙擊回到預設寬度">
+  <img src="../.github/assets/anim/list-column-resize-dark.svg" width="640" alt="滑鼠移到左欄邊緣出現強調色的線，拖寬、拖窄，再雙擊回到預設寬度">
 </p>
 
 <p align="center">
