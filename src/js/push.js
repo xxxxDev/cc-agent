@@ -168,15 +168,12 @@ export async function enablePush() {
     error.code = 'PUSH_WORKER_UNAVAILABLE';
     throw error;
   }
-  let browserSubscription = await worker.pushManager.getSubscription();
-  let created = false;
-  if (!browserSubscription) {
-    browserSubscription = await worker.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: decodeApplicationServerKey(config.publicKey),
-    });
-    created = true;
-  }
+  // A subscription the browser kept from before a key rotation is not sent as it is: the
+  // server would mark it as on the current key while it still uses the previous one.
+  const { subscription: browserSubscription, created } = await subscriptionForKey(
+    worker.pushManager,
+    decodeApplicationServerKey(config.publicKey),
+  );
   try {
     await pushApi('/push/subscription', {
       method: 'PUT',
@@ -237,6 +234,22 @@ export function applicationServerKeyMatches(liveKey, desiredKey) {
     if (live[i] !== desiredKey[i]) return false;
   }
   return true;
+}
+
+// The browser's subscription for this VAPID public key: the one it has when that one's
+// applicationServerKey is this key, otherwise a new one, the old one (made with another
+// key, before a rotation) being given back first. created: a new one was made.
+export async function subscriptionForKey(pushManager, desiredKey) {
+  const existing = await pushManager.getSubscription();
+  if (existing && applicationServerKeyMatches(existing.options?.applicationServerKey, desiredKey)) {
+    return { subscription: existing, created: false, replaced: false };
+  }
+  if (existing) await existing.unsubscribe().catch(() => {});
+  const subscription = await pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: desiredKey,
+  });
+  return { subscription, created: true, replaced: Boolean(existing) };
 }
 
 // VAPID rotation client behavior: when this device is subscribed and
