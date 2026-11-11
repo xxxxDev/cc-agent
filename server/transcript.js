@@ -415,6 +415,22 @@ function relays(stateRoot, conversation) {
 }
 
 const READ_SLICE = 16 * 1024 * 1024;
+// Bytes read since the last slice: whole records go to absorb(), the cut-off tail
+// waits for the next slice. Split on bytes, not characters: the tail may stop
+// mid-record and even mid-codepoint, and decoding that would corrupt the next line.
+function absorbSlice(state, bytes) {
+  state.offset += bytes.length;
+  const chunk = state.partial.length ? Buffer.concat([state.partial, bytes]) : bytes;
+  const end = chunk.lastIndexOf(0x0a);
+  if (end < 0) { state.partial = Buffer.from(chunk); return; }
+  state.partial = Buffer.from(chunk.subarray(end + 1));
+  for (const line of chunk.subarray(0, end).toString('utf8').split('\n')) {
+    if (!line) continue;
+    let record;
+    try { record = JSON.parse(line); } catch { continue; }
+    absorb(state, record);
+  }
+}
 function read(file) {
   let stat;
   try { stat = fs.statSync(file); } catch { readers.delete(file); return null; }
@@ -433,25 +449,73 @@ function read(file) {
         const buffer = Buffer.allocUnsafe(length);
         const read = fs.readSync(fd, buffer, 0, length, state.offset);
         if (read <= 0) break;
-        state.offset += read;
-        // Split on bytes, not characters: the tail may stop mid-record and even
-        // mid-codepoint, and decoding that would corrupt the next line.
-        const chunk = state.partial.length ? Buffer.concat([state.partial, buffer.subarray(0, read)]) : buffer.subarray(0, read);
-        const end = chunk.lastIndexOf(0x0a);
-        if (end < 0) { state.partial = Buffer.from(chunk); continue; }
-        state.partial = Buffer.from(chunk.subarray(end + 1));
-        for (const line of chunk.subarray(0, end).toString('utf8').split('\n')) {
-          if (!line) continue;
-          let record;
-          try { record = JSON.parse(line); } catch { continue; }
-          absorb(state, record);
-        }
+        absorbSlice(state, buffer.subarray(0, read));
       }
     } catch { return state; }
     finally { if (fd !== undefined) try { fs.closeSync(fd); } catch {} }
   }
   return state;
 }
+
+// Opening an agent read every generation's transcript whole on the spot the first
+// time after a restart: a gigabyte of transcripts took seconds, with the whole
+// service waiting and the chat page empty. What the
+// opened chat only shows (its cost, the progress line) reads a file that far behind
+// in the background instead, in small slices between requests, and is not known
+// until it is done; a little behind is still read on the spot.
+const SOON_BYTES = Number(process.env.CC_AGENT_TRANSCRIPT_SOON) || 4 * 1024 * 1024;
+const CATCH_UP_SLICE = Math.min(READ_SLICE, 4 * 1024 * 1024);
+const catching = new Map();
+function readSoon(file) {
+  let size;
+  try { size = fs.statSync(file).size; } catch { return read(file); }
+  const state = readers.get(file);
+  const from = state && size >= state.offset ? state.offset : 0;
+  if (size - from <= SOON_BYTES) return read(file);
+  catchUp(file);
+  return null;
+}
+function catchUp(file) {
+  if (catching.has(file)) return catching.get(file);
+  const job = (async () => {
+    let handle;
+    try {
+      handle = await fs.promises.open(file, 'r');
+      for (;;) {
+        const {size} = await fs.promises.stat(file);
+        let state = readers.get(file);
+        if (!state || size < state.offset) { state = blank(); readers.set(file, state); }
+        const at = state.offset;
+        if (at >= size) break;
+        const buffer = Buffer.allocUnsafe(Math.min(size - at, CATCH_UP_SLICE));
+        const {bytesRead} = await handle.read(buffer, 0, buffer.length, at);
+        if (bytesRead <= 0) break;
+        // read() on the spot (the Agents list's poll) may have moved on meanwhile:
+        // this slice is then stale, and the next one starts where it stopped.
+        if (readers.get(file) !== state || state.offset !== at) continue;
+        absorbSlice(state, buffer.subarray(0, bytesRead));
+      }
+    } catch {} finally {
+      if (handle) await handle.close().catch(() => {});
+      catching.delete(file);
+    }
+  })();
+  catching.set(file, job);
+  return job;
+}
+// The current run's transcript as the Agents list, the runner's heartbeat and the
+// channel's poll ask for it: the first Agents list after a restart, with twenty agents
+// running, read every one of their transcripts whole on the spot, seconds with the
+// service waiting. Far behind, it is read in
+// the background as above, and LATER says it is not known yet; each caller decides
+// what that means for it (currentWork counts it as in a turn).
+const LATER = Symbol('later');
+function readCurrent(file) {
+  const state = readSoon(file);
+  return state === null && catching.has(file) ? LATER : state;
+}
+// Settles once no transcript is being read in the background (for the tests).
+function caughtUp() { return Promise.all([...catching.values()]).then(() => {}); }
 
 // A session imported from another directory keeps living in the project folder it
 // was created in, so fall back to a scan, but remember the answer, including the
@@ -479,14 +543,16 @@ function locate(cwd, sessionId) {
   return file;
 }
 
-function statesFor(stateRoot, conversation) {
+// Each generation's reader, by readSoon(): null when one is still being read.
+function statesFor(stateRoot, conversation, runs = conversation.runs || []) {
   const out = [];
-  for (const run of conversation.runs || []) {
+  for (const run of runs) {
     const cwd = path.join(stateRoot, 'workspaces', conversation.id, 'g' + run.number);
     const file = locate(cwd, run.sessionId);
     if (!file) continue;
-    const state = read(file);
+    const state = readSoon(file);
     if (state) out.push({run, state});
+    else if (catching.has(file)) return null;
   }
   return out;
 }
@@ -498,7 +564,7 @@ function statesFor(stateRoot, conversation) {
 function usage(stateRoot, conversation) {
   if (!conversation || conversation.mode !== 'claude') return null;
   const states = statesFor(stateRoot, conversation);
-  if (!states.length) return null;
+  if (!states?.length) return null;
   const tokens = {input: 0, output: 0, cacheRead: 0, cacheWrite: 0, thinking: 0};
   const models = new Set();
   let costUSD = 0, turns = 0, unpriced = 0;
@@ -519,8 +585,9 @@ function usage(stateRoot, conversation) {
 // many tools this answer has taken, and when the current one started.
 function progress(stateRoot, conversation) {
   if (!conversation || conversation.mode !== 'claude') return null;
-  const states = statesFor(stateRoot, conversation);
-  const current = states.at(-1);
+  // Only the newest generation is asked: the older ones were read for nothing.
+  const states = statesFor(stateRoot, conversation, (conversation.runs || []).slice(-1));
+  const current = states?.at(-1);
   if (!current || current.run !== (conversation.runs || []).at(-1)) return null;
   const state = current.state;
   const running = [...state.running.values()].at(-1) || null;
@@ -540,12 +607,18 @@ function liveBackground(state, now = Date.now()) {
 // whether Claude is in a turn, and how many jobs it left running in the background
 // (a subagent at work, and no spinner on the list); for the wrap-up check, how many
 // of them are subagents and which are commands.
-function currentWork(stateRoot, conversation) {
+// While a transcript far behind is still being read (readCurrent), nothing is known:
+// it counts as in a turn, with `catching`, so a busy agent never reads as idle and
+// nothing that waits for quiet (pausing, restarting, reviving its channel, the
+// wrap-up check) acts on it meanwhile. `now` reads it on the spot instead, for a
+// turn's end, which needs the jobs it left running.
+function currentWork(stateRoot, conversation, now = false) {
   const none = {inTurn: false, background: 0, subagents: 0, commands: [], lingering: []};
   const run = (conversation?.runs || []).at(-1);
   if (conversation?.mode !== 'claude' || !run) return none;
   const file = locate(path.join(stateRoot, 'workspaces', conversation.id, 'g' + run.number), run.sessionId);
-  const state = file ? read(file) : null;
+  const state = !file ? null : now ? read(file) : readCurrent(file);
+  if (state === LATER) return {...none, inTurn: true, catching: true};
   if (!state) return none;
   const jobs = liveBackground(state);
   return {inTurn: inTurn(state), background: jobs.length, subagents: jobs.filter(j => j.kind === 'subagent').length,
@@ -560,8 +633,8 @@ function turnEndedSince(stateRoot, conversation, since) {
   const run = (conversation?.runs || []).at(-1);
   if (conversation?.mode !== 'claude' || !run) return false;
   const file = locate(path.join(stateRoot, 'workspaces', conversation.id, 'g' + run.number), run.sessionId);
-  const state = file ? read(file) : null;
-  return !!state && !inTurn(state) && Date.parse(state.turnEndedAt || 0) > since;
+  const state = file ? readCurrent(file) : null;
+  return !!state && state !== LATER && !inTurn(state) && Date.parse(state.turnEndedAt || 0) > since;
 }
 
 // When the usage limit that last stopped the current run resets: {at, seen} in ms.
@@ -914,16 +987,20 @@ function currentRun(stateRoot, conversation) {
   const cwd = path.join(stateRoot, 'workspaces', conversation.id, 'g' + run.number);
   const own = path.join(PROJECTS, cwd.replace(/[^a-zA-Z0-9]/g, '-'), run.sessionId + '.jsonl');
   const file = fs.existsSync(own) ? own : located.get(run.sessionId)?.file || null;
-  const state = file ? read(file) : null;
+  const state = file ? readCurrent(file) : null;
+  if (state === LATER) return LATER;
   return state ? {run, state} : null;
 }
+// Nothing while the transcript is still being read: the mirror takes them next time.
 function terminalEvents(stateRoot, conversation) {
   const r = currentRun(stateRoot, conversation);
-  return r ? {generation: r.run.number, events: r.state.terminal.events} : null;
+  return r && r !== LATER ? {generation: r.run.number, events: r.state.terminal.events} : null;
 }
-// When the current run's terminal last ran /model and /effort (ms; 0 for never).
+// When the current run's terminal last ran /model and /effort (ms; 0 for never); null
+// while its transcript is still being read.
 function typedSettings(stateRoot, conversation) {
   const r = currentRun(stateRoot, conversation);
+  if (r === LATER) return null;
   return r ? {...r.state.typed} : {model: 0, effort: 0};
 }
 
@@ -932,8 +1009,8 @@ function skills(stateRoot, conversation) {
   const run = (conversation?.runs || []).at(-1);
   if (conversation?.mode !== 'claude' || !run) return [];
   const file = locate(path.join(stateRoot, 'workspaces', conversation.id, 'g' + run.number), run.sessionId);
-  const state = file ? read(file) : null;
-  return state ? [...state.skills].map(([name, description]) => ({name, description: description.slice(0, 300)})) : [];
+  const state = file ? readCurrent(file) : null;
+  return state && state !== LATER ? [...state.skills].map(([name, description]) => ({name, description: description.slice(0, 300)})) : [];
 }
 
 // The claude.ai connectors an agent has had tools from (they are named in its
@@ -1026,4 +1103,4 @@ function subagents(stateRoot, conversation) {
   return out.sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt))).slice(0, SUBAGENT_MAX);
 }
 
-module.exports = {terminalEvents, typedSettings, turnEndedSince, workedSince, subagents, lastCompaction, usage, progress, currentWork, quotaReset, waiting, skills, connectors, relays, segment, history, messageCost, priceOf, PRICES, WEB_SEARCH_USD};
+module.exports = {caughtUp, terminalEvents, typedSettings, turnEndedSince, workedSince, subagents, lastCompaction, usage, progress, currentWork, quotaReset, waiting, skills, connectors, relays, segment, history, messageCost, priceOf, PRICES, WEB_SEARCH_USD};

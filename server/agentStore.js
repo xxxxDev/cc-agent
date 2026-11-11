@@ -1728,7 +1728,7 @@ function bridge(c,action,data={}) {
    // or explain. Keyed by when it started and what it
    // is, so one already named never blocks again.
    if(data.checkFinal===true&&data.stopHookActive!==true){
-    let jobs=[];try{const w=transcript.currentWork(stateRoot,c);jobs=[...(w.commands||[]),...(w.lingering||[]).map(j=>({...j,subagent:true}))];}catch{}
+    let jobs=[];try{const w=transcript.currentWork(stateRoot,c,true);jobs=[...(w.commands||[]),...(w.lingering||[]).map(j=>({...j,subagent:true}))];}catch{}
     const keyOf=job=>(job.subagent?'subagent|':'')+String(job.since||'')+'|'+String(job.description||'');
     const fresh=jobs.filter(job=>!(g.bgReminded||[]).includes(keyOf(job)));
     if(fresh.length){
@@ -2485,6 +2485,8 @@ function followSessionModel(c){
  // Saved only after a /model or /effort typed in its terminal since the last one followed
  // (g.modelTypedAt; transcript.typedSettings, read from where the transcript reader is).
  const typed=main?transcript.typedSettings(stateRoot,c):{};
+ // Its transcript still being read after a restart (null): looked at again next heartbeat.
+ if(!typed)return false;
  const r=modelFollow.decide({report:main&&{model:main.model,effort:main.effort,at:Date.parse(main.at),stale:main.stale},session:{model:g.model,effort:g.effort},saved:{model:saved.model,effort:saved.effort},launchedAt:g.launchedAt,check,typed,since:g.modelTypedAt||0});
  if(r.followed)g.modelTypedAt=r.followed;
  if(r.kind==='none'){if(r.followed)save(c);return false;}
@@ -2995,7 +2997,7 @@ function runWrapUps({now=Date.now(),startedAt=SERVICE_STARTED_AT,ownerActive=()=
   // background commands are separate things: a command left running is named when its turn ends
   // (backgroundReminder), not in this check.
   const work=transcript.currentWork(stateRoot,c);
-  if(g.phase==='busy'||busyElsewhere(c,g,work)||work.background>0){w.busyAt=now;continue;}
+  if(g.phase==='busy'||busyElsewhere(c,g,work)||work.background>0||work.catching){w.busyAt=now;continue;}
   if(now<w.at)continue;
   // Switched off meanwhile, paused, or an owner who can no longer sign in: let it go.
   // Reconnecting: try again later.
