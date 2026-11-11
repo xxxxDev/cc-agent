@@ -2,7 +2,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 // The lock one process at a time holds on a data folder (server.lock: scripts/start.mjs,
-// and server/scripts/rotate-push-keys.js while it writes the stores). It is made with
+// and server/scripts/rotate-push-keys.js while it writes the stores; its dry run only
+// reads it, with inspectDataFolderLock). It is made with
 // O_EXCL, names its process and is synced where the filesystem allows. One naming a
 // process that is gone is taken over only inside a second lock beside it,
 // server.lock.takeover, made the same way: in
@@ -205,6 +206,19 @@ function enterTakeover(guard, pid, isAlive) {
   return null;
 }
 
+// Reads the lock as takeDataFolderLock reads it (an empty one read again for a moment,
+// the pid range, a lock naming this process's own pid that it did not make is stale) and
+// writes nothing: no lock, no takeover lock, a stale one left in place. null when there
+// is none; otherwise { pid, held }: held while its process is alive, false when the lock
+// was left by a process that is gone and a start would take it over. Throws
+// DATA_FOLDER_LOCK_UNREADABLE (with the file) for one nobody can say is stale. For a check
+// that must not write (a dry run): a start can still take the lock a moment after.
+function inspectDataFolderLock(lock, { pid = process.pid, isAlive = processAlive } = {}) {
+  const holder = readLock(lock);
+  if (!holder) return null;
+  return { pid: holder.pid, held: held(holder, pid, isAlive) };
+}
+
 // Takes the lock for this process, or throws DATA_FOLDER_LOCK_HELD (a live process has
 // it), DATA_FOLDER_LOCK_UNREADABLE (with the file that cannot be read), or
 // DATA_FOLDER_LOCK_BUSY (another process kept taking it over). Returns the pid of a stale
@@ -240,4 +254,4 @@ function takeDataFolderLock(lock, { pid = process.pid, isAlive = processAlive, a
   throw lockError('The data folder lock kept changing', 'DATA_FOLDER_LOCK_BUSY');
 }
 
-module.exports = { takeDataFolderLock, processAlive, lockPid };
+module.exports = { takeDataFolderLock, inspectDataFolderLock, processAlive, lockPid };

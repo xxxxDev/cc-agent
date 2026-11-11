@@ -14,7 +14,7 @@ const nedbModel = require('@seald-io/nedb/lib/model');
 const {
   NEDB_LINE_HOOKS, escapeRawNedbLineBreaks, privateDatastoreOptions, repairRawNedbLineBreaks,
 } = require('../services/privateFiles');
-const { takeDataFolderLock, lockPid } = require('../services/dataFolderLock');
+const { takeDataFolderLock, inspectDataFolderLock } = require('../services/dataFolderLock');
 const {
   planPushKeyRotation,
   rotatePushKeys,
@@ -107,24 +107,39 @@ function requireDataFiles(dbDir) {
   return resolved;
 }
 
+// The lock errors of services/dataFolderLock.js as this script's: the same for the dry
+// run's check and for an apply or restore taking the lock.
+function serviceRunning(pid) {
+  return rotationError('The service is running on this data folder; stop it first', 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: SERVICE_LOCK, pid: pid ?? undefined });
+}
+function serviceLockError(error, lock) {
+  if (error.code === 'DATA_FOLDER_LOCK_HELD') return serviceRunning(error.pid);
+  // The lock that cannot be read may be server.lock or the takeover lock beside it: the
+  // one named is the one to remove (its file name only, as the other details are).
+  if (error.code === 'DATA_FOLDER_LOCK_UNREADABLE') {
+    const unreadable = path.basename(error.file || lock);
+    return rotationError(`The service lock ${unreadable} is unreadable; stop the service, then remove ${unreadable}`, 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: unreadable });
+  }
+  if (error.code === 'DATA_FOLDER_LOCK_BUSY') {
+    return rotationError('Something else took the service lock; try again', 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: SERVICE_LOCK });
+  }
+  return null;
+}
+
 // A service started by scripts/start.mjs on this data folder holds server.lock with its
 // pid. Any other way of running it leaves no signal: --ack-quiesced stays the promise.
-// Returns quietly when there is no lock or only one left by a process that is gone.
+// The lock is read as a start reads it (services/dataFolderLock.js): one just made and
+// still empty is read again for a moment, and one left by a process that is gone (or by
+// an earlier process with this one's pid) is no service. Nothing is written, not even a
+// stale lock removed. Returns quietly when there is no lock or only a stale one.
 function refuseWhileServiceRuns(dbDir) {
   const lock = path.join(path.dirname(path.resolve(dbDir)), SERVICE_LOCK);
-  let text;
-  try { text = fs.readFileSync(lock, 'utf8'); } catch (error) {
-    if (error.code === 'ENOENT') return;
-    throw rotationError('The service lock cannot be read', 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: SERVICE_LOCK });
+  let holder;
+  try { holder = inspectDataFolderLock(lock); } catch (error) {
+    throw serviceLockError(error, lock)
+      || rotationError('The service lock cannot be read', 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: SERVICE_LOCK });
   }
-  const pid = lockPid(text);
-  if (pid === null) {
-    throw rotationError('The service lock is unreadable; stop the service, then remove it', 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: SERVICE_LOCK });
-  }
-  try { process.kill(pid, 0); } catch (error) {
-    if (error.code === 'ESRCH') return; // left by a service that did not exit cleanly
-  }
-  throw rotationError('The service is running on this data folder; stop it first', 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: SERVICE_LOCK, pid });
+  if (holder && holder.held) throw serviceRunning(holder.pid);
 }
 
 // An apply or a restore holds server.lock itself, made the way scripts/start.mjs makes it
@@ -137,19 +152,8 @@ function holdServiceLock(dbDir) {
   const lock = path.join(path.dirname(path.resolve(dbDir)), SERVICE_LOCK);
   let owned;
   try { ({ stat: owned } = takeDataFolderLock(lock)); } catch (error) {
-    if (error.code === 'DATA_FOLDER_LOCK_HELD') {
-      throw rotationError('The service is running on this data folder; stop it first', 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: SERVICE_LOCK, pid: error.pid ?? undefined });
-    }
-    // The lock that cannot be read may be server.lock or the takeover lock beside it: the
-    // one named is the one to remove (its file name only, as the other details are).
-    if (error.code === 'DATA_FOLDER_LOCK_UNREADABLE') {
-      const unreadable = path.basename(error.file || lock);
-      throw rotationError(`The service lock ${unreadable} is unreadable; stop the service, then remove ${unreadable}`, 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: unreadable });
-    }
-    if (error.code === 'DATA_FOLDER_LOCK_BUSY') {
-      throw rotationError('Something else took the service lock; try again', 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: SERVICE_LOCK });
-    }
-    throw rotationError('The service lock cannot be made', 'PUSH_KEY_ROTATION_LOCK_FAILED', { lock: SERVICE_LOCK, reason: error.code || 'write failed' });
+    throw serviceLockError(error, lock)
+      || rotationError('The service lock cannot be made', 'PUSH_KEY_ROTATION_LOCK_FAILED', { lock: SERVICE_LOCK, reason: error.code || 'write failed' });
   }
   const signals = ['SIGINT', 'SIGTERM', 'SIGHUP'];
   let released = false;
