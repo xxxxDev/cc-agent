@@ -120,8 +120,10 @@ function serviceLockError(error, lock) {
     const unreadable = path.basename(error.file || lock);
     return rotationError(`The service lock ${unreadable} is unreadable; stop the service, then remove ${unreadable}`, 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: unreadable });
   }
+  // As scripts/start.mjs says it: the files to remove are named, by file name only.
   if (error.code === 'DATA_FOLDER_LOCK_BUSY') {
-    return rotationError('Something else took the service lock; try again', 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: SERVICE_LOCK });
+    return rotationError(`Something else kept taking over the service lock; try again. If nothing is running, remove ${SERVICE_LOCK}.takeover and any ${SERVICE_LOCK}.takeover.break-* beside it`,
+      'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: SERVICE_LOCK });
   }
   return null;
 }

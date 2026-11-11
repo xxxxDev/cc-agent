@@ -17,11 +17,17 @@ const path = require('node:path');
 // inside) is removed the same way, inside a break file of its own, and the takeover lock
 // is then judged again. A process removes no lock but its own on the way out. A lock
 // naming this process's own pid that this process did not make was left by an earlier
-// process with the same pid (after a reboot, say), and is gone too.
+// process with the same pid (after a reboot, say), and is gone too. A take ends by the
+// clock: past TAKE_DEADLINE_MS it stops between steps as busy, holding nothing. One that
+// took the lock removes break files left by a process killed after it removed the file it
+// broke.
 
 const TAKEOVER_SUFFIX = '.takeover';
 const BREAK_SUFFIX = '.break-';
 const BUSY_WAIT_MS = 20;
+// How long one take may go on, by the clock: the levels of break files and the re-reads of
+// an empty lock otherwise multiply to about a minute.
+const TAKE_DEADLINE_MS = 5000;
 const LOCK_MODE = 0o600;
 
 // The locks this process made (device and inode).
@@ -64,6 +70,16 @@ function unreadable(filename) {
   return lockError('The data folder lock is unreadable', 'DATA_FOLDER_LOCK_UNREADABLE', { file: filename });
 }
 
+function busy() {
+  return lockError('The data folder lock kept changing', 'DATA_FOLDER_LOCK_BUSY');
+}
+
+// Between the steps of a take: past its deadline it stops as busy. What it made on the way
+// is removed as the error goes out (each lock's own finally).
+function checkDeadline(deadline) {
+  if (Date.now() >= deadline) throw busy();
+}
+
 // One read of a lock file: { pid, ino, dev }, null when it is gone, or { pid: null } when
 // it is a regular file naming no pid.
 function readLockOnce(filename) {
@@ -87,14 +103,16 @@ function readLockOnce(filename) {
 // O_EXCL before its pid is written, so one read empty (or naming no pid) may be another
 // process's lock a moment old: it is read again every BUSY_WAIT_MS for UNREADABLE_AFTER_MS
 // (by the clock: a sleep can run long). One that still names no pid then (or is not a
-// regular file) is refused: nobody can say it is stale. The error names the file.
+// regular file) is refused: nobody can say it is stale. The error names the file. Past
+// the take's deadline it stops as busy instead.
 const UNREADABLE_AFTER_MS = 200;
-function readLock(filename) {
-  const deadline = Date.now() + UNREADABLE_AFTER_MS;
+function readLock(filename, deadline = Infinity) {
+  const unreadableAt = Date.now() + UNREADABLE_AFTER_MS;
   for (;;) {
     const lock = readLockOnce(filename);
     if (!lock || lock.pid !== null) return lock;
-    if (Date.now() >= deadline) throw unreadable(filename);
+    if (Date.now() >= unreadableAt) throw unreadable(filename);
+    checkDeadline(deadline);
     sleep(BUSY_WAIT_MS);
   }
 }
@@ -175,21 +193,22 @@ const MAX_BREAK_DEPTH = 3;
 // died inside it is broken the same way, inside a breaker of its own, holding nothing
 // meanwhile; the lock it guarded is then judged again inside a breaker made afresh. One
 // that stays empty throws DATA_FOLDER_LOCK_UNREADABLE with its name.
-function breakDeadLock(filename, judged, pid, isAlive, depth = 0) {
+function breakDeadLock(filename, judged, pid, isAlive, depth = 0, deadline = Infinity) {
   const breakerName = `${filename}${BREAK_SUFFIX}${judged.ino}`;
   for (let attempt = 0; attempt < 2; attempt += 1) {
+    checkDeadline(deadline);
     let breaker;
     try { breaker = createLock(breakerName, pid); } catch (error) {
       if (error.code !== 'EEXIST') throw error;
-      const other = readLock(breakerName);
+      const other = readLock(breakerName, deadline);
       if (!other) continue; // done meanwhile
       if (held(other, pid, isAlive) || depth >= MAX_BREAK_DEPTH) return false;
-      if (!breakDeadLock(breakerName, other, pid, isAlive, depth + 1)) return false;
+      if (!breakDeadLock(breakerName, other, pid, isAlive, depth + 1, deadline)) return false;
       continue;
     }
     try {
       let now;
-      try { now = readLock(filename); } catch (error) {
+      try { now = readLock(filename, deadline); } catch (error) {
         if (error.code === 'DATA_FOLDER_LOCK_UNREADABLE') return false;
         throw error;
       }
@@ -218,18 +237,51 @@ function breakable(filename, judged, pid, isAlive, depth = 0) {
 
 // Enters the takeover lock: its fstat, or null while another live process is inside or
 // is breaking a dead one.
-function enterTakeover(guard, pid, isAlive) {
+function enterTakeover(guard, pid, isAlive, deadline) {
   for (let attempt = 0; attempt < 2; attempt += 1) {
+    checkDeadline(deadline);
     try { return createLock(guard, pid); } catch (error) {
       if (error.code !== 'EEXIST') throw error;
     }
-    const inside = readLock(guard);
+    const inside = readLock(guard, deadline);
     if (!inside) continue; // left meanwhile
     if (held(inside, pid, isAlive)) return null;
     // Its process died inside.
-    if (!breakDeadLock(guard, inside, pid, isAlive)) return null;
+    if (!breakDeadLock(guard, inside, pid, isAlive, 0, deadline)) return null;
   }
   return null;
+}
+
+// Break files beside the takeover lock (server.lock.takeover.break-<inode>, and their own
+// break files) left by a process killed after it removed the file it broke: the file named
+// is gone, or is another file now (another inode), and the break file names a process that
+// is gone. Run only by a take that holds the lock. Each is removed the way a dead break
+// file is (breakDeadLock: inside a break file of its own, only while it is still the file
+// read, naming the same process, still gone); one still empty, or naming a live process, is
+// left. Shortest names first: a break file's own break file is judged after it. Best
+// effort: the lock is held whatever happens here, and a break file left is judged as
+// before by the next take that meets it.
+function removeOrphanBreakFiles(lock, pid, isAlive, deadline) {
+  const folder = path.dirname(lock);
+  const prefix = `${path.basename(lock)}${TAKEOVER_SUFFIX}${BREAK_SUFFIX}`;
+  let names;
+  try { names = fs.readdirSync(folder).filter((name) => name.startsWith(prefix)); } catch (_error) { return; }
+  names.sort((a, b) => a.length - b.length);
+  for (const name of names) {
+    const match = /^(.+)\.break-([0-9]+)$/.exec(name);
+    if (!match) continue;
+    try {
+      const filename = path.join(folder, name);
+      const file = readLockOnce(filename);
+      if (!file || file.pid === null || held(file, pid, isAlive)) continue;
+      let target = null;
+      try { target = fs.lstatSync(path.join(folder, match[1])); } catch (error) {
+        if (error.code !== 'ENOENT') continue;
+      }
+      if (target && String(target.ino) === match[2]) continue; // still that file's
+      breakDeadLock(filename, file, pid, isAlive, 0, deadline);
+    } catch (_error) { /* left for the next take */ }
+  }
 }
 
 // Reads the lock as takeDataFolderLock reads it (an empty one read again for a moment,
@@ -255,29 +307,34 @@ function inspectDataFolderLock(lock, { pid = process.pid, isAlive = processAlive
 
 // Takes the lock for this process, or throws DATA_FOLDER_LOCK_HELD (a live process has
 // it), DATA_FOLDER_LOCK_UNREADABLE (with the file that cannot be read), or
-// DATA_FOLDER_LOCK_BUSY (another process kept taking it over). Returns the pid of a stale
-// holder it replaced, if any, and the fstat of the lock it made (stat), which is how its
-// release knows the file is still its own.
-function takeDataFolderLock(lock, { pid = process.pid, isAlive = processAlive, attempts = 5, wait = sleep } = {}) {
+// DATA_FOLDER_LOCK_BUSY (another process kept taking it over, or the take reached its
+// deadline, timeout ms by the clock). Returns the pid of a stale holder it replaced, if
+// any, and the fstat of the lock it made (stat), which is how its release knows the file is
+// still its own.
+function takeDataFolderLock(lock, { pid = process.pid, isAlive = processAlive, attempts = 5, wait = sleep, timeout = TAKE_DEADLINE_MS } = {}) {
   const guard = `${lock}${TAKEOVER_SUFFIX}`;
+  const deadline = Date.now() + timeout;
+  // The lock just taken: break files left beside it are cleared, then it is returned.
+  const holding = (taken) => { removeOrphanBreakFiles(lock, pid, isAlive, deadline); return taken; };
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    try { return { tookOverFrom: null, stat: createLock(lock, pid) }; } catch (error) {
+    checkDeadline(deadline);
+    try { return holding({ tookOverFrom: null, stat: createLock(lock, pid) }); } catch (error) {
       if (error.code !== 'EEXIST') throw error;
     }
-    const holder = readLock(lock);
+    const holder = readLock(lock, deadline);
     if (!holder) continue; // released meanwhile
     if (held(holder, pid, isAlive)) throw lockError('The data folder is in use', 'DATA_FOLDER_LOCK_HELD', { pid: holder.pid });
-    const entered = enterTakeover(guard, pid, isAlive);
+    const entered = enterTakeover(guard, pid, isAlive, deadline);
     if (!entered) { wait(BUSY_WAIT_MS); continue; }
     try {
-      const stale = readLock(lock);
+      const stale = readLock(lock, deadline);
       if (stale && held(stale, pid, isAlive)) throw lockError('The data folder is in use', 'DATA_FOLDER_LOCK_HELD', { pid: stale.pid });
       if (stale) {
         try { fs.unlinkSync(lock); } catch (error) {
           if (error.code !== 'ENOENT') throw error;
         }
       }
-      try { return { tookOverFrom: stale ? stale.pid : null, stat: createLock(lock, pid) }; } catch (error) {
+      try { return holding({ tookOverFrom: stale ? stale.pid : null, stat: createLock(lock, pid) }); } catch (error) {
         // A process starting meanwhile made it with O_EXCL: it is judged again.
         if (error.code !== 'EEXIST') throw error;
       }
@@ -285,7 +342,7 @@ function takeDataFolderLock(lock, { pid = process.pid, isAlive = processAlive, a
       removeOwnLock(guard, entered, pid);
     }
   }
-  throw lockError('The data folder lock kept changing', 'DATA_FOLDER_LOCK_BUSY');
+  throw busy();
 }
 
 module.exports = { takeDataFolderLock, inspectDataFolderLock, processAlive, lockPid };
