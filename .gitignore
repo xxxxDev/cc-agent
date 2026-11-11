@@ -21,3 +21,6 @@ logs/
 # A store's original, kept when its raw line breaks are escaped (services/privateFiles.js).
 server/db/*.db.before-line-break-repair-*
 server/db/.*.db.line-break-repair-*
+# ...and of a crash-safe companion (.db~) repaired when its store is missing.
+server/db/*.db~.before-line-break-repair-*
+server/db/.*.db~.line-break-repair-*
