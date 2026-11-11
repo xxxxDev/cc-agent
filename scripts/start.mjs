@@ -35,7 +35,11 @@ if(fs.existsSync(path.join(data,'auth','users.db'))&&!fs.existsSync(path.join(da
 // replaced meanwhile, by another start that found this one gone, say, stays.
 let ownedRuntimeLock;
 try{ownedRuntimeLock=createRequire(import.meta.url)('../server/services/dataFolderLock.js').takeDataFolderLock(lock).stat;}catch(e){
- if(String(e.code).startsWith('DATA_FOLDER_LOCK_'))throw new Error('Another CC Agent process (a running server, or rotate-push-keys.js) is using this data folder.');throw e;
+ if(e.code==='DATA_FOLDER_LOCK_HELD')throw new Error(`Another CC Agent process (pid ${e.pid}: a running server, or rotate-push-keys.js) is using this data folder.`);
+ // Empty or naming no process: nobody can say it is stale, so it is named for removal.
+ if(e.code==='DATA_FOLDER_LOCK_UNREADABLE')throw new Error(`The data folder lock ${e.file||lock} cannot be read (it is empty, names no process or is not a plain file). If no CC Agent process is running, remove that file and start again.`);
+ if(e.code==='DATA_FOLDER_LOCK_BUSY')throw new Error(`Another CC Agent process kept taking over this data folder's lock; try again. If none is running, remove ${lock}.takeover and any ${lock}.takeover.break-* beside it.`);
+ throw e;
 }
 process.on('exit',()=>{try{const current=fs.lstatSync(lock);if(!current.isSymbolicLink()&&current.ino===ownedRuntimeLock.ino&&current.dev===ownedRuntimeLock.dev&&fs.readFileSync(lock,'utf8')===String(process.pid))fs.unlinkSync(lock);}catch{}});
 const credentials=path.join(data,'local-access.json');

@@ -1,22 +1,31 @@
 const fs = require('node:fs');
+const path = require('node:path');
 
 // The lock one process at a time holds on a data folder (server.lock: scripts/start.mjs,
 // and server/scripts/rotate-push-keys.js while it writes the stores). It is made with
-// O_EXCL and names its process. One naming a process that is gone is taken over only
-// inside a second lock beside it, server.lock.takeover, made the same way: in there the
-// lock is read again and, if it still names a process that is gone, removed and made
-// afresh with O_EXCL. One process at a time is inside, so none removes a lock another has
-// just taken over, and nothing is renamed or linked (some filesystems have no hard
-// links). A takeover lock whose process is gone (it died inside) is judged by its pid
-// too, and removed only while it is still the file that was judged. A process removes no
-// takeover lock but its own on the way out.
+// O_EXCL, names its process and is synced. One naming a process that is gone is taken
+// over only inside a second lock beside it, server.lock.takeover, made the same way: in
+// there the lock is read again and, if it still names a process that is gone, removed and
+// made afresh with O_EXCL. One process at a time is inside, so none removes a lock another
+// has just taken over, and nothing is renamed or linked (some filesystems have no hard
+// links). A takeover lock whose process is gone (it died inside) is removed only inside a
+// third lock named for that very file, server.lock.takeover.break-<inode>, made with
+// O_EXCL: two processes that judged it at once cannot both remove it, so neither removes
+// the takeover lock the other has just made. A process removes no lock but its own on the
+// way out. A lock naming this process's own pid that this process did not make was left
+// by an earlier process with the same pid (after a reboot, say), and is gone too.
 
 const TAKEOVER_SUFFIX = '.takeover';
+const BREAK_SUFFIX = '.break-';
 const BUSY_WAIT_MS = 20;
 const LOCK_MODE = 0o600;
 
-function lockError(message, code, pid) {
-  return Object.assign(new Error(message), { code, pid });
+// The locks this process made (device and inode).
+const madeHere = new Set();
+const fileKey = (info) => `${info.dev}:${info.ino}`;
+
+function lockError(message, code, details) {
+  return Object.assign(new Error(message), { code }, details);
 }
 
 function processAlive(pid) {
@@ -29,21 +38,29 @@ function sleep(milliseconds) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
 }
 
+// Whether a lock as read is held: one naming this process (or the pid it takes the lock
+// as) only when this process made that very file, any other while its process is alive.
+function held(lock, pid, isAlive) {
+  if (lock.pid === pid || lock.pid === process.pid) return madeHere.has(fileKey(lock));
+  return isAlive(lock.pid);
+}
+
 // The pid a lock file names and its inode, or null when it is gone. A file that names
 // no pid (or cannot be read as a regular file) is refused: nobody can say it is stale.
+// The error names the file.
 function readLock(filename) {
   let descriptor;
   try {
     descriptor = fs.openSync(filename, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
   } catch (error) {
     if (error.code === 'ENOENT') return null;
-    throw lockError('The data folder lock is unreadable', 'DATA_FOLDER_LOCK_UNREADABLE');
+    throw lockError('The data folder lock is unreadable', 'DATA_FOLDER_LOCK_UNREADABLE', { file: filename });
   }
   try {
     const info = fs.fstatSync(descriptor);
     const pid = Number(fs.readFileSync(descriptor, 'utf8').trim());
     if (!info.isFile() || !Number.isInteger(pid) || pid <= 0) {
-      throw lockError('The data folder lock is unreadable', 'DATA_FOLDER_LOCK_UNREADABLE');
+      throw lockError('The data folder lock is unreadable', 'DATA_FOLDER_LOCK_UNREADABLE', { file: filename });
     }
     return { pid, ino: info.ino, dev: info.dev };
   } finally {
@@ -60,9 +77,21 @@ function sameFile(filename, owned) {
   return !now.isSymbolicLink() && now.ino === owned.ino && now.dev === owned.dev;
 }
 
-// Makes filename with O_EXCL, naming pid, and returns the fstat of the descriptor it
-// made: the file this process owns. One it made but could not finish is removed again.
-// EEXIST when it is there already.
+// The folder's entry for a file just made, synced where the system allows it (not all do,
+// for a folder): best effort.
+function syncFolder(filename) {
+  let descriptor;
+  try {
+    descriptor = fs.openSync(path.dirname(filename), fs.constants.O_RDONLY);
+    fs.fsyncSync(descriptor);
+  } catch (_error) { /* not supported here */ } finally {
+    if (descriptor !== undefined) try { fs.closeSync(descriptor); } catch (_error) { /* closed */ }
+  }
+}
+
+// Makes filename with O_EXCL, naming pid, syncs it, and returns the fstat of the
+// descriptor it made: the file this process owns. One it made but could not finish is
+// removed again. EEXIST when it is there already.
 function createLock(filename, pid) {
   const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL
     | (fs.constants.O_NOFOLLOW || 0);
@@ -70,6 +99,7 @@ function createLock(filename, pid) {
   let made = null;
   try {
     made = fs.fstatSync(descriptor);
+    madeHere.add(fileKey(made));
     const text = Buffer.from(String(pid));
     let written = 0;
     while (written < text.length) {
@@ -77,11 +107,14 @@ function createLock(filename, pid) {
       if (count <= 0) throw lockError('The data folder lock could not be written', 'DATA_FOLDER_LOCK_WRITE');
       written += count;
     }
+    fs.fsyncSync(descriptor);
+    syncFolder(filename);
     return fs.fstatSync(descriptor);
   } catch (error) {
     if (made && sameFile(filename, made)) {
       try { fs.unlinkSync(filename); } catch (_cleanupError) { /* gone */ }
     }
+    if (made) madeHere.delete(fileKey(made));
     throw error;
   } finally {
     fs.closeSync(descriptor);
@@ -93,9 +126,40 @@ function removeOwnLock(filename, owned, pid) {
   try {
     if (sameFile(filename, owned) && fs.readFileSync(filename, 'utf8') === String(pid)) fs.unlinkSync(filename);
   } catch (_error) { /* gone */ }
+  madeHere.delete(fileKey(owned));
 }
 
-// Enters the takeover lock: its fstat, or null while another live process is inside.
+// Removes a lock whose process is gone (judged: as it was read), inside a breaker lock
+// named for that very file. Only the process that makes the breaker removes it, and only
+// while it is still the file judged and names the same process, still gone: no other can
+// remove or replace it meanwhile. True when it is gone; false when another process is
+// breaking it, or it changed (judged again from the top).
+function breakDeadLock(filename, judged, pid, isAlive) {
+  let breaker;
+  const breakerName = `${filename}${BREAK_SUFFIX}${judged.ino}`;
+  try { breaker = createLock(breakerName, pid); } catch (error) {
+    if (error.code === 'EEXIST') return false;
+    throw error;
+  }
+  try {
+    let now;
+    try { now = readLock(filename); } catch (error) {
+      if (error.code === 'DATA_FOLDER_LOCK_UNREADABLE') return false;
+      throw error;
+    }
+    if (!now) return true;
+    if (now.ino !== judged.ino || now.dev !== judged.dev || now.pid !== judged.pid || held(now, pid, isAlive)) return false;
+    try { fs.unlinkSync(filename); } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    return true;
+  } finally {
+    removeOwnLock(breakerName, breaker, pid);
+  }
+}
+
+// Enters the takeover lock: its fstat, or null while another live process is inside or
+// is breaking a dead one.
 function enterTakeover(guard, pid, isAlive) {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try { return createLock(guard, pid); } catch (error) {
@@ -103,21 +167,18 @@ function enterTakeover(guard, pid, isAlive) {
     }
     const inside = readLock(guard);
     if (!inside) continue; // left meanwhile
-    if (isAlive(inside.pid)) return null;
-    // Its process died inside: removed while it is still the file judged.
-    if (sameFile(guard, inside)) {
-      try { fs.unlinkSync(guard); } catch (error) {
-        if (error.code !== 'ENOENT') throw error;
-      }
-    }
+    if (held(inside, pid, isAlive)) return null;
+    // Its process died inside.
+    if (!breakDeadLock(guard, inside, pid, isAlive)) return null;
   }
   return null;
 }
 
 // Takes the lock for this process, or throws DATA_FOLDER_LOCK_HELD (a live process has
-// it), DATA_FOLDER_LOCK_UNREADABLE, or DATA_FOLDER_LOCK_BUSY (another process kept taking
-// it over). Returns the pid of a stale holder it replaced, if any, and the fstat of the
-// lock it made (stat), which is how its release knows the file is still its own.
+// it), DATA_FOLDER_LOCK_UNREADABLE (with the file that cannot be read), or
+// DATA_FOLDER_LOCK_BUSY (another process kept taking it over). Returns the pid of a stale
+// holder it replaced, if any, and the fstat of the lock it made (stat), which is how its
+// release knows the file is still its own.
 function takeDataFolderLock(lock, { pid = process.pid, isAlive = processAlive, attempts = 5, wait = sleep } = {}) {
   const guard = `${lock}${TAKEOVER_SUFFIX}`;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -126,12 +187,12 @@ function takeDataFolderLock(lock, { pid = process.pid, isAlive = processAlive, a
     }
     const holder = readLock(lock);
     if (!holder) continue; // released meanwhile
-    if (isAlive(holder.pid)) throw lockError('The data folder is in use', 'DATA_FOLDER_LOCK_HELD', holder.pid);
+    if (held(holder, pid, isAlive)) throw lockError('The data folder is in use', 'DATA_FOLDER_LOCK_HELD', { pid: holder.pid });
     const entered = enterTakeover(guard, pid, isAlive);
     if (!entered) { wait(BUSY_WAIT_MS); continue; }
     try {
       const stale = readLock(lock);
-      if (stale && isAlive(stale.pid)) throw lockError('The data folder is in use', 'DATA_FOLDER_LOCK_HELD', stale.pid);
+      if (stale && held(stale, pid, isAlive)) throw lockError('The data folder is in use', 'DATA_FOLDER_LOCK_HELD', { pid: stale.pid });
       if (stale) {
         try { fs.unlinkSync(lock); } catch (error) {
           if (error.code !== 'ENOENT') throw error;
