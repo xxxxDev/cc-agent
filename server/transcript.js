@@ -186,6 +186,10 @@ const NOTE_MAX = 300;
 // Claude Code writes it as <cross-session-message> (missing it, a wake from
 // another agent showed no working bubble); older builds wrote <agent-message>.
 const AGENT_WAKE = /^Another Claude session sent a message:\s*<(agent-message|cross-session-message)\b[^>]*>[\s\S]*?<\/\1>(?:\s|$)/;
+// Claude Code 2.1.321 resumes a turn by itself when a usage limit resets, with a meta
+// prompt of its own: the turn never opened and the page showed the agent idle while
+// it worked (2026-11-11).
+const LIMIT_RESUME = /^Your claude\.ai usage limit has reset\. Continue the task/;
 function trackTurn(state, record) {
   if (record.type === 'system' && TURN_END.has(record.subtype)) { state.turnOpen = false; if (record.timestamp) state.turnEndedAt = record.timestamp; return; }
   if (record.type !== 'user' || record.isCompactSummary || record.isVisibleInTranscriptOnly) return;
@@ -197,7 +201,7 @@ function trackTurn(state, record) {
     // A Stop hook that blocks the end sends its feedback as a meta note and the model goes
     // on with the same turn: open again.
     if (record.isMeta && text.startsWith('Stop hook feedback')) { state.turnOpen = true; return; }
-    if (record.isMeta && !text.startsWith('<channel ') && !AGENT_WAKE.test(text)) return;
+    if (record.isMeta && !text.startsWith('<channel ') && !AGENT_WAKE.test(text) && !LIMIT_RESUME.test(text)) return;
     state.turnOpen = true;
     // How long the turn has run, as Claude Code's own timer counts it, and what it
     // has said in it so far, both from its start.
