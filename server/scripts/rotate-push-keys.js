@@ -107,6 +107,17 @@ function requireDataFiles(dbDir) {
   return resolved;
 }
 
+// An apply copies both push stores into --backup-dir, which must be a new folder or an
+// empty one, so a backup is never mixed with older files. A folder that cannot be listed
+// (missing, or not a folder) is left to the backup step, which creates it or reports it.
+function requireEmptyBackupDir(backupDir) {
+  let entries;
+  try { entries = fs.readdirSync(backupDir); } catch (_error) { return; }
+  if (entries.length) {
+    throw rotationError('--backup-dir must be a new or empty folder', 'PUSH_KEY_ROTATION_BLOCKED');
+  }
+}
+
 // The lock errors of services/dataFolderLock.js as this script's: the same for the dry
 // run's check and for an apply or restore taking the lock.
 function serviceRunning(pid) {
@@ -243,11 +254,6 @@ async function loadDatafileSnapshot(filename) {
   return { store, unreadableLines, rawLineBreaks: escaped.total ? escaped.characters : null };
 }
 
-// The documents a snapshot holds, for checks and tests.
-async function readDatafileSnapshot(filename) {
-  return (await loadDatafileSnapshot(filename)).store.getAllData();
-}
-
 // A store the apply writes to: NeDB opens it here, inside main, so a file it refuses
 // becomes one of this script's errors instead of an exception nobody catches. Its raw
 // line breaks are escaped first, as every store's are, and what was done goes into the
@@ -289,6 +295,7 @@ async function main(argv = process.argv.slice(2)) {
       return { mode: 'restore', ...restorePushKeyFiles(options.backupDir, dbDir) };
     }
     requireDataFiles(dbDir);
+    if (options.mode === 'apply') requireEmptyBackupDir(options.backupDir);
     if (keys) Object.assign(process.env, keys);
     // All three files are read as NeDB would read them before anything is written, so a
     // file the apply could not load stops it here, before the backup. Sessions are only
@@ -417,6 +424,6 @@ if (require.main === module) {
 }
 
 module.exports = {
-  parseArgs, main, loadKeys, loadDatafileSnapshot, readDatafileSnapshot, openDatastore, requireDataFiles,
+  parseArgs, main, loadKeys, loadDatafileSnapshot, openDatastore, requireDataFiles,
   refuseWhileServiceRuns, holdServiceLock, describeError, pathArgumentsOf,
 };

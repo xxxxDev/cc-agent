@@ -80,8 +80,7 @@ function validatePrivateFileForRead(filename) {
 }
 
 // Backup both push datastores under one manifest (schema tag + per-file
-// sha256/size/mode), refusing to overwrite a non-empty target, the same
-// discipline as the user-lifecycle backup, extended to two files.
+// sha256/size/mode) into a new or empty folder, refusing one that holds anything.
 function backupPushKeyFiles(dbDir, backupDirectory, { now = () => new Date() } = {}) {
   const directory = ensurePrivateDirectory(backupDirectory);
   const manifestFile = path.join(directory, MANIFEST_BASENAME);
@@ -90,7 +89,7 @@ function backupPushKeyFiles(dbDir, backupDirectory, { now = () => new Date() } =
     source: path.resolve(dbDir, basename),
     backup: path.join(directory, basename),
   }));
-  if (fs.existsSync(manifestFile) || targets.some((t) => fs.existsSync(t.backup))) {
+  if (fs.readdirSync(directory).length) {
     throw migrationError('Push key rotation backup target is not empty', { backupDirectory: directory });
   }
   const files = [];
