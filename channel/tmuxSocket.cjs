@@ -1,5 +1,5 @@
 // The tmux server an installation's agents run in: one per data folder, so a second
-// CC Agent on the same account (a test instance) can never reach another one's
+// CC Agent on the same account (a scratch copy while developing) can never reach another one's
 // agents. The private state root is canonicalized, so symlink aliases of the same
 // instance still agree.
 const fs = require('node:fs');

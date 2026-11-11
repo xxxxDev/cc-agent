@@ -109,7 +109,7 @@ function startNotifications(agents,service=getDefaultPushService(),admins=active
   return current;
  }
  service.start();void flush();const timer=setInterval(flush,1500);timer.unref();
- // The returned stop function also carries flush, for tests that step the queue.
+ // The returned stop function also carries flush, to step the queue by hand.
  return Object.assign(()=>{clearInterval(timer);service.stop();},{flush});
 }
 module.exports={startNotifications,replyNotification,reportNotification,diagnosticNotification,scheduleNotification,scheduleFailureNotification,scheduleResultNotification,REPORT_QUIET_MS,REPORT_MAX_ATTEMPTS};

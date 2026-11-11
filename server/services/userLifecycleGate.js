@@ -61,15 +61,7 @@ async function runLifecycleExclusive(userId, action, operation) {
   }
 }
 
-function resetLifecycleGateForTests() {
-  if ([...states.values()].some((state) => state.activeMutations || state.blocked)) {
-    throw new Error('cannot reset an active user lifecycle gate');
-  }
-  states.clear();
-}
-
 module.exports = {
   runUserScheduleMutation,
   runLifecycleExclusive,
-  resetLifecycleGateForTests,
 };

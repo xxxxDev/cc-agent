@@ -15,7 +15,6 @@ logs/
 
 /test-results/
 
-# The test suites are kept privately and not published.
 /tests/
 /server/tests/
 /scripts/run-tests.mjs

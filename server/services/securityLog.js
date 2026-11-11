@@ -494,10 +494,12 @@ function create({ file, now = Date.now, timers = realTimers } = {}) {
   return { where, blockOf, login, fail, succeeded, hold, seen, accountFail, codeFail, codeSpent, codesGuessed, unsaved, accountGuard, forgetUser, renamed, accountProtected, accountRelease, block, unblock, qr, twoStep, passkey, guard, view, source, flush, groupOf };
 }
 
-// Tests never write the real log (see audit.js for why).
-// Where it is kept, its file and the test folder's prefix are the product's (siteConfig.js).
+// Only the service names the data folder it is kept in (scripts/start.mjs sets the setting
+// dirEnv names); any other process keeps its own in a temporary folder, as audit.js does,
+// never the live one. The setting, the file and the folder's prefix are the product's
+// (siteConfig.js).
 const stateRoot = process.env[PRODUCT.securityLog.dirEnv]
-  || (process.env.NODE_TEST_CONTEXT ? path.join(require('node:os').tmpdir(), `${PRODUCT.tempPrefix}-test-security-${process.pid}`) : path.resolve(__dirname, '..', '..', PRODUCT.securityLog.dir));
+  || path.join(require('node:os').tmpdir(), `${PRODUCT.tempPrefix}-security-${process.pid}`);
 const security = create({ file: path.join(stateRoot, PRODUCT.securityLog.file) });
 // What the last two seconds (or the last minute of guard counts) left unwritten is
 // written as the process goes: a restart must not lose a block just made.

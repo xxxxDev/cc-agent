@@ -37,22 +37,22 @@ const devOnlyOrigins = () => [...new Set([...site.loopbackPorts(), ...site.devPo
 // attacker serves on another port of a LAN host is not a trusted origin.
 const LAN_HOST = '(?:10\\.\\d+\\.\\d+\\.\\d+|172\\.(?:1[6-9]|2\\d|3[01])\\.\\d+\\.\\d+|192\\.168\\.\\d+\\.\\d+)';
 const privateLanProd = new RegExp(`^https?://${LAN_HOST}:${SERVING_PORT}$`);
-// Dev: the vite dev server, the service and a throwaway instance (siteConfig) — not any port, which let a page served from anywhere on the LAN make
+// Dev: the vite dev server, the service and a scratch instance (siteConfig) — not any port, which let a page served from anywhere on the LAN make
 // credentialed requests here.
 const privateLanDev = () => new RegExp(`^https?://${LAN_HOST}:(?:${[...new Set([...site.devPorts(), ...site.loopbackPorts()])].join('|')})$`);
 
 // Passkeys belong to the public address alone: a key made for localhost would be the
 // same key on every machine and port, and anything serving a page there could ask
-// for it. The setting PRODUCT.env.passkeyTestOrigin names
-// (siteConfig.js) is a test seam for a throwaway instance.
+// for it. The setting PRODUCT.env.passkeyDevOrigin names (siteConfig.js) is a second
+// trusted origin for passkeys, for a scratch instance while developing.
 function isPasskeyOrigin(origin) {
   if (alwaysAllowedOrigins.includes(origin)) return true;
   // Not where NODE_ENV is production. On a local install scripts/start.mjs sets
   // development, so there the only thing keeping this shut is that the variable is
-  // never set for the live service: it is given on the command line of a throwaway
-  // test instance alone.
-  const testOrigin = process.env[site.PRODUCT.env.passkeyTestOrigin];
-  return process.env.NODE_ENV !== 'production' && !!testOrigin && origin === testOrigin;
+  // never set for the live service: it is given on the command line of a scratch
+  // instance alone.
+  const devOrigin = process.env[site.PRODUCT.env.passkeyDevOrigin];
+  return process.env.NODE_ENV !== 'production' && !!devOrigin && origin === devOrigin;
 }
 
 function isAllowedOrigin(origin) {

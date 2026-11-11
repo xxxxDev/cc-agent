@@ -5,15 +5,13 @@ const { PRODUCT } = require('../siteConfig');
 
 // One audit log for the API, the agent bridge and the admin terminal.
 //
-// Test processes write somewhere else. Otherwise every `node --test` run
-// would append to the real log, and the deliberately unauthenticated requests the
-// suites make (hundreds of POST /api/conversations → 401 per run) read like an
-// attack when the log is reviewed.
-// (The setting's name and the test folder's prefix are the product's: siteConfig.js.)
+// Only the service names it: scripts/start.mjs sets the setting PRODUCT.env.auditLog
+// names. Any other process that loads this file (a one-off script, a scratch copy of the
+// server) writes to a temporary folder of its own, so its requests never mix into the
+// live log, where a run of unauthenticated ones would read like an attack.
+// (The setting's name and the folder's prefix are the product's: siteConfig.js.)
 const AUDIT_LOG = process.env[PRODUCT.env.auditLog]
-  || (process.env.NODE_TEST_CONTEXT
-    ? path.join(os.tmpdir(), `${PRODUCT.tempPrefix}-test-audit-${process.pid}`, 'api-audit.log')
-    : path.join(__dirname, '..', 'logs', 'api-audit.log'));
+  || path.join(os.tmpdir(), `${PRODUCT.tempPrefix}-audit-${process.pid}`, 'api-audit.log');
 ensurePrivateDirectory(path.dirname(AUDIT_LOG));
 hardenExistingPrivateFile(AUDIT_LOG);
 

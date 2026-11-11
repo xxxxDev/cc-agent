@@ -17,11 +17,11 @@ const unsandboxedCommands=require('../channel/unsandboxedCommands.cjs');
 const runtimeTools=require('../channel/runtimeTools.cjs');
 const platform=require('../channel/platform.cjs');
 const ROOT = path.resolve(__dirname, '..');
-// A test that names no data folder gets a new empty one, never this repository's live
-// .local and, with it, the live tmux socket (a second
-// process reading the wrong data could reach a live agent); the same seam as the audit log's.
+// A process that names no data folder gets a new empty one, never this repository's live
+// .local and, with it, the live tmux socket (a second process reading the wrong data
+// could reach a live agent); the audit log does the same.
 // Only scripts/start.mjs names the live data folder (it sets AGENT_DATA_DIR before it
-// loads anything). Any other process that loads this file without one (a test, a
+// loads anything). Any other process that loads this file without one (a scratch copy, a
 // one-off node -e) gets an empty folder of its own: such a load could otherwise
 // rewrite a live data file on exit.
 const stateRoot = process.env.AGENT_DATA_DIR || fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'cc-agent-unnamed-data-'));
@@ -618,9 +618,11 @@ function interrupt(c) {
 // the other machine it may hear from and write to; this side's ticks are the gate for
 // what arrives here. What the other machine says about who sent a message is its word.
 // The answering side's key for its own forced command (scripts/peer-exchange.mjs), in
-// ~/.config/cc-agent beside the others, used only if it is a plain file of this account
-// that nobody else can read; never shown, never sent to the other machine.
-const peerKeyFile=process.env.CC_AGENT_PEER_KEY_FILE||(process.env.NODE_TEST_CONTEXT?path.join(require('node:os').tmpdir(),`cc-agent-test-peer-${process.pid}`,'peer-key'):path.join(require('node:os').homedir(),'.config','cc-agent','peer-key'));
+// ~/.config/cc-agent beside the others (scripts/start.mjs names it for the service), used
+// only if it is a plain file of this account that nobody else can read; never shown, never
+// sent to the other machine. Any other process that loads this file keeps one of its own
+// in a temporary folder, so it never reads or makes the account's real key.
+const peerKeyFile=process.env.CC_AGENT_PEER_KEY_FILE||path.join(require('node:os').tmpdir(),`cc-agent-peer-${process.pid}`,'peer-key');
 function peerKey(){
  const crypto=require('node:crypto');
  try{

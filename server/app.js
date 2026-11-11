@@ -28,8 +28,8 @@ const {DIAGNOSTIC_REPORTS_PATH} = require('./diagnosticReports');
 const {PRODUCT, isAllowedHost, isHttpsHost, servicePort, publicOrigin} = require('./siteConfig');
 // A wrong setting stops the service at start, not at the first request.
 publicOrigin();
-// The setting PRODUCT.env.distDir names (CC_AGENT_DIST_DIR here) is a test seam: a throwaway instance serves a scratch build, not
-// the live dist/ (a throwaway test instance).
+// The setting PRODUCT.env.distDir names (CC_AGENT_DIST_DIR here) points a scratch instance at a
+// build of its own, so building while developing never replaces the live dist/.
 const DIST_DIR = process.env[PRODUCT.env.distDir] || path.join(__dirname, '..', 'dist');
 
 // Content-Security-Policy: scripts come only from

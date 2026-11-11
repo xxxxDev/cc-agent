@@ -69,7 +69,7 @@ function get(url) {
   });
 }
 
-// Replaced in tests, which cannot reach a public address.
+// The fetch goes through io, so a caller with no public network can put its own get in place.
 const io = { get };
 async function download(url) {
   let at = url;

@@ -25,13 +25,13 @@ const PRODUCT = Object.freeze({
   // app.js: sources a page may use beyond this origin, by CSP directive. None here.
   cspExtraSources: Object.freeze({}),
   // The names of this product's environment settings that generic files read: the
-  // audit log's path (services/audit.js), a throwaway instance's passkey origin
+  // audit log's path (services/audit.js), a scratch instance's passkey origin
   // (middlewares/requestGuards.js), its build folder (app.js) and the data folder
   // the sign-in rescue writes to (scripts/sign-in-rescue.mjs).
   env: Object.freeze({
     auditLog: 'CC_AGENT_AUDIT_LOG',
-    passkeyTestOrigin: 'CC_AGENT_PASSKEY_TEST_ORIGIN',
-    // Set to 1 while developing (the vite dev server, a throwaway test instance).
+    passkeyDevOrigin: 'CC_AGENT_PASSKEY_DEV_ORIGIN',
+    // Set to 1 while developing (the vite dev server, a scratch instance).
     dev: 'CC_AGENT_DEV',
     distDir: 'CC_AGENT_DIST_DIR',
     // scripts/sign-in-rescue.mjs: the data folder, else .local under the project.
@@ -42,16 +42,16 @@ const PRODUCT = Object.freeze({
   // root (scripts/start.mjs sets DB_DIR to <data folder>/auth). The rescue note goes
   // beside it, where authController's applySignInRescue reads it.
   accountDbDir: '.local/auth',
-  // Folder names a test process writes in under the system's temporary folder
-  // (services/audit.js, services/securityLog.js): `${tempPrefix}-test-audit-<pid>`.
+  // The start of folder names a process other than the service writes in under the
+  // system's temporary folder (services/audit.js, services/securityLog.js):
+  // `${tempPrefix}-audit-<pid>`.
   tempPrefix: 'cc-agent',
   // services/securityLog.js, stored data: the folder it is kept in (the one the
-  // environment setting dirEnv names, else dir, from the project's root), its file,
-  // and the label account names are hashed with. The label and the file are not to
-  // be changed. (No path module here: vite.config.js may bundle this file.)
+  // environment setting dirEnv names), its file, and the label account names are hashed
+  // with. The label and the file are not to be changed. (No path module here:
+  // vite.config.js may bundle this file.)
   securityLog: Object.freeze({
     dirEnv: 'AGENT_DATA_DIR',
-    dir: '.local',
     file: 'security-log.json',
     nameHashLabel: 'security-log-names',
   }),
@@ -61,14 +61,15 @@ const PRODUCT = Object.freeze({
   // services/pushKeyRotationMigration.js, stored data: the same for a push-key backup.
   pushKeyBackupSchema: 'cc-agent.push-key-rotation-backup.v1',
 });
-// A throwaway test instance and the vite dev server.
-const TEST_PORT = 4281, DEV_PORT = 4279;
+// A scratch instance (a second copy of the service, with its own data folder and build)
+// and the vite dev server, while developing.
+const SCRATCH_PORT = 4281, DEV_PORT = 4279;
 // Their ports are trusted only while developing: CC_AGENT_DEV=1 and NODE_ENV not
 // production. Otherwise any program on this machine that serves a page on one of those
 // ports would be a trusted origin: credentialed CORS, the CSRF cookie read back, the
 // account's own actions taken in its name.
 const devMode = () => process.env[PRODUCT.env.dev] === '1' && process.env.NODE_ENV !== 'production';
-const devPorts = () => (devMode() ? [TEST_PORT, DEV_PORT] : []);
+const devPorts = () => (devMode() ? [SCRATCH_PORT, DEV_PORT] : []);
 
 function servicePort() {
   const raw = process.env.CC_AGENT_PORT;
@@ -94,9 +95,9 @@ function publicOrigin() {
 }
 const publicHost = () => new URL(publicOrigin()).host;
 
-// Loopback ports a request may name as its Host: the service and a test instance.
-// (and while developing a test instance).
-const loopbackPorts = () => [...new Set([servicePort(), ...(devMode() ? [TEST_PORT] : [])])];
+// Loopback ports a request may name as its Host: the service, and while developing a
+// scratch instance.
+const loopbackPorts = () => [...new Set([servicePort(), ...(devMode() ? [SCRATCH_PORT] : [])])];
 const loopbackHosts = (ports) => ports.flatMap((p) => [`127.0.0.1:${p}`, `localhost:${p}`]);
 
 // The Host header a request may carry. Anything else is refused (app.js).
@@ -105,7 +106,7 @@ const isAllowedHost = (host) => typeof host === 'string' && (host === publicHost
 const isHttpsHost = (host) => host === publicHost();
 
 // The pages a live-update or terminal socket may come from: the public address, and on
-// this machine the service, the vite dev server and a test instance.
+// this machine the service, the vite dev server and a scratch instance.
 const socketOrigins = () => new Set([publicOrigin(), ...loopbackHosts([...new Set([servicePort(), ...devPorts()])]).map((h) => 'http://' + h)]);
 // Both the Origin and the Host are checked, the Host as the page would have named it.
 const isAllowedSocket = (req) => {
@@ -113,4 +114,4 @@ const isAllowedSocket = (req) => {
   return origins.has(req.headers.origin) && origins.has((isHttpsHost(host) ? 'https://' : 'http://') + host);
 };
 
-module.exports = { PRODUCT, DEV_PORT, TEST_PORT, devMode, devPorts, servicePort, publicOrigin, publicHost, loopbackPorts, isAllowedHost, isHttpsHost, socketOrigins, isAllowedSocket };
+module.exports = { PRODUCT, DEV_PORT, SCRATCH_PORT, devMode, devPorts, servicePort, publicOrigin, publicHost, loopbackPorts, isAllowedHost, isHttpsHost, socketOrigins, isAllowedSocket };

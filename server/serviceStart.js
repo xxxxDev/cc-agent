@@ -27,7 +27,7 @@ async function migrateSessions({ sessionsDB, subscriptionsDB }) {
 // product(server): starts what the product runs beside it and returns
 //   { stop(): ms to give it before the process ends (0: none), finish() }, or nothing.
 // live: options for installLiveUpdates; a product without agentStore.js passes its own agents.
-// exit: process.exit (a test passes its own). Returns { server, stop }.
+// exit: process.exit unless the caller passes its own. Returns { server, stop }.
 const STOP_GRACE_MS = 3000;
 
 function startService({ app, port, live: liveOptions = {}, onListening = () => {}, product = () => null, exit = (code) => process.exit(code), signals = ['SIGINT', 'SIGTERM'] }) {

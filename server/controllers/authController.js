@@ -155,7 +155,7 @@ function needCode(req, res, user, where) {
 function held(ip, res, username = '') {
   const release = security.hold(ip, username);
   if (!release) return false;
-  // (A response that cannot say when it is over, as in a unit test, holds nothing.)
+  // (A response that cannot say when it is over, one with no close event, holds nothing.)
   if (typeof res.on === 'function') res.on('close', release); else release();
   return true;
 }
@@ -219,10 +219,8 @@ function publicUser(user) {
   };
 }
 
-let injectedLifecycleService = null;
 function lifecycleService() {
-  return injectedLifecycleService
-    || require('../services/userLifecycle').getDefaultUserLifecycleService();
+  return require('../services/userLifecycle').getDefaultUserLifecycleService();
 }
 
 function sendLifecycleError(res, error, extra = {}) {
@@ -1047,7 +1045,7 @@ const inTurn = (handler) => (req, res) => {
     Promise.resolve().then(async () => {
       // Nobody is there to answer: nothing is done.
       if (res.destroyed || res.writableEnded || req.socket?.destroyed) return answered();
-      // A request with no session to read (a test calling the handler) is taken as it came.
+      // A request with no session to read (the handler called directly) is taken as it came.
       if (req.sessionToken) {
         const actor = await resolveLivePrincipal(req.sessionToken, req.userId);
         if (!actor) return res.status(401).json({ message: 'Invalid or expired session' });
@@ -1364,10 +1362,6 @@ async function lifecycleAction(req, res, action, successMessage) {
 exports.disableUser = inTurn((req, res) => lifecycleAction(req, res, 'disable', 'User disabled'));
 exports.enableUser = inTurn((req, res) => lifecycleAction(req, res, 'enable', 'User enabled'));
 exports.deleteUser = inTurn((req, res) => lifecycleAction(req, res, 'delete', 'User deleted'));
-
-exports._setUserLifecycleServiceForTests = (service) => {
-  injectedLifecycleService = service || null;
-};
 
 // Retryable footprint cleanup for a purged user: remove their push subscription and
 // preference rows, and everything their agents own. Every cleanup is attempted,

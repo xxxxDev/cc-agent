@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {randomBytes} from 'node:crypto';
 import {createRequire} from 'node:module';
@@ -10,14 +11,17 @@ createRequire(import.meta.url)('../server/services/outputStreams.js').keepOutput
 const devGiven=process.env.CC_AGENT_DEV;
 createRequire(import.meta.url)('dotenv').config({path:path.join(root,'server','.env'),quiet:true});
 // Development trust (siteConfig.devMode) is given on the command line only: a line in
-// server/.env would quietly make the dev and test ports trusted origins for the live
+// server/.env would quietly make the dev and scratch ports trusted origins for the live
 // service. Empty, so server/app.js's own .env read does not bring it back either.
 if(devGiven===undefined&&process.env.CC_AGENT_DEV!==undefined){process.env.CC_AGENT_DEV='';console.warn('CC_AGENT_DEV in server/.env is ignored: set it on the command line while developing.');}
-if(process.env.CC_AGENT_DEV==='1')console.warn('Developing (CC_AGENT_DEV=1): the vite dev server and the test instance ports are trusted origins.');
+if(process.env.CC_AGENT_DEV==='1')console.warn('Developing (CC_AGENT_DEV=1): the vite dev server and scratch instance ports are trusted origins.');
 const data=path.resolve(process.env.CC_AGENT_DATA_DIR||path.join(root,'.local'));fs.mkdirSync(data,{recursive:true,mode:0o700});
 // With a data folder set (CC_AGENT_DATA_DIR), the audit log goes in it too, under logs/;
-// with the default .local, it stays in server/logs.
-if(data!==path.join(root,'.local')&&!process.env.CC_AGENT_AUDIT_LOG)process.env.CC_AGENT_AUDIT_LOG=path.join(data,'logs','api-audit.log');
+// with the default .local, it stays in server/logs. The service names it and the answering
+// side's peer key here: a process started any other way keeps both in a temporary folder
+// (services/audit.js, agentStore.js).
+if(!process.env.CC_AGENT_AUDIT_LOG)process.env.CC_AGENT_AUDIT_LOG=data!==path.join(root,'.local')?path.join(data,'logs','api-audit.log'):path.join(root,'server','logs','api-audit.log');
+if(!process.env.CC_AGENT_PEER_KEY_FILE)process.env.CC_AGENT_PEER_KEY_FILE=path.join(os.homedir(),'.config','cc-agent','peer-key');
 const lock=path.join(data,'server.lock');
 // Accounts without the secret that signs their logins: a new secret and a new seed
 // password would be made beside them, so the start is refused before anything is

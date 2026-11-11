@@ -2,10 +2,10 @@ const Datastore = require('@seald-io/nedb');
 const path = require('path');
 const { privateDatastoreOptions } = require('./services/privateFiles');
 
-// DB_DIR is a test seam: two processes autoloading the same NeDB files race
-// each other's crash-safe compaction (.db~ create/rename) into ENOENT, so each
-// test process points here at its own temp directory. scripts/start.mjs sets it to
-// <data folder>/auth; without it, server/db is used.
+// DB_DIR: two processes autoloading the same NeDB files race each other's
+// crash-safe compaction (.db~ create/rename) into ENOENT, so each process names
+// its own folder here. scripts/start.mjs sets it to <data folder>/auth; without
+// it, server/db is used.
 const DB_DIR = process.env.DB_DIR || path.join(__dirname, 'db');
 
 function datastore(filename) {

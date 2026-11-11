@@ -3,7 +3,7 @@
 export function bindTabbarViewport({viewport=window.visualViewport}={}) {
   if(!viewport)return ()=>{};
   let frame;
-  // As visibleHeight.js: this file is also read as plain source by a test.
+  // The same fallback as visibleHeight.js, written out so this file imports nothing.
   const height=()=>viewport.height>0?viewport.height:window.innerHeight;
   const sync=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{
     // The same shortfall for what sits at the very bottom of the app, as a toast

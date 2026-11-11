@@ -8,7 +8,7 @@
 // ever compared with the lists the profile may hold (agentProfile.validate, run by the caller
 // as check()); nothing outside them is saved.
 //
-// The rules that keep it from flapping, all here so they can be tested on their own:
+// The rules that keep it from flapping, all here so they can be checked on their own:
 // - a save of the profile waiting for a restart (pending) wins: nothing is followed;
 // - only a report from this start of the session, written a while after it was launched
 //   (GRACE_MS: a status line of the run stopped for the restart can still land just after

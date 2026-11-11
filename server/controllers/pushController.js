@@ -101,10 +101,12 @@ exports.sendTest = async (req, res) => {
   }
 };
 
-exports._setPushStoreForTests = (value = null) => {
+// Another subscription store or sender in place of the defaults, for a product built on
+// this code that keeps or delivers push its own way; null brings the default back.
+exports.setPushStore = (value = null) => {
   storeOverride = value;
 };
 
-exports._setPushServiceForTests = (value = null) => {
+exports.setPushService = (value = null) => {
   serviceOverride = value;
 };

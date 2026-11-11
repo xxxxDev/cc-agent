@@ -7,7 +7,7 @@ const b64u = (buf) => { let s = '';for (const b of new Uint8Array(buf)) s += Str
 const unb64u = (text) => Uint8Array.from(atob(String(text).replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
 // A passkey belongs to a site's name: it cannot be made for a bare IP address, and
 // the server takes one only for its public https address (localhost is offered for
-// a test instance, which says so to its server).
+// a scratch instance while developing, which says so to its server).
 export const passkeysWork = () => typeof window !== 'undefined' && !!window.PublicKeyCredential && !!navigator.credentials && window.isSecureContext && (location.protocol === 'https:' || location.hostname === 'localhost') && !/^[\d.]+$|:/.test(location.hostname);
 // The person closing the device's sheet is not an error to show.
 export const cancelled = (e) => e?.name === 'NotAllowedError' || e?.name === 'AbortError';

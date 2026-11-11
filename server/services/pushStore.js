@@ -532,15 +532,6 @@ function createPushStore({
     return { subscriptions: Number(subscriptions || 0), preferences: Number(preferences || 0) };
   }
 
-  async function countsForTests() {
-    const [subscriptions, preferences, deliveries] = await Promise.all([
-      databaseCall(subscriptionsDB, 'count', {}),
-      databaseCall(preferencesDB, 'count', {}),
-      databaseCall(deliveriesDB, 'count', {}),
-    ]);
-    return { subscriptions, preferences, deliveries };
-  }
-
   return {
     upsertSubscription,
     deactivateSubscription,
@@ -562,7 +553,6 @@ function createPushStore({
     updateDelivery,
     recoverStaleSending,
     purgeUser,
-    countsForTests,
   };
 }
 

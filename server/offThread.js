@@ -21,6 +21,6 @@ function started(){
 function run(file,args,{timeout=1000}={}){
  return new Promise(resolve=>{const id=++next;waiting.set(id,resolve);const w=started();w.ref();w.postMessage({id,file,args,timeout});});
 }
-// Settles once no read is unanswered (the tests wait on it after a heartbeat).
+// Settles once no read is unanswered (to wait on after a heartbeat).
 function idle(){return waiting.size?new Promise(done=>idlers.push(done)):Promise.resolve();}
 module.exports={run,idle};
