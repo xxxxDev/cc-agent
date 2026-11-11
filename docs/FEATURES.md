@@ -246,7 +246,7 @@ Agents on two of your computers can talk to each other, for example a build agen
 - **Install it** to the home screen on iPhone, Android or a computer.
 - **Push notifications** when an agent replies or a schedule finishes.
 - **Updates** are noticed within seconds of a new build being served, and offered without reloading under you.
-- **Notices** (toasts) appear at the top centre as one rounded pill, on a phone and a computer alike.
+- **Notices** (toasts) appear at the top centre, just below the navbar so they cover none of its buttons, as one rounded pill, on a phone and a computer alike.
 - **Restarts don't sign you out.** While the service restarts, the page keeps checking for up to 90 seconds instead of showing the sign-in screen.
 - **Sheets that pull down.** On a phone, every popup opens as an iOS-style pushed card: Agent Profile, To-dos, Usage, search, New agent, the group form, a group room's to-dos and search, a schedule, a security source's details and a user's agent access. The card stands almost full height with a grabber at its top and a round ✕ at the top left, and the page behind steps back and darkens. Pull one down or tap ✕ to close it, as on iOS. A form with unsaved changes (Agent Profile, the group form, a schedule, a user's agent access) asks Keep editing or Discard first, whether you pull it down, tap ✕ or tap outside it. The group room's terminal still opens full screen.
 - **A phone layout like iOS 26.** On a phone, the navbar and the page sides match the iPhone's own apps: the buttons at the top, and lists, cards and titles 20px from the edges.
