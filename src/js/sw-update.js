@@ -1,5 +1,5 @@
 // Browsers only re-check sw.js on navigation, an explicit update() call, or a
-// 24h cap — a tab left open never notices a deploy on its own and can keep a
+// 24h cap: a tab left open never notices a deploy on its own and can keep a
 // stale push handler for hours. The
 // worker is built with skipWaiting, so a fetched update takes over at once;
 // these background checks make that happen without the user reopening.
@@ -10,7 +10,7 @@ async function check() {
     const registration = await navigator.serviceWorker.getRegistration();
     await registration?.update();
   } catch (_error) {
-    // Offline or transient fetch failure — the next tick tries again.
+    // Offline or transient fetch failure: the next tick tries again.
   }
 }
 

@@ -242,7 +242,7 @@ export function applicationServerKeyMatches(liveKey, desiredKey) {
 // VAPID rotation client behavior: when this device is subscribed and
 // the server's current public key no longer matches the live subscription's
 // applicationServerKey, silently unsubscribe and resubscribe against the current
-// key so future sends succeed. Best-effort — any failure is logged to the
+// key so future sends succeed. Best-effort: any failure is logged to the
 // console only and never blocks app start or settings open. Runs at app start
 // and on settings open, alongside the existing push init points.
 export async function resubscribeIfRotated({

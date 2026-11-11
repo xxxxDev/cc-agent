@@ -5,7 +5,7 @@
 // the composer leaves it under the keyboard, and not easing the history is what
 // makes the whole thing look like a jump.
 //
-// The curve is smootherstep — gentle at both ends. It is used instead of the
+// The curve is smootherstep: gentle at both ends. It is used instead of the
 // msg-fade-up cubic-bezier(.22,1,.36,1), which is right for a bubble arriving but
 // covers a third of the distance in its first tenth: over 300px of region that
 // reads as a snap followed by a settle, not as being carried.

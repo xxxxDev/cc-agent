@@ -36,7 +36,7 @@ const markdown = configure();
 // What a person types is not necessarily markdown. `3 * 4 * 5` should not turn
 // into italics, a Windows path should not lose its backslashes, and an indented
 // line is indentation, not a code block. So the sent bubble keeps the syntax
-// people actually reach for in chat — code, links, lists, quotes, line breaks —
+// people actually reach for in chat (code, links, lists, quotes, line breaks)
 // and renders emphasis and headings as the literal characters that were typed.
 // Its fenced blocks get the same copy button, from configure().
 const typed = configure().disable(['emphasis', 'heading', 'lheading', 'code']);

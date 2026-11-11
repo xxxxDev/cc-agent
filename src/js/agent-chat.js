@@ -37,7 +37,7 @@ let opening=0;
 // router stack is the only "back" this app has: the navbar back link and the
 // edge swipe both go through it. Pushing entries meant an iOS edge swipe ran the
 // system history-back AND F7's swipeback for one gesture, and any bookkeeping to
-// reconcile the two stepped one entry too far — which is how a swipe could land on
+// reconcile the two stepped one entry too far, which is how a swipe could land on
 // an empty conversation while the back link stayed fine. With nothing behind the
 // page in history, the system gesture stays inert and F7 alone handles it.
 // Only the chat tab's address is this file's to write; App.vue keeps every tab's
@@ -219,7 +219,7 @@ const showViewSwitch=computed(()=>user.value?.role==='admin'&&detail.value?.mode
 // transcript inspector keeps its own condition, so hiding one never hides the other.
 const showTerminalSwitch=computed(()=>showViewSwitch.value&&preferenceTerminalSwitch.value);
 // The transcript inspector: an admin-only right column showing the raw material
-// behind one bubble. Narrow screens never get it — the same content on a phone is
+// behind one bubble. Narrow screens never get it: the same content on a phone is
 // unreadable, and the panel would take the whole conversation with it.
 const WIDE='(min-width: 1024px)';
 const inspectorOpen=ref(false),wideScreen=ref(typeof matchMedia==='function'?matchMedia(WIDE).matches:false);
@@ -241,7 +241,7 @@ async function inspect(message){
 }
 function clearInspection(){inspectRun++;inspectId.value='';inspectData.value=null;inspectError.value='';inspectBusy.value=false;}
 // Opening the panel chooses nothing: with no bubble selected it shows what the
-// agent carries into every turn — its profile, memory, model and usage — and a
+// agent carries into every turn (its profile, memory, model and usage), and a
 // bubble is only read when one is actually asked for. Clicking the chosen bubble
 // again goes back to that view.
 async function toggleInspector(){
@@ -427,8 +427,8 @@ const awaitingReply=computed(()=>(secondClock.value,status.awaitingReply(detail.
 // The progress belongs in the typing bubble: that is where the eye already is,
 // it says plainly that this reply is being written, and putting it there stops
 // the bar from growing and shrinking the page on every turn. The bar is only the
-// fallback for an agent busy with no message of the user's to answer — compaction
-// shows its own shield — so exactly one of them is ever showing.
+// fallback for an agent busy with no message of the user's to answer (compaction
+// shows its own shield), so exactly one of them is ever showing.
 // Background work has a typing bubble of its own, above the reply's, so neither line has to carry both.
 // Work with no message of the user's to answer, a start's initialization or a turn
 // the agent began itself, has the typing bubble too, as a split-view cell already
@@ -446,8 +446,8 @@ const showSubnavbar=computed(()=>!!progressInBar.value);
 // A switch that disappears must not leave the terminal on screen.
 watch(showTerminalSwitch,visible=>{if(!visible)terminalOpen.value=false;});
 // The terminal replaces the conversation in the same scroller, so coming back
-// rebuilt the bubbles at the top and the reader lost their place. Remember where they were before the switch — this runs
-// before the DOM changes — and put them back once the bubbles and the composer
+// rebuilt the bubbles at the top and the reader lost their place. Remember where they were before the switch (this runs
+// before the DOM changes), and put them back once the bubbles and the composer
 // are laid out again.
 // The place is the bubble at the top of the view and how far down it sat, not a
 // distance: anything added above while away (an older page, a new message) would
@@ -1067,14 +1067,14 @@ const guardOperation=kind=>guardProfile(kind,{dirty:()=>(infoOpen.value||profile
 async function mayCloseProfile(){if(!profileDirty.value)return true;if(!(await askDiscard()))return false;profileDraft.value=profileBase.value;profileConflicts.value=[];return true;}
 async function closeProfile(){if(!(await mayCloseProfile()))return;if(returnFromProfile())return;infoOpen.value=false;profilePanelOpen.value=false;}
 // The draft is taken when Agent Profile opens, in either form, and again when the
-// open panel moves to another agent — never on the 1.2 s refresh, which would undo typing.
+// open panel moves to another agent, never on the 1.2 s refresh, which would undo typing.
 // Hidden and shown again for the same agent (an operation, the terminal, another panel,
 // a narrower window, back to the list), a draft with unsaved changes is kept.
 function takeProfileDraft(){profileConflicts.value=[];profileDraft.value=profileBase.value=agentOperation.profileDraftOf(detail.value);profileDraftId.value=detail.value.id;memoryDraft.value=detail.value.memory||'';error.value='';}
 watch(()=>[infoOpen.value||profilePanelVisible.value,detail.value?.id],([open,id],[wasOpen,wasId]=[])=>{if(open&&detail.value&&(!wasOpen||id!==wasId)&&(id!==profileDraftId.value||!profileDirty.value))takeProfileDraft();},{immediate:true});
 const time=s=>new Date(s).toLocaleTimeString(timeLocale(),{hour:'2-digit',minute:'2-digit'});
-// The conversation the page was opened on — a notification, or an address someone
-// kept — read once at load: the address is rewritten as the user moves around, so
+// The conversation the page was opened on (a notification, or an address someone
+// kept), read once at load: the address is rewritten as the user moves around, so
 // reading it after sign-in could find it already replaced.
 let launchAgentId=typeof location!=='undefined'?agentIdFromUrl(location.href):null;
 // Whether the first load after signing in is through, so an agent opened now stays

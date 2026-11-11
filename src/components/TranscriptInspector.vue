@@ -31,7 +31,7 @@
      </button>
      <template v-if="openSub===a.id">
       <div class="ti-block-name">{{ct('交辦內容')}}</div>
-      <pre>{{a.prompt||'—'}}</pre>
+      <pre>{{a.prompt||''}}</pre>
       <div class="ti-block-name">{{ct('回報')}}</div>
       <pre>{{a.result||ct('還沒有回報')}}</pre>
      </template>
@@ -93,8 +93,8 @@ export default {
    const from = Date.parse(props.data?.from || ''), to = Date.parse(props.data?.to || '');
    return Number.isFinite(from) && Number.isFinite(to) && to > from ? duration(Math.round((to - from) / 1000)) : '';
   });
-  // The first record is the prompt as the model received it — the whole point of
-  // this panel — so it gets said plainly rather than being labelled "user".
+  // The first record is the prompt as the model received it (the whole point of
+  // this panel), so it gets said plainly rather than being labelled "user".
   const label = (record, index) => index === 0 ? ct('送給模型的內容')
    : record.role === 'assistant' ? ct('模型輸出') : ct('工具回傳');
   const blockLabel = block => ({thinking: ct('思考'), tool_result: ct('結果')}[block.type] || block.type);

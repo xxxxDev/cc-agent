@@ -72,7 +72,7 @@ function validatePrivateFileForRead(filename) {
 }
 
 // Backup both push datastores under one manifest (schema tag + per-file
-// sha256/size/mode), refusing to overwrite a non-empty target — the same
+// sha256/size/mode), refusing to overwrite a non-empty target, the same
 // discipline as the user-lifecycle backup, extended to two files.
 function backupPushKeyFiles(dbDir, backupDirectory, { now = () => new Date() } = {}) {
   const directory = ensurePrivateDirectory(backupDirectory);
@@ -186,7 +186,7 @@ function restorePushKeyFiles(backupDirectory, dbDir) {
 
 // A stored session fingerprint resolves to: itself (already current-key), the
 // current-key fingerprint of the same live token (was previous-key), or null
-// (no live session — leave stale; the send-time check is dual-key/authoritative).
+// (no live session: leave stale; the send-time check is dual-key/authoritative).
 async function buildSessionResolver(sessionsDB, env) {
   const sessions = await findMany(sessionsDB);
   const currentFingerprints = new Set();
@@ -219,7 +219,7 @@ function keyIdContext(env) {
 
 // Classify one subscription row against the current key set, producing the
 // minimal $set needed to move it fully onto the current keys. `vapidKeyId` is
-// deliberately never part of the update — only a real resubscription moves a
+// deliberately never part of the update: only a real resubscription moves a
 // device to a new VAPID key. Returns null `update` when already converged.
 function classifySubscription(row, env, ids, resolveSession) {
   let decrypted;
@@ -265,7 +265,7 @@ function classifySubscription(row, env, ids, resolveSession) {
 }
 
 // Build a full rotation plan (never writes). The returned `report` carries
-// counts and key ids ONLY — no key material, endpoints, or fingerprints.
+// counts and key ids ONLY: no key material, endpoints, or fingerprints.
 async function planPushKeyRotation(subscriptionsDB, deliveriesDB, sessionsDB, env) {
   const ids = keyIdContext(env);
   const resolveSession = await buildSessionResolver(sessionsDB, env);

@@ -12,7 +12,7 @@ const {resolveClientIp}=require('./services/clientIp');
 // The attachment is confined to its own agent. With
 // tmux's defaults the web terminal could reach a raw shell or any other user's
 // agent session: C-b : opens the command prompt, and even with no prefix, mouse on
-// brings the root table's right-click menus — split a pane, new window, next
+// brings the root table's right-click menus: split a pane, new window, next
 // session. So the session gets no prefix, no status line, and an empty key table
 // of its own, in which only the harmless mouse bindings are put back: clicks and
 // the wheel go to Claude's full-screen UI, or scroll in copy mode.

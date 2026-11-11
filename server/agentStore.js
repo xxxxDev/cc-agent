@@ -107,8 +107,8 @@ function generation(c) {
 }
 const active=c=>c.runs.at(-1);
 function get(id,owner) {const c=state.conversations.find(c=>c.id===id&&c.owner===owner);if(!c)throw error('找不到這個對話',404);return reconcile(c);}
-// A run that reports itself live but whose tmux session no longer exists — after
-// a reboot, or any stop that bypassed stop() — otherwise sits at "ready" with a
+// A run that reports itself live but whose tmux session no longer exists (after
+// a reboot, or any stop that bypassed stop()) otherwise sits at "ready" with a
 // stale heartbeat forever: the UI shows the wake shield with every control
 // locked, and launch() is unreachable from it. Flip it to the same error state a
 // dead Claude process reports, so the reconnect affordance appears. Healthy runs
@@ -117,7 +117,7 @@ function get(id,owner) {const c=state.conversations.find(c=>c.id===id&&c.owner==
 const STALE_MS=60000;
 // A second way to be stuck: the Claude process is alive and
 // its heartbeat is fine, but it decided the executive MCP tools did not exist and
-// never called ready — so the run sits at "starting" behind the wake shield, and
+// never called ready, so the run sits at "starting" behind the wake shield, and
 // the profile's 啟動 is disabled for exactly that phase. Give the handshake a
 // generous ceiling and then say so, which is what puts the working 重新連線 button
 // (stop, then start) in front of the user. The tmux session is deliberately left
@@ -578,7 +578,7 @@ function launch(c) {
 }
 // The profile's control is labelled 啟動 / 重新連線 and has to honour both halves.
 // launch() deliberately returns early on a run that is already alive, so calling
-// it on a healthy agent would do nothing at all — the tap would look inert while
+// it on a healthy agent would do nothing at all: the tap would look inert while
 // the agent stayed on its old process. Reconnecting is stop-then-launch; a reply in flight is the
 // one case worth refusing, because stopping would discard the answer being written.
 function reconnect(c) {
@@ -1506,7 +1506,7 @@ function bridge(c,action,data={}) {
  if(action==='schedule-list')return {checks:scheduleChecks.list().map(scheduleChecks.view),schedules:scheduleStore.list().filter(x=>x.conversationId===c.id).map(x=>({id:x.id,name:x.name,prompt:x.prompt,frequency:x.frequency,status:x.status,nextAt:x.nextAt,...(x.script?{kind:'script',onResult:x.onResult,interpreter:x.script.interpreter,domains:x.script.domains}:x.check?{kind:'check',check:x.check,onResult:x.onResult}:x.feed?{kind:'feed',feedUrl:x.feed.url,onResult:'agent'}:{kind:'agent'}),runs:(x.runs||[]).slice(0,5).map(r=>({at:r.at,outcome:r.outcome,detail:r.detail,output:r.output||''}))}))};
  if(action==='permission-request'){
   permissions.request(g,data);
-  // Nothing outside an agent's scope is granted from a prompt, to anyone — an
+  // Nothing outside an agent's scope is granted from a prompt, to anyone: an
   // admin included. Refuse it now and file it; the
   // scope is widened, if at all, from the review of these reports.
   fileReport(c,g,{kind:'permission',key:'permission:'+g.sessionId+':'+data.request_id,tool:data.tool_name,detail:(String(data.description||'').slice(0,500)+'\n'+String(data.input_preview||'').slice(0,1000)).trim()});
@@ -2645,7 +2645,7 @@ function setPreferences(owner,{compactThreshold,handoff,subagents,autoCompact,te
 function decidePermission(c,data){permissions.decide(active(c),data);save(c);}
 // The raw material behind one bubble. Admin-only at the route: this is the agent's
 // system prompt, reasoning and tool arguments, and it must never leave an
-// authenticated response — no notification, no preview, no log.
+// authenticated response: no notification, no preview, no log.
 // An admin widening one agent's scope from a report. Any owner's agent, since reviewing is the admin's job; the change
 // goes through the same validation as Agent Profile and relaunches a ready agent
 // the way a profile change does, so the new scope is what it runs with.
@@ -2681,7 +2681,7 @@ function applyAccess(c,next,current=agentAccess.of(c)){
  if(c.mode==='claude'&&g.phase!=='stopped'){try{stop(c);}catch(e){console.error(`stop after a scope change failed for ${c.id}: ${e.message}`);}if(live){try{launch(c);}catch(e){console.error(`relaunch after a scope change failed for ${c.id}: ${e.message}`);}}}
  return {changed:true,access:next};
 }
-// An admin setting any agent's scope outright — how a grant is narrowed or undone.
+// An admin setting any agent's scope outright: how a grant is narrowed or undone.
 // Full access only on an agent whose owner is an active admin: on a member's agent it
 // would let that member reach everything the owner's account can. callerRole is the
 // route's verified principal, never the target account's role or the request body

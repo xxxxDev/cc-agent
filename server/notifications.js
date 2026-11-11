@@ -22,8 +22,8 @@ function activeAdmins(){
  const {usersDB}=require('./stores');const {isActiveUser}=require('./services/userLifecycle');
  return new Promise((resolve,reject)=>usersDB.find({role:'admin'},(error,users)=>error?reject(error):resolve(users.filter(isActiveUser).map(u=>String(u._id)))));
 }
-// An agent can file several reports in a row — up to five a turn, and one per
-// refused request — and each would ring every admin's phone. One push per agent per
+// An agent can file several reports in a row (up to five a turn, and one per
+// refused request), and each would ring every admin's phone. One push per agent per
 // quiet period; the others are marked all the same and wait in the review queue
 // with the badge on the Admin tab's scope-reports row.
 const REPORT_QUIET_MS=10*60_000;

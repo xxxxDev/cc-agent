@@ -1,8 +1,8 @@
 // Every agent is a real `claude` CLI process, and Claude Code writes each session
 // to ~/.claude/projects/<cwd with non-alphanumerics turned into ->/<sessionId>.jsonl.
 // That file already carries per-turn token usage and every tool call, so reading it
-// answers three questions the UI wants — what an agent has cost, what it is doing
-// right now, and what actually went to the model — without adding a single hook or
+// answers three questions the UI wants (what an agent has cost, what it is doing
+// right now, and what actually went to the model) without adding a single hook or
 // changing how agents run.
 //
 // Nothing here may throw: a missing or unreadable transcript is an absent number in
@@ -454,7 +454,7 @@ function read(file) {
 }
 
 // A session imported from another directory keeps living in the project folder it
-// was created in, so fall back to a scan — but remember the answer, including the
+// was created in, so fall back to a scan, but remember the answer, including the
 // absence of one, because this runs on every poll (several times a second across
 // agents). Either answer is looked at again after a while; a file gone meanwhile
 // reads as nothing (read() finds no file).
@@ -491,7 +491,7 @@ function statesFor(stateRoot, conversation) {
   return out;
 }
 
-// Totals across every generation of one agent. Tokens are exact — they are copied
+// Totals across every generation of one agent. Tokens are exact: they are copied
 // from the usage Claude Code recorded. The dollar figure is derived from them, and
 // the subscription these agents run under does not charge it; it is the
 // API-equivalent value of the work.
@@ -587,8 +587,8 @@ function waiting(stateRoot, conversation) {
 // One turn, in full: what the model was given, what it did, what it sent back.
 //
 // The boundaries are exact rather than guessed. A turn opens with the user record
-// the channel delivered — literally `<channel source="executive" message_id="…">`
-// wrapping the text — and everything up to the next such record belongs to it,
+// the channel delivered (literally `<channel source="executive" message_id="…">`
+// wrapping the text), and everything up to the next such record belongs to it,
 // including the `mcp__executive__reply` whose message_id is the same, and whatever
 // the model wrote after replying. So a bubble in the web UI and its transcript
 // segment are matched by id.
@@ -752,8 +752,8 @@ function segment(stateRoot, conversation, messageId) {
 // twice adds nothing the second time.
 //
 // A web turn is recognised by the channel marker the executive server writes into
-// the prompt. The marker is not always at the start — a changed profile is
-// prepended to it — so it is matched anywhere in the text.
+// the prompt. The marker is not always at the start (a changed profile is
+// prepended to it), so it is matched anywhere in the text.
 const WEB_TURN = /<channel\s+source="executive"\s+message_id="[0-9a-f-]{36}"/;
 const CHANNEL_WRAPPER = /^<channel\b[^>]*>\s*([\s\S]*?)\s*<\/channel>\s*$/;
 const SYSTEM_BLOCK = /<system-reminder>[\s\S]*?<\/system-reminder>/g;

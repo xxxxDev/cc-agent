@@ -1,6 +1,6 @@
 // Framework7 builds its dialogs from HTML strings: a dialog's title and text are
 // markup, and prompt() writes its default value into value="…" unescaped. A
-// member's display name reached an admin's session that way — the admin opened the
+// member's display name reached an admin's session that way: the admin opened the
 // member, tapped 變更顯示名稱, and the name ran as script. Every dialog in this app shows plain text, so escape once, here,
 // for all of them, and hand prompt() its default through the DOM instead.
 const ENTITIES = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'};

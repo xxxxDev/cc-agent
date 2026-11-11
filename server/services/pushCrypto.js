@@ -363,7 +363,7 @@ function decryptWithKey(value, key) {
 }
 
 // The key is chosen by keyId. An unknown keyId is a distinct, fail-closed error
-// (PUSH_KEY_UNAVAILABLE, 503) — never conflated with corrupt ciphertext,
+// (PUSH_KEY_UNAVAILABLE, 503), never conflated with corrupt ciphertext,
 // because the correct action is "restore the key", not "discard the row".
 function decryptSubscription(value, env = process.env) {
   if (!value || value.version !== 2) {

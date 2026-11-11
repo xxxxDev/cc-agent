@@ -5,13 +5,13 @@ const path = require('node:path');
 // What an agent may reach beyond its own workspace: folders it may use, folders
 // carved out of those, folders it may only read, and websites. Set per agent by an admin; the default is
 // nothing, the workspace alone. The runner turns it
-// into Claude's restricted mode plus the OS sandbox — see SECURITY.md.
+// into Claude's restricted mode plus the OS sandbox: see SECURITY.md.
 const LIMIT = 20;
 const fail = (message) => Object.assign(new Error(message), { status: 400 });
 
 // Where CC Agent keeps what no agent may reach: its own code and data (signing
 // secrets, every user's conversations, other agents' bridge tokens), and the
-// owner's credentials. An allowed folder may not be, or contain, any of these — so
+// owner's credentials. An allowed folder may not be, or contain, any of these, so
 // a folder that holds this repository cannot be granted, and an agent cannot talk
 // an admin into it through a report's suggestion. Folders inside them can still be excluded.
 // Also the folders of the programs agents are run with (node, claude, tmux: an agent

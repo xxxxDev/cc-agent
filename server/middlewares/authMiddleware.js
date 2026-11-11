@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 const { resolveLivePrincipal } = require('../services/livePrincipal');
 // required lazily-in-practice: authController always loads first (authRoutes
 // requires it before this module), and touchActivity is only called at request
-// time — so there is no circular-init hazard.
+// time, so there is no circular-init hazard.
 const authController = require('../controllers/authController');
 
 function verifyToken(req, res, next) {

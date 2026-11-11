@@ -375,7 +375,7 @@ async function forceUpdate() {
 .push-test .icon {font-size:17px;}
 .push-test.disabled {opacity:.4;pointer-events:none;}
 /* Toggle rows are plain (non-link) list items, so without this their titles
-   are text-selectable while link rows are not — visually inconsistent. */
+   are text-selectable while link rows are not, visually inconsistent. */
 .cc-settings-list {
   user-select: none;
   -webkit-user-select: none;

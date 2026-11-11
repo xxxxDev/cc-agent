@@ -41,7 +41,7 @@
 
 /* These three states ride a data attribute, not classes. Vue rewrites className
    when a :class binding changes, which discards classes added at runtime by
-   anyone else — and F7 puts `page-current` on this element. Binding classes here
+   anyone else, and F7 puts `page-current` on this element. Binding classes here
    silently dropped it the moment the inspector opened or an agent started
    working, taking F7's own routing/CSS hooks with it. Attributes do not collide.
 
@@ -98,7 +98,7 @@
 .terminal-divider::after {content:'';position:absolute;left:5px;top:50%;width:2px;height:44px;margin-top:-22px;border-radius:1px;background:color-mix(in srgb,currentColor 28%,transparent);}
 .chat-page[data-chat~="terminal-full"] .terminal-divider {left:0;}
 /* F7's .toolbar sets width:100% as well as left:0, which over-constrains an
-   absolutely positioned box and makes `right` ignored — so narrow it by width. */
+   absolutely positioned box and makes `right` ignored, so narrow it by width. */
 .chat-page[data-chat~="side-open"] > :deep(.messagebar) {width:calc(100% - var(--transcript-inspector-width));}
 /* A bubble is a control while the panel is open, and the chosen one says so. */
 .chat-page :deep(.inspectable) {cursor:pointer;}
@@ -111,11 +111,11 @@
 
    The ring has to be drawn from the bubble's silhouette, not its box. F7's iOS
    bubble is shaped by a -webkit-mask-box-image SVG (framework7-bundle.css, .ios
-   .message-received.message-tail .message-bubble), so its real outline — tail
-   included — is an alpha mask that has nothing to do with border-radius: an
+   .message-received.message-tail .message-bubble), so its real outline, tail
+   included, is an alpha mask that has nothing to do with border-radius: an
    outline outside the box is clipped away, and an inset shadow is masked into a
    ring with its left side and tail missing, which is exactly what showed.
-   Nothing painted BY the bubble can escape that mask — an outline outside it, an
+   Nothing painted BY the bubble can escape that mask: an outline outside it, an
    outer shadow, even a drop-shadow filter (filters run before masking) is clipped
    away. The ring therefore has to be a second, slightly larger copy of the same
    silhouette, painted behind the bubble by its unmasked parent: same mask, orange

@@ -1388,7 +1388,7 @@ async function purgeUserFootprint(userId) {
   }
 }
 
-// DELETE /api/auth/users/:id/purge — permanently remove a tombstone account.
+// DELETE /api/auth/users/:id/purge: permanently remove a tombstone account.
 // Admin-only (restrictTo in the route; the internal role check mirrors updateMe
 // and keeps the endpoint self-guarding). The target must already be a
 // deleted_tombstone; anything else is refused with 409 USER_NOT_TOMBSTONE.

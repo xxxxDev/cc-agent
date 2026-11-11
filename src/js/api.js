@@ -26,7 +26,7 @@ export async function api(endpoint, options = {}) {
   try {
     data = text ? JSON.parse(text) : {};
   } catch {
-    // non-JSON body (proxy/CORS error pages) — fall through to status error
+    // non-JSON body (proxy/CORS error pages): fall through to status error
   }
   if (!res.ok) {
     const error = new Error(data.message || `Request failed: ${res.status}`);
@@ -60,7 +60,7 @@ export function apiUpload(endpoint, body, { headers = {}, onProgress } = {}) {
       try {
         data = text ? JSON.parse(text) : {};
       } catch {
-        // non-JSON body — fall through to status error, as api() does
+        // non-JSON body: fall through to status error, as api() does
       }
       if (xhr.status < 200 || xhr.status >= 300) {
         const error = new Error(data.message || `Request failed: ${xhr.status}`);

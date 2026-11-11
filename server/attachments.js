@@ -8,7 +8,7 @@ const fail=(message,status=400)=>Object.assign(new Error(message),{status});
 // five minutes, one login could otherwise fill the disk with files it never sends; a message carries at most MAX_FILES anyway.
 const MAX_STAGED_BYTES=400*1024*1024;
 function staged(root,c){const dir=directory(root,c),sent=new Set(c.messages.flatMap(m=>(m.attachments||[]).map(a=>a.id)));let metas=[];try{metas=fs.readdirSync(dir).filter(f=>META.test(f)).map(f=>JSON.parse(fs.readFileSync(path.join(dir,f),'utf8')));}catch{}return metas.filter(m=>!sent.has(m.id)&&m.terminal!==true);}
-// Under the owner, so deleting a person is deleting one directory — the old flat
+// Under the owner, so deleting a person is deleting one directory: the old flat
 // attachments/<conversation> layout had no owner in the path and nothing ever
 // cleaned it up.
 // A file's description is <id>.json; a .json file itself is kept as <id>.data.json,

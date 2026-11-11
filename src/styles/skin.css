@@ -34,7 +34,7 @@ body {
 /* ---- White brand accent ----
  * F7's default iOS blue is replaced by the accent (F7 v9 has no color-theme-white).
  * F7's fill-button text defaults to #fff, so on a white accent we set the fill text dark to keep
- * CTAs readable — a white pill with a black label. */
+ * CTAs readable: a white pill with a black label. */
 .cc-app,
 .cc-app .framework7-root {
   --f7-theme-color: var(--cc-color-accent);
@@ -66,7 +66,7 @@ body {
   --f7-tabbar-labels-height: var(--cc-size-tabbar);
   --f7-tabbar-label-font-size: var(--cc-font-label-sm);
   /* Search radius: the search field rounds at 24px; F7 v9 defaults the inline searchbar to 44px.
-   * Only the BASE var sets BOTH the input-wrap and the input to 24px — the inline var moves the
+   * Only the BASE var sets BOTH the input-wrap and the input to 24px; the inline var moves the
    * input alone and leaves the wrap at 44px. */
   --f7-searchbar-input-border-radius: var(--cc-radius-card);
   /* Search bg: F7 v9 defaults the searchbar input to its glass color (rgba(50,50,50,.5), a dark
@@ -96,8 +96,8 @@ body {
   background: rgba(var(--cc-color-accent-rgb), var(--cc-accent-list-alpha));
 }
 
-/* Search pill: the capsule is painted on the WRAP — white-8% fill + inset white-40% ring +
- * blur(5px) backdrop — with a transparent input inside. */
+/* Search pill: the capsule is painted on the WRAP (white-8% fill + inset white-40% ring +
+ * blur(5px) backdrop), with a transparent input inside. */
 .cc-app .searchbar .searchbar-input-wrap {
   background: var(--cc-glass-fill-subtle);
   border-radius: var(--cc-radius-card);
@@ -121,7 +121,7 @@ body {
   width: var(--cc-size-icon-lg);
   height: var(--cc-size-icon-lg);
   font-size: var(--cc-size-icon-lg);
-  top: 8px; /* (44-28)/2 — a fixed value, so it does not stack with F7's own positioning/transform */
+  top: 8px; /* (44-28)/2: a fixed value, so it does not stack with F7's own positioning/transform */
   margin-top: 0;
 }
 .cc-app .searchbar .searchbar-icon::after {
@@ -256,7 +256,7 @@ body {
 }
 
 /* ============================================================================================
- * Structural layer — containers and menus pure F7 v9 does not provide.
+ * Structural layer: containers and menus pure F7 v9 does not provide.
  * ============================================================================================ */
 
 /* Spacing the tabbar fade keys off (below). */
@@ -346,7 +346,7 @@ body {
   font-size: 17px;
 }
 
-/* Section headers on tab pages (such as Settings) are indented 16px inside the margin — glyphs
+/* Section headers on tab pages (such as Settings) are indented 16px inside the margin: glyphs
  * at 32. Scoped to the tab pages only. */
 .cc-app .page-large-static .block-title {
   padding-left: var(--cc-space-md);
@@ -437,7 +437,7 @@ body {
   .cc-app .sidebar-edge { transition: none !important; }
 }
 /* ---- Source dropdown ----
- * Teleported to <body>, i.e. OUTSIDE .cc-app — these rules are intentionally unscoped.
+ * Teleported to <body>, i.e. OUTSIDE .cc-app: these rules are intentionally unscoped.
  * Click-anchored absolute panel, 24px radius, dialog-dark 80% + saturate/blur(6px)
  * glass, inset white ring, 0.23s scale-in from the trigger origin. */
 .dropdown-backdrop {

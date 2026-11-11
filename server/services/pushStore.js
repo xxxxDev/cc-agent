@@ -505,7 +505,7 @@ function createPushStore({
 
   // Permanent purge cleanup: remove a purged user's subscription
   // and preference rows outright. Delivery history (push-deliveries.db) is
-  // intentionally left untouched. Best-effort — the caller swallows failures.
+  // intentionally left untouched. Best-effort: the caller swallows failures.
   async function purgeUser(userId) {
     const id = String(userId);
     const [subscriptions, preferences] = await Promise.all([

@@ -323,8 +323,8 @@ watch(() => currentUser.value?.id || '', (id) => {
 
 // Every screen has an address, and an address opens its screen (src/js/appUrl.js),
 // swapped with replaceState only: the app never adds a history entry. An address
-// naming a screen is opened once someone is signed in and that tab's view exists —
-// a scope-report notification's /?access-report=<id> among them — and an admin's
+// naming a screen is opened once someone is signed in and that tab's view exists
+// (a scope-report notification's /?access-report=<id> among them), and an admin's
 // page only for an admin. Conversation addresses are the chat tab's own
 // (agent-chat.js).
 let pendingScreen = typeof window !== 'undefined' ? screenFor(window.location.href) : null;
@@ -522,7 +522,7 @@ const f7params = {
   name: 'CC Agent',
   theme: 'ios',
   darkMode: false,
-  // full stock palette restated — the colors param REPLACES F7's defaults 
+  // full stock palette restated: the colors param REPLACES F7's defaults
   colors: {
     primary: '#ffffff',
     red: '#ff3b30',

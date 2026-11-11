@@ -51,7 +51,7 @@ function buildPayload(reply) {
 // Per-row VAPID selection: the keypair is chosen from the row's
 // stored vapidKeyId (defaulting to 'k0') on every send, rather than a single
 // process-global setVapidDetails. selectVapidDetails throws
-// PUSH_VAPID_KEY_UNAVAILABLE — before any network call — for a row whose keyId
+// PUSH_VAPID_KEY_UNAVAILABLE, before any network call, for a row whose keyId
 // matches neither the current nor the previous VAPID key, so a device is never
 // messaged with the wrong key; sendOne maps that to a suppression, not a send.
 function createWebPushSender(env = process.env) {
@@ -250,7 +250,7 @@ function createPushService({
       });
     } catch (error) {
       // The device's VAPID key is gone (neither current nor previous matches):
-      // fail closed as a suppression, never a `failed` send and never a retry —
+      // fail closed as a suppression, never a `failed` send and never a retry:
       // retrying cannot conjure the key, and it must never be sent with another.
       if (error?.code === 'PUSH_VAPID_KEY_UNAVAILABLE') {
         await suppress(delivery, 'vapid_key_unavailable');
@@ -285,7 +285,7 @@ function createPushService({
   // Admin-triggered plumbing check: broadcasts to every active device of the
   // caller's own account (a test must behave like a
   // real reply would), while still bypassing the agent reply pipeline and
-  // its delivery ledger on purpose — a test must never look like an agent
+  // its delivery ledger on purpose: a test must never look like an agent
   // reply. Dead sessions are deactivated and skipped, not fatal, so one
   // stale device cannot hide the healthy ones.
   async function sendTest({ userId }) {
@@ -311,7 +311,7 @@ function createPushService({
         sentCount += 1;
       } catch (error) {
         // A device on a retired VAPID key (PUSH_VAPID_KEY_UNAVAILABLE) is
-        // skipped like a dead session — never sent with the wrong key.
+        // skipped like a dead session, never sent with the wrong key.
         const statusCode = Number(error?.statusCode || 0);
         if (statusCode === 404 || statusCode === 410) {
           await store.deactivateByFingerprint(subscription.endpointFingerprint, 'push_endpoint_gone');

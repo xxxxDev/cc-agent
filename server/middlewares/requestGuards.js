@@ -26,7 +26,7 @@ const alwaysAllowedOrigins = [site.publicOrigin()];
 // Dev-only. localhost / 127.0.0.1 are origins an attacker can serve a page from,
 // so they are NOT trusted in production. But the SPA is served at localhost
 // during local dev and cors() gates its GETs too, so removing them in dev would
-// break local dev entirely — hence the env split, not a plain deletion.
+// break local dev entirely, hence the env split, not a plain deletion.
 // Asked at each request: whether the dev ports count (siteConfig.devMode) can change.
 const devOnlyOrigins = () => [...new Set([...site.loopbackPorts(), ...site.devPorts()])].flatMap((port) => [`http://localhost:${port}`, `http://127.0.0.1:${port}`]);
 
@@ -37,7 +37,7 @@ const devOnlyOrigins = () => [...new Set([...site.loopbackPorts(), ...site.devPo
 // attacker serves on another port of a LAN host is not a trusted origin.
 const LAN_HOST = '(?:10\\.\\d+\\.\\d+\\.\\d+|172\\.(?:1[6-9]|2\\d|3[01])\\.\\d+\\.\\d+|192\\.168\\.\\d+\\.\\d+)';
 const privateLanProd = new RegExp(`^https?://${LAN_HOST}:${SERVING_PORT}$`);
-// Dev: the vite dev server, the service and a scratch instance (siteConfig) — not any port, which let a page served from anywhere on the LAN make
+// Dev: the vite dev server, the service and a scratch instance (siteConfig), not any port, which let a page served from anywhere on the LAN make
 // credentialed requests here.
 const privateLanDev = () => new RegExp(`^https?://${LAN_HOST}:(?:${[...new Set([...site.devPorts(), ...site.loopbackPorts()])].join('|')})$`);
 
@@ -86,7 +86,7 @@ function isHttpsRequest(req) {
 function csrfCookieOpts(req) {
   return {
     // the SPA has to read this one back out to echo it in the header, so unlike
-    // session_id it cannot be httpOnly — it is a CSRF token, not a credential
+    // session_id it cannot be httpOnly: it is a CSRF token, not a credential
     httpOnly: false,
     secure: isHttpsRequest(req),
     sameSite: 'Lax',
@@ -207,7 +207,7 @@ function rateLimit({ windowMs, max }) {
 // allow-listed field sets, far below it.
 const JSON_BODY_LIMIT = '100kb';
 
-// express's default error handler answers a body-parser error with HTML — and
+// express's default error handler answers a body-parser error with HTML, and
 // leaks a stack trace outside production. Keep the API's JSON error shape.
 function jsonBodyErrorHandler(err, req, res, next) {
   if (err?.type === 'entity.too.large') {

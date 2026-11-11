@@ -25,7 +25,7 @@ export function operationTitle(kind) {
 // done / in progress / not started, matching the rotate list's existing marks.
 const step=(done,active)=>done?'✓ ':active?'⋯ ':'○ ';
 export function operationSteps(d, kind, op) {
- // Waking an agent — creating one, or reconnecting a stopped one — is only ever
+ // Waking an agent (creating one, or reconnecting a stopped one) is only ever
  // locked in these two phases, so report them instead of only spinning. The
  // awaiting-workspace/confirmation gates deliberately do not lock the page.
  if(kind==='start'){

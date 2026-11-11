@@ -12,7 +12,7 @@ require('dotenv').config({ path: fileURLToPath(new URL('./server/.env', import.m
 // The public address and the service port (server/siteConfig.js, one place).
 const site = require('./server/siteConfig.js');
 
-// Build id: `git describe` of the last commit that could change the output —
+// Build id: `git describe` of the last commit that could change the output:
 // `v2026.9.11` on a release, `v2026.9.11-3-gabc1234` after it, `-dirty` for
 // unsaved source. One marker for the Settings footer, the update prompt and
 // /version.json; contract and rationale in build/buildId.js.

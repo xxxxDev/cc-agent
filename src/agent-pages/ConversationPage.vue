@@ -88,7 +88,7 @@ import ChecklistPanel,{askNewChecklist} from "../components/ChecklistPanel.vue";
 workspace.recoverOrphanedConversation();
 stopOrphanWatch=watch(workspace.selected,id=>{if(!id)nextTick(workspace.recoverOrphanedConversation);});});
 // Opening or closing the right column narrows or widens the conversation, and the
-// bubbles re-wrap to a different height while scrollTop stays put — so the view
+// bubbles re-wrap to a different height while scrollTop stays put, so the view
 // jumped, at the bottom by thousands of pixels. Keep
 // what the reader had: the bottom if they were there, else the message at the top.
 function readingPosition(){

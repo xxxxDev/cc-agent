@@ -1,6 +1,6 @@
 // What an agent may be set to run on. Ordinary members get the production
-// models and the two efforts the product is tuned for; an admin — the person who
-// carries the consequence of the choice, and who creates every agent —
+// models and the two efforts the product is tuned for; an admin (the person who
+// carries the consequence of the choice, and who creates every agent)
 // gets Fable and the CLI's full effort range (claude --effort: low, medium, high,
 // xhigh, max).
 //

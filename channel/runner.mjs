@@ -34,7 +34,7 @@ const hookCommand=quote(process.execPath)+' '+quote(path.join(config.root,'chann
 const agentConfig=path.join(config.root,'channel/agent-config');
 // The workspace sits under the owner's home, and CLAUDE.md discovery walks up from
 // it, so ~/.claude/CLAUDE.md and ~/.claude/rules load as *project* memory even with
-// the user source off — measured with /context. Exclude every ancestor's memory;
+// the user source off, measured with /context. Exclude every ancestor's memory;
 // the workspace's own, and any repository an agent works in below it, still load.
 // Claude turns every backslash into a slash before matching with picomatch, so
 // special characters are escaped as one-character classes, never with a backslash.
@@ -67,7 +67,7 @@ const plainFiles=dir=>{try{return fs.readdirSync(dir,{withFileTypes:true}).every
 const dropEmptyStaging=dir=>{try{const c=path.join(dir,'.claude'),st=fs.lstatSync(c);if(!st.isDirectory())return;const inner=fs.readdirSync(c);if(inner.length!==1||inner[0]!=='.cc-writes')return;const w=path.join(c,'.cc-writes');if(!fs.lstatSync(w).isDirectory()||fs.readdirSync(w).length)return;fs.rmdirSync(w);fs.rmdirSync(c);}catch{}};
 if(typeof config.reference==='string')dropEmptyStaging(config.reference);
 const referenceDirs=[config.reference,config.attachments].filter(d=>d&&plainFiles(d)).map(d=>path.resolve(d));
-// Denying ~ alone left Bash free to read everything outside home — external
+// Denying ~ alone left Bash free to read everything outside home: external
 // volumes, /tmp (other sessions' files), world-readable LaunchDaemon plists that may
 // hold a service's token.
 // Those are denied too. A deny-everything-and-reopen fence breaks git, node and
@@ -126,8 +126,8 @@ const writableTmp=fullAccess?tmpDirs:[sandboxTmp,'/private'+sandboxTmp];
 const sharedTmp=['/tmp/claude','/private/tmp/claude',`/tmp/claude-${uid}`,`/private/tmp/claude-${uid}`];
 // An allowed folder is writable, but not its .claude/: Claude reads the settings in
 // a --add-dir folder's .claude/ at launch (enabledPlugins among them), so an agent
-// that could write there could switch on a plugin installed for the owner — which
-// runs outside the sandbox — at its next start. Bash can write there unless it
+// that could write there could switch on a plugin installed for the owner, which
+// runs outside the sandbox, at its next start. Bash can write there unless it
 // is denied; Claude guards only the workspace's own .claude/ by itself.
 const configDirs=allowDirs.map(d=>path.join(d,'.claude'));
 // Full access (server/agentAccess.js): no scope at
@@ -365,7 +365,7 @@ const transcript=path.join(platform.isWin?homeDir:env.HOME,'.claude','projects',
 const resumed=config.resume||fs.existsSync(transcript)||fs.existsSync(path.join(controlDir,'started.marker'));
 // The last two sentences are load-bearing. A session's first ToolSearch can come
 // back without the executive tools, and the session then announces the server is
-// down and stops — while the MCP log shows that server connected with its tools
+// down and stops, while the MCP log shows that server connected with its tools
 // registered. It never calls ready, and the web UI sits on the wake shield until a
 // human tells it to try again. Another MCP server failing to spawn (a missing
 // binary in the launchd PATH, say) is a separate thing and must not be read as

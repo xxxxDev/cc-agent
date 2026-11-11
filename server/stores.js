@@ -12,7 +12,7 @@ function datastore(filename) {
   return new Datastore(privateDatastoreOptions(path.join(DB_DIR, filename)));
 }
 
-// Shared NeDB instances — required by both the auth controller and the
+// Shared NeDB instances, required by both the auth controller and the
 // auth middleware (verifyToken checks live sessions, not just JWT validity).
 const usersDB = datastore('users.db');
 const sessionsDB = datastore('sessions.db');
@@ -30,7 +30,7 @@ const passkeysDB = datastore('passkeys.db');
 // Periodic cleanup: logout only removes the current token's row, so sessions
 // that lapse by idle-timeout are never deleted and would accumulate over time
 // (more so now that sessions can live up to the 15-day sliding window). Sweep
-// expired rows shortly after boot and hourly to keep the store bounded — this
+// expired rows shortly after boot and hourly to keep the store bounded; this
 // also catches abandoned sessions a pure clean-on-read would miss.
 function sweepExpiredSessions() {
   sessionsDB.remove({ expiresAt: { $lt: new Date() } }, { multi: true }, (err, removed) => {

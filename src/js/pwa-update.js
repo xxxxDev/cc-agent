@@ -21,7 +21,7 @@ export async function forceAppUpdate({ onPhase = () => {} } = {}) {
     // Keep the registration (and therefore the PushSubscription) intact while
     // asking the browser for the newest worker, then wait for its takeover
     // (controllerchange) so one tap really lands on the new version. The hard
-    // deadline wraps the WHOLE phase including the sw.js fetch — that fetch has
+    // deadline wraps the WHOLE phase including the sw.js fetch: that fetch has
     // no timeout of its own.
     if ('serviceWorker' in navigator) {
       await Promise.race([
@@ -51,12 +51,12 @@ export async function forceAppUpdate({ onPhase = () => {} } = {}) {
       ]);
     }
   } catch (e) {
-    /* ignore — reload regardless */
+    /* ignore: reload regardless */
   }
   // Reload to the app root: reloading in place can trap the user on a
   // deep-linked page (e.g. a push-opened detail page).
   // The query parameter is how the freshly loaded app knows it is here because
-  // the user asked to update — if it comes up still behind, the waits above
+  // the user asked to update: if it comes up still behind, the waits above
   // failed open and the user is told that instead of being offered the same
   // update again. Keep it in sync with UPDATE_ATTEMPT_PARAM in versionCheck.js.
   window.location.replace(`/?force_update=${Date.now()}`);

@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 //
 // The marker has to do two jobs at once: name a release a human can recognise,
 // and pin the exact source the bundle came from. `git describe --tags --always
-// --dirty` gives both in one string — `v2026.7.3`, `v2026.7.3-5-gd76e17b`, plus a
+// --dirty` gives both in one string: `v2026.7.3`, `v2026.7.3-5-gd76e17b`, plus a
 // `-dirty` suffix when tracked files are modified.
 //
 // It is deterministic for a given source, which is what keeps the release check

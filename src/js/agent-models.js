@@ -5,7 +5,7 @@
 //
 // This list is presentation only. `server/agentProfile.js` holds the same split
 // and is what actually enforces it, from the session's verified role rather than
-// anything the page sends — keep the two in step.
+// anything the page sends: keep the two in step.
 export const MODEL_LABELS = {
   'claude-sonnet-5': 'Sonnet 5',
   'claude-opus-5': 'Opus 5',

@@ -98,8 +98,8 @@ app.use(compression());
 const PORT = servicePort();
 
 // Refuse cross-site mutations explicitly, and before cors(). cors()
-// only refuses a disallowed origin by accident — its error callback surfaces as
-// a 500 — and it deliberately waves through a request carrying no Origin at all,
+// only refuses a disallowed origin by accident (its error callback surfaces as
+// a 500), and it deliberately waves through a request carrying no Origin at all,
 // which is the actual hole. Safe methods are not gated, so cors() keeps its
 // existing behaviour for everything else.
 // Requests the site's guards turned away, counted a day for the admin's security
@@ -135,8 +135,8 @@ app.use(cookieParser());
 // string or it is nothing: dropped here, before any route can hand it to a query.
 app.use((req,res,next)=>{for(const k of ['session_id'])if(k in req.cookies&&typeof req.cookies[k]!=='string')delete req.cookies[k];next();});
 // The bridge is for the agents on this machine, which call 127.0.0.1 directly.
-// Tunnel traffic also arrives from 127.0.0.1, so anything Cloudflare forwarded —
-// recognised by the headers it adds — is refused as if the path did not exist.
+// Tunnel traffic also arrives from 127.0.0.1, so anything Cloudflare forwarded,
+// recognised by the headers it adds, is refused as if the path did not exist.
 // Express ignores case here but a proxy rule on /bridge may not, so only lowercase is the bridge.
 // Refusals and failed bridge calls are audited; the API audit below never saw them.
 app.use('/bridge', (req, res, next) => {
@@ -193,7 +193,7 @@ app.use(
 // Login holds no session, and so no CSRF token, yet: it is CSRF-exempt above and
 // instead carries a stricter volume cap of its own. That is a different control
 // from authController's failure-based lockout, which only
-// counts failures — this one caps attempts whether they succeed or not.
+// counts failures; this one caps attempts whether they succeed or not.
 // Each step its own count (the exact path): the name, the password and the code
 // shared one twenty, and three name lookups could spend a sign-in's worth.
 app.post('/api/auth/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 20 }));
@@ -218,7 +218,7 @@ const wwwDir = DIST_DIR;
 // Unhashed PWA control files must revalidate on every load: when the origin is
 // silent Cloudflare injects a months-long browser TTL, and a cached stale
 // registerSW.js once stranded browsers in a worker-less state. Hashed /assets/ names change every build, so they may cache
-// forever — but only if we say so explicitly, for the same reason.
+// forever, but only if we say so explicitly, for the same reason.
 const NO_CACHE_BASENAMES = new Set([
   'index.html',
   'registerSW.js',
@@ -228,7 +228,7 @@ const NO_CACHE_BASENAMES = new Set([
   'manifest.webmanifest',
   // The update check reads this to learn which build the origin is serving. A
   // cached copy makes the app compare itself against its own stale answer, so
-  // the check silently never fires — the other half of the precache exclusion
+  // the check silently never fires: the other half of the precache exclusion
   // in vite.config.js.
   'version.json',
 ]);

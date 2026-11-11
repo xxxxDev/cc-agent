@@ -3,10 +3,10 @@ const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 
 // Everything an agent tried outside its scope, for an admin to review. Nothing out
-// of scope is granted from a prompt — not to a member, not to an admin — so a refused request ends up here instead, and whether to
+// of scope is granted from a prompt (not to a member, not to an admin), so a refused request ends up here instead, and whether to
 // widen that agent's scope is decided from this list. SECURITY.md.
 const MAX_REPORTS = 5000;
-// Open reports per conversation, so one agent — whose own output feeds the 'blocked' reports —
+// Open reports per conversation, so one agent, whose own output feeds the 'blocked' reports,
 // can neither bury the queue nor push other agents' reports out of it.
 const MAX_PER_CONVERSATION = 200;
 

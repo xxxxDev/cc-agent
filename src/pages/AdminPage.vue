@@ -260,7 +260,7 @@ function goUsers() {
 
 <style scoped>
 /* Toggle rows are plain (non-link) list items, so without this their titles
-   are text-selectable while link rows are not — visually inconsistent. */
+   are text-selectable while link rows are not, visually inconsistent. */
 .cc-settings-list {
   user-select: none;
   -webkit-user-select: none;
