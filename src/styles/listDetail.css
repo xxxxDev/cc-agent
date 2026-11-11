@@ -48,6 +48,11 @@
     --f7-navbar-inner-padding-left: 10px;
     --f7-navbar-inner-padding-right: 10px;
   }
+  /* Scrolled, Framework7 brings the small "Agents" title into the navbar, centred; in the narrow
+   * column it ran under the buttons (2026-11-11), so the column keeps none. */
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .navbar .title {
+    display: none;
+  }
   /* Compact rows in the column: a smaller picture, the name and one line of the latest. */
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .page-content > :is(.list.inset, .agent-search-row, .select-all-row) {
     max-width: calc(100% - 20px);
