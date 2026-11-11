@@ -173,7 +173,13 @@ import {inject,ref,computed,nextTick} from "vue";import {listIsColumn} from "../
 .start .swipe-circle {background:#34c759;}
 .delete .swipe-circle {background:#ff3b30;}
 .bulk-count {align-self:center;margin-left:4px;padding:2px 8px;border-radius:10px;font-size:12px;white-space:nowrap;background:color-mix(in srgb,currentColor 14%,transparent);}
-.agent-rename {color:inherit;font:inherit;}
+/* An admin's name in Edit mode is a link; Framework7's inline-flex link was cut off at the
+   title's edge with no ellipsis and ran up to the delete (2026-11-11). */
+.agent-rename {display:block;color:inherit;font:inherit;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* On a phone the bulk buttons and the chosen count leave no room in Edit mode for deleted
+   agents and new agent, which ran off the screen (2026-11-11); as in the
+   list's column (listDetail.css), Edit leaves them out and Done brings them back. */
+@media (max-width:599px){.page:has(.conversation-list.editing) .navbar .right{display:none;}}
 .agent-avatar {
   position: relative;
   width: 45px;
