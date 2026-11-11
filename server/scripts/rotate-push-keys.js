@@ -11,7 +11,10 @@ const { Readable } = require('node:stream');
 const Datastore = require('@seald-io/nedb');
 const NedbIndex = require('@seald-io/nedb/lib/indexes');
 const nedbModel = require('@seald-io/nedb/lib/model');
-const { NEDB_LINE_HOOKS, privateDatastoreOptions } = require('../services/privateFiles');
+const {
+  NEDB_LINE_HOOKS, escapeRawNedbLineBreaks, privateDatastoreOptions, repairRawNedbLineBreaks,
+} = require('../services/privateFiles');
+const { takeDataFolderLock } = require('../services/dataFolderLock');
 const {
   planPushKeyRotation,
   rotatePushKeys,
@@ -99,7 +102,7 @@ function requireDataFiles(dbDir) {
     try { return !fs.lstatSync(path.join(resolved, basename)).isFile(); } catch (_error) { return true; }
   });
   if (missing.length) {
-    throw rotationError('--db-dir does not hold the service\'s data files', 'PUSH_KEY_ROTATION_MISSING_DATA', { dbDir: resolved, missing });
+    throw rotationError('--db-dir does not hold the service\'s data files', 'PUSH_KEY_ROTATION_MISSING_DATA', { missing });
   }
   return resolved;
 }
@@ -112,34 +115,37 @@ function refuseWhileServiceRuns(dbDir) {
   let text;
   try { text = fs.readFileSync(lock, 'utf8'); } catch (error) {
     if (error.code === 'ENOENT') return;
-    throw rotationError('The service lock cannot be read', 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock });
+    throw rotationError('The service lock cannot be read', 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: SERVICE_LOCK });
   }
   const pid = Number(text.trim());
   if (!Number.isInteger(pid) || pid <= 0) {
-    throw rotationError('The service lock is unreadable; stop the service, then remove it', 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock });
+    throw rotationError('The service lock is unreadable; stop the service, then remove it', 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: SERVICE_LOCK });
   }
   try { process.kill(pid, 0); } catch (error) {
     if (error.code === 'ESRCH') return; // left by a service that did not exit cleanly
   }
-  throw rotationError('The service is running on this data folder; stop it first', 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock, pid });
+  throw rotationError('The service is running on this data folder; stop it first', 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: SERVICE_LOCK, pid });
 }
 
 // An apply or a restore holds server.lock itself, made the way scripts/start.mjs makes it
 // (flag wx, its own pid), so a start refuses while the stores are being written: start.mjs
 // stops at a lock whose process is alive. One left by a process that is gone is taken
-// over, as start.mjs does. It is removed when the run ends, by an error or a signal too,
-// and only while it is still this process's file.
+// over the same way start.mjs takes it over (services/dataFolderLock.js), so two runs, or a
+// run and a start, never both hold it. It is removed when the run ends, by an error or a
+// signal too, and only while it is still this process's file.
 function holdServiceLock(dbDir) {
   const lock = path.join(path.dirname(path.resolve(dbDir)), SERVICE_LOCK);
-  const take = () => fs.writeFileSync(lock, String(process.pid), { flag: 'wx', mode: 0o600 });
-  try { take(); } catch (error) {
-    if (error.code !== 'EEXIST') {
-      throw rotationError('The service lock cannot be made', 'PUSH_KEY_ROTATION_LOCK_FAILED', { lock, reason: error.code || 'write failed' });
+  try { takeDataFolderLock(lock); } catch (error) {
+    if (error.code === 'DATA_FOLDER_LOCK_HELD') {
+      throw rotationError('The service is running on this data folder; stop it first', 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: SERVICE_LOCK, pid: error.pid ?? undefined });
     }
-    refuseWhileServiceRuns(dbDir);
-    try { fs.unlinkSync(lock); take(); } catch (_error) {
-      throw rotationError('Something else took the service lock; try again', 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock });
+    if (error.code === 'DATA_FOLDER_LOCK_UNREADABLE') {
+      throw rotationError('The service lock is unreadable; stop the service, then remove it', 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: SERVICE_LOCK });
     }
+    if (error.code === 'DATA_FOLDER_LOCK_BUSY') {
+      throw rotationError('Something else took the service lock; try again', 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: SERVICE_LOCK });
+    }
+    throw rotationError('The service lock cannot be made', 'PUSH_KEY_ROTATION_LOCK_FAILED', { lock: SERVICE_LOCK, reason: error.code || 'write failed' });
   }
   const owned = fs.lstatSync(lock);
   const signals = ['SIGINT', 'SIGTERM', 'SIGHUP'];
@@ -185,7 +191,10 @@ function datafileLoadError(error, file) {
 // \r, U+0085, U+2028 and U+2029, its own parser with the service's hooks and corruption
 // limit, and its indexes rebuilt, so a file NeDB would refuse is refused here too. The
 // bytes come through a descriptor opened read-only: nothing is written, created or
-// compacted. unreadableLines counts the lines NeDB would drop.
+// compacted. Raw U+0085, U+2028 and U+2029 are escaped in memory first, as the stores do
+// in the file itself before they load it (services/privateFiles.js), so it reads as it
+// will once repaired; rawLineBreaks counts them. unreadableLines counts the lines NeDB
+// would drop.
 async function loadDatafileSnapshot(filename) {
   const { resolved } = validatePrivateFileForRead(filename);
   const file = path.basename(resolved);
@@ -195,10 +204,12 @@ async function loadDatafileSnapshot(filename) {
     if (!fs.fstatSync(descriptor).isFile()) {
       throw rotationError('A data file is not a regular file', 'PUSH_KEY_ROTATION_MISSING_DATA', { file });
     }
-    raw = fs.readFileSync(descriptor, 'utf8');
+    raw = fs.readFileSync(descriptor);
   } finally {
     fs.closeSync(descriptor);
   }
+  const escaped = escapeRawNedbLineBreaks(raw);
+  raw = escaped.buffer.toString('utf8');
   let unreadableLines = 0;
   const store = new Datastore({
     inMemoryOnly: true,
@@ -220,7 +231,7 @@ async function loadDatafileSnapshot(filename) {
   try { store._resetIndexes(treated.data); } catch (error) {
     throw datafileLoadError(error, file);
   }
-  return { store, unreadableLines };
+  return { store, unreadableLines, rawLineBreaks: escaped.total ? escaped.characters : null };
 }
 
 // The documents a snapshot holds, for checks and tests.
@@ -229,9 +240,15 @@ async function readDatafileSnapshot(filename) {
 }
 
 // A store the apply writes to: NeDB opens it here, inside main, so a file it refuses
-// becomes one of this script's errors instead of an exception nobody catches.
-async function openDatastore(filename) {
-  const store = new Datastore({ ...privateDatastoreOptions(filename), autoload: false });
+// becomes one of this script's errors instead of an exception nobody catches. Its raw
+// line breaks are escaped first, as every store's are, and what was done goes into the
+// report instead of being printed.
+async function openDatastore(filename, repairs = null) {
+  const repair = repairRawNedbLineBreaks(filename);
+  if (repair.repaired && repairs) {
+    repairs[repair.file] = { characters: repair.characters, repaired: true, backup: repair.backup };
+  }
+  const store = new Datastore({ ...privateDatastoreOptions(filename, { onRepair: null }), autoload: false });
   try { await store.loadDatabaseAsync(); } catch (error) {
     throw datafileLoadError(error, path.basename(filename));
   }
@@ -241,12 +258,14 @@ async function openDatastore(filename) {
 async function snapshotAll(dbDir) {
   const stores = {};
   const unreadableLines = {};
+  const rawLineBreaks = {};
   for (const basename of DATA_FILES) {
     const snapshot = await loadDatafileSnapshot(path.join(dbDir, basename));
     stores[basename] = snapshot.store;
     unreadableLines[basename] = snapshot.unreadableLines;
+    if (snapshot.rawLineBreaks) rawLineBreaks[basename] = snapshot.rawLineBreaks;
   }
-  return { stores, unreadableLines };
+  return { stores, unreadableLines, rawLineBreaks };
 }
 
 async function main(argv = process.argv.slice(2)) {
@@ -282,14 +301,23 @@ async function main(argv = process.argv.slice(2)) {
         converged: plan.report.plannedChanges === 0,
         wouldChange: plan.report.plannedChanges,
         unreadableLines: snapshot.unreadableLines,
+        // Files still holding raw line breaks: the apply (for the two push stores) or the
+        // service's next start escapes them, keeping the original beside each.
+        lineBreakRepair: Object.fromEntries(Object.entries(snapshot.rawLineBreaks)
+          .map(([file, characters]) => [file, { characters, repaired: false, wouldRepair: true }])),
         report: plan.report,
       };
     }
 
     // apply: manifest-backed backup BEFORE any mutation.
     const backup = backupPushKeyFiles(dbDir, options.backupDir);
-    const subscriptionsDB = await openDatastore(path.join(dbDir, 'push-subscriptions.db'));
-    const deliveriesDB = await openDatastore(path.join(dbDir, 'push-deliveries.db'));
+    const lineBreakRepair = {};
+    const subscriptionsDB = await openDatastore(path.join(dbDir, 'push-subscriptions.db'), lineBreakRepair);
+    const deliveriesDB = await openDatastore(path.join(dbDir, 'push-deliveries.db'), lineBreakRepair);
+    // sessions.db is only read here: the service escapes it at its next start.
+    if (snapshot.rawLineBreaks['sessions.db']) {
+      lineBreakRepair['sessions.db'] = { characters: snapshot.rawLineBreaks['sessions.db'], repaired: false, repairedAtServiceStart: true };
+    }
     const result = await rotatePushKeys(subscriptionsDB, deliveriesDB, sessionsDB, {
       apply: true, env: process.env,
     });
@@ -305,6 +333,7 @@ async function main(argv = process.argv.slice(2)) {
       changed: result.changed,
       converged: result.converged,
       unreadableLines: snapshot.unreadableLines,
+      lineBreakRepair,
       report: result.report,
       after: result.after,
     };
@@ -313,15 +342,57 @@ async function main(argv = process.argv.slice(2)) {
   }
 }
 
-// Only this script's own errors, the push modules' (fixed text and key names) and the
-// system's (a path) are shown as they are; anything else gets a fixed message, so no key
-// text can reach the terminal.
-function describeError(error) {
+// Which path argument a path belongs to: the deepest one holding it, or the data folder
+// (where server.lock is), never the path itself.
+function pathArgumentLabel(target, pathArguments = {}) {
+  if (typeof target !== 'string' || !target) return undefined;
+  const resolved = path.resolve(target);
+  const bases = Object.entries(pathArguments).filter(([, value]) => typeof value === 'string' && value)
+    .map(([name, value]) => [name, path.resolve(value)]);
+  if (pathArguments['--db-dir']) bases.push(['the data folder holding --db-dir', path.dirname(path.resolve(pathArguments['--db-dir']))]);
+  let best = null;
+  for (const [name, base] of bases) {
+    if ((resolved === base || resolved.startsWith(`${base}${path.sep}`)) && (!best || base.length > best[1].length)) best = [name, base];
+  }
+  return best ? best[0] : 'another path';
+}
+
+// Details carry file names and counts; an absolute path left in them is named by its
+// argument instead.
+function pathFreeDetails(details, pathArguments) {
+  if (!details || typeof details !== 'object') return details;
+  return Object.fromEntries(Object.entries(details).map(([key, value]) => [
+    key, typeof value === 'string' && path.isAbsolute(value) ? pathArgumentLabel(value, pathArguments) : value,
+  ]));
+}
+
+// Only this script's own errors and the push modules' (fixed text and key names) are shown
+// as they are. A system error or a storage check shows its code and which argument's path
+// it was about, never the path or the system's message, which quote paths typed on the
+// command line. Anything else gets a fixed message, so no key text can reach the terminal.
+function describeError(error, pathArguments = {}) {
   const code = typeof error?.code === 'string' ? error.code : '';
-  const known = code.startsWith('PUSH_') || code === 'PRIVATE_STORAGE_INVALID';
-  if (known) return { error: error.message, code, details: error.details };
-  if (error?.syscall) return { error: error.message, code: code || 'PUSH_KEY_ROTATION_FAILED' };
+  if (code.startsWith('PUSH_')) return { error: error.message, code, details: pathFreeDetails(error.details, pathArguments) };
+  if (code === 'PRIVATE_STORAGE_INVALID') {
+    return { error: error.reason || 'Private storage check failed', code, path: pathArgumentLabel(error.path, pathArguments) };
+  }
+  if (error?.syscall) {
+    const described = { error: 'A file operation failed', code: code || 'PUSH_KEY_ROTATION_FAILED', syscall: error.syscall };
+    if (error.path) described.path = pathArgumentLabel(error.path, pathArguments);
+    if (error.dest) described.dest = pathArgumentLabel(error.dest, pathArguments);
+    return described;
+  }
   return { error: 'Push key rotation failed', code: 'PUSH_KEY_ROTATION_FAILED' };
+}
+
+// The path arguments as typed, for describeError; none when the command line is invalid.
+function pathArgumentsOf(argv) {
+  try {
+    const options = parseArgs(argv);
+    return { '--db-dir': options.dbDir, '--backup-dir': options.backupDir, '--keys': options.keys };
+  } catch (_error) {
+    return {};
+  }
 }
 
 if (require.main === module) {
@@ -331,12 +402,12 @@ if (require.main === module) {
       if (result.converged === false) process.exitCode = 1;
     })
     .catch((error) => {
-      process.stderr.write(`${JSON.stringify(describeError(error))}\n`);
+      process.stderr.write(`${JSON.stringify(describeError(error, pathArgumentsOf(process.argv.slice(2))))}\n`);
       process.exitCode = 1;
     });
 }
 
 module.exports = {
   parseArgs, main, loadKeys, loadDatafileSnapshot, readDatafileSnapshot, openDatastore, requireDataFiles,
-  refuseWhileServiceRuns, holdServiceLock, describeError,
+  refuseWhileServiceRuns, holdServiceLock, describeError, pathArgumentsOf,
 };

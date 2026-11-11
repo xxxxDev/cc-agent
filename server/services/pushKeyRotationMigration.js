@@ -63,10 +63,14 @@ function validatePrivateFileForRead(filename) {
       mode: result.info.mode & 0o777,
     });
   }
+  // NeDB ignores the half-finished rewrite while the store itself is there, so removing it
+  // loses nothing; a restore removes it too.
   if (fs.existsSync(`${result.resolved}~`)) {
-    throw migrationError('Push datastore has an unresolved NeDB companion file', {
-      filename: result.resolved,
-    });
+    const leftover = `${path.basename(result.resolved)}~`;
+    throw migrationError(
+      `A leftover ${leftover} from an interrupted write sits beside the store: remove it, then run again, or run --restore with your backup`,
+      { file: leftover },
+    );
   }
   return result;
 }
