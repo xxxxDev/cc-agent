@@ -31,3 +31,35 @@ export function setListDetail(on) {
 export function listIsColumn(pageEl) {
   return listDetailActive.value && !!pageEl?.classList?.contains('page-previous') && pageEl.nextElementSibling?.dataset?.name === 'conversation';
 }
+
+// The column's width, dragged at its edge (2026-11-11): kept on the device;
+// null is the built-in width. Never narrower than LIST_MIN, nor so wide that the
+// conversation keeps less than CHAT_KEEP; a double click goes back to the built-in width.
+const WIDTH_KEY = PRODUCT.storageKeys.listColumn;
+export const LIST_MIN = 260, LIST_MAX = 640, CHAT_KEEP = 560;
+const readWidth = () => { try { const n = Number(localStorage.getItem(WIDTH_KEY)); return Number.isFinite(n) && n >= LIST_MIN && n <= LIST_MAX ? n : null; } catch { return null; } };
+export const listColumnWidth = ref(readWidth());
+export function clampListColumn(width, viewWidth) {
+  return Math.round(Math.max(LIST_MIN, Math.min(width, LIST_MAX, viewWidth - CHAT_KEEP)));
+}
+export function setListColumnWidth(width) {
+  listColumnWidth.value = width == null ? null : Math.round(width);
+  try { width == null ? localStorage.removeItem(WIDTH_KEY) : localStorage.setItem(WIDTH_KEY, String(Math.round(width))); } catch {}
+}
+export function startListColumnResize(event) {
+  const view = event.currentTarget?.closest?.('#view-chat');
+  if (!view) return;
+  event.preventDefault();
+  const handle = event.currentTarget, box = view.getBoundingClientRect();
+  try { handle.setPointerCapture(event.pointerId); } catch {}
+  document.body.classList.add('col-resizing');
+  document.documentElement.classList.add('list-resizing');
+  const move = (e) => { listColumnWidth.value = clampListColumn(e.clientX - box.left, box.width); };
+  const end = () => {
+    handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', end); handle.removeEventListener('pointercancel', end);
+    document.body.classList.remove('col-resizing');
+    document.documentElement.classList.remove('list-resizing');
+    setListColumnWidth(listColumnWidth.value);
+  };
+  handle.addEventListener('pointermove', move); handle.addEventListener('pointerup', end); handle.addEventListener('pointercancel', end);
+}

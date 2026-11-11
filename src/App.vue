@@ -172,7 +172,7 @@ import UsageMeters from './components/UsageMeters.vue';
 import { ct } from './js/agent-i18n.js';
 import { sidebarFolded, sidebarAuto, sidebarRail, sidebarNarrow, setSidebarFolded, peekSidebar } from './js/sidebarState.js';
 import { forceAppUpdate } from './js/pwa-update.js';
-import { listDetailActive } from './js/listDetail.js';
+import { listDetailActive, listColumnWidth } from './js/listDetail.js';
 
 const ls = (k) => {
   try {
@@ -436,6 +436,8 @@ watch([sidebarRail, sidebarNarrow], ([rail, narrow]) => {
 // The Agents list beside the conversation (listDetail.js): a class on <html>, read by
 // styles/listDetail.css together with the same width.
 watch(listDetailActive, (on) => document.documentElement.classList.toggle('list-detail-on', on), { immediate: true });
+// The column's dragged width, read by listDetail.css as --list-column-set.
+watch(listColumnWidth, (w) => w == null ? document.documentElement.style.removeProperty('--list-column-set') : document.documentElement.style.setProperty('--list-column-set', w + 'px'), { immediate: true });
 // A folded item's name beside it while the mouse is on it.
 const sideTip = ref(null);
 function showSideTip(event, text) {

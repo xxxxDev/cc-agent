@@ -8,7 +8,7 @@
  * the setting off, nothing here applies and the pages slide over each other as before. */
 @media (min-width: 1280px) {
   html.list-detail-on #view-chat {
-    --list-column: clamp(320px, 25vw, 360px);
+    --list-column: var(--list-column-set, clamp(320px, 25vw, 360px));
     --list-detail-motion: .32s cubic-bezier(.2, .8, .2, 1);
   }
   html.list-detail-on #view-chat > .page[data-name="chats"] {
@@ -52,6 +52,14 @@
    * column it ran under the buttons (2026-11-11), so the column keeps none. */
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .navbar .title {
     display: none;
+  }
+  /* The column's edge can be dragged (listDetail.js startListColumnResize); while it is, nothing
+   * eases, so the column follows the pointer. */
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous + .page[data-name="conversation"] .list-column-divider {
+    display: block;
+  }
+  html.list-detail-on.list-resizing #view-chat > .page {
+    transition: none !important;
   }
   /* Compact rows in the column: a smaller picture, the name and one line of the latest. */
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .page-content > :is(.list.inset, .agent-search-row, .select-all-row) {
@@ -137,4 +145,34 @@
 @media (min-width: 1280px) and (prefers-reduced-motion: reduce) {
   html.list-detail-on #view-chat > .page[data-name="chats"] { transition: none; }
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous + .page[data-name="conversation"] { animation: none; }
+}
+
+/* The drag handle at the conversation's left edge; shown only beside the column (above). It looks
+ * and works like the split view's dividers (SplitView.vue): an accent line on hover and while
+ * dragging, a double click to go back. */
+.list-column-divider {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  z-index: 600;
+  cursor: col-resize;
+  touch-action: none;
+}
+.list-column-divider::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--dp-color-accent, #d97757);
+  opacity: 0;
+  transition: opacity .15s;
+}
+.list-column-divider:hover::after, html.list-resizing .list-column-divider::after {
+  opacity: .8;
 }

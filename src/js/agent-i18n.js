@@ -309,7 +309,7 @@ const english = {
 "無法載入這個 Agent":"This Agent could not be loaded",
 "拖曳調整欄寬":"Drag to change the column widths",
 "拖曳調整列高":"Drag to change the row heights",
-"拖曳調整聊天室與終端機寬度":"Drag to share the width between the chat and the terminal",
+"拖曳調整聊天室與終端機寬度":"Drag to share the width between the chat and the terminal","拖曳調整清單寬度":"Drag to resize the list","拖曳調整清單寬度，按兩下恢復":"Drag to resize the list; double-click to reset",
 "Claude 終端機":"Claude terminal",
 "跟隨管理設定":"Follow the Admin setting",
 "拖曳整個群組":"Drag the whole group",
