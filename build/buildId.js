@@ -28,7 +28,7 @@ export function describeSourceBuild({ run = runGit } = {}) {
   const sourceCommit = run(['log', '-1', '--format=%H', '--', ...NON_SOURCE_PATHSPECS]);
   // A tree whose entire history is documentation still deserves a marker.
   const described = run(['describe', '--tags', '--always', sourceCommit || 'HEAD']);
-  // The dirty flag reads the same pathspec: an unsaved CHANGELOG edit is not a
+  // The dirty flag reads the same pathspec: an unsaved README edit is not a
   // different build, an unsaved source edit is.
   // `--untracked-files=all` is required here: an untracked public asset or a
   // source file consumed by a glob changes dist even though Git has no index

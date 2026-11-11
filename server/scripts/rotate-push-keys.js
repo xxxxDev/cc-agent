@@ -1,5 +1,9 @@
 #!/usr/bin/env node
+// Moves the stored push subscriptions onto the current push keys after a rotation
+// (docs/push-keys.md): re-encrypts them and takes their fingerprints again. Run it with
+// the service stopped; --apply backs up both push stores first, --restore puts a backup back.
 
+const fs = require('node:fs');
 const path = require('node:path');
 const Datastore = require('@seald-io/nedb');
 const { privateDatastoreOptions } = require('../services/privateFiles');
@@ -11,7 +15,7 @@ const {
 } = require('../services/pushKeyRotationMigration');
 
 function parseArgs(argv) {
-  const options = { mode: null, dbDir: null, backupDir: null, ackQuiesced: false };
+  const options = { mode: null, dbDir: null, backupDir: null, ackQuiesced: false, keys: null };
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
     if (value === '--dry-run') options.mode = options.mode ? 'invalid' : 'dry-run';
@@ -20,6 +24,7 @@ function parseArgs(argv) {
     else if (value === '--ack-quiesced') options.ackQuiesced = true;
     else if (value === '--db-dir') options.dbDir = argv[index += 1];
     else if (value === '--backup-dir') options.backupDir = argv[index += 1];
+    else if (value === '--keys') options.keys = argv[index += 1];
     else throw new Error(`unknown argument: ${value}`);
   }
   if (!['dry-run', 'apply', 'restore'].includes(options.mode)) {
@@ -42,6 +47,9 @@ function openStores(dbDir) {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
+  // The keys file the service starts with (push-keys.json in the data folder); its values
+  // win over the environment, as they do in scripts/start.mjs.
+  if (options.keys) Object.assign(process.env, JSON.parse(fs.readFileSync(options.keys, 'utf8')));
 
   if (options.mode === 'restore') {
     return { mode: 'restore', ...restorePushKeyFiles(options.backupDir, options.dbDir) };

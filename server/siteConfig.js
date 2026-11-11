@@ -55,10 +55,8 @@ const PRODUCT = Object.freeze({
     file: 'security-log.json',
     nameHashLabel: 'security-log-names',
   }),
-  // services/userLifecycleMigration.js, stored data: the schema a users-file backup
+  // services/pushKeyRotationMigration.js, stored data: the schema a push-key backup
   // manifest is written and read with.
-  lifecycleBackupSchema: 'cc-agent.user-lifecycle-backup.v1',
-  // services/pushKeyRotationMigration.js, stored data: the same for a push-key backup.
   pushKeyBackupSchema: 'cc-agent.push-key-rotation-backup.v1',
 });
 // A scratch instance (a second copy of the service, with its own data folder and build)
