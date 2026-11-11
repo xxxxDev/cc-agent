@@ -145,12 +145,14 @@ function startEveryAgent(){
 // and only that source's part is saved; dropped outside it (on a source's title) it
 // goes back with nothing saved. src/js/sourceFence.js keeps Framework7 from offering
 // such a place; this is the last check.
-async function reorderChats({from,to,el}){if(orderBusy.value||search.value||from===to||listSource.value==='recent')return;const rows=[...listRows.value];if(rows[from]?.kind!=='agent'||wasRefused(el))return;const moved=rows[from];rows.splice(to,0,rows.splice(from,1)[0]);if(listSource.value!=='all')return saveRows(rows);
+async function reorderChats({from,to,el}){if(orderBusy.value||search.value||from===to||listSource.value==='recent')return;const rows=[...listRows.value];if(rows[from]?.kind!=='agent'||rows[from].pinned||wasRefused(el))return;const pinnedEnd=rows.findLastIndex(r=>r.kind==='pins'||r.pinned);if(to<=pinnedEnd){refuseDrop(el);return;}const moved=rows[from];rows.splice(to,0,rows.splice(from,1)[0]);if(listSource.value!=='all')return saveRows(rows);
  const start=rows.findLastIndex((r,i)=>i<to&&r.kind==='source');if(start<0||rows[start].id!=='source:'+sourceOfAgent(moved.agent)){refuseDrop(el);return;}
  const next=rows.findIndex((r,i)=>i>start&&r.kind==='source');await saveRows(rows.slice(start+1,next<0?rows.length:next));}
-async function saveRows(rows){let group=null;const next=[],groups={};for(const row of rows){if(row.kind==='group'){group=row.id;continue;}if(row.kind==='slot')continue;next.push(row.agent);groups[row.id]=group;}
- // The other sources keep their own order after this one's.
- const shown=new Set(next.map(c=>c.id));next.push(...conversations.value.filter(c=>!shown.has(c.id)));orderBusy.value=true;const result=await attempt(()=>api('/conversations/reorder',{method:'POST',body:JSON.stringify({ids:next.map(c=>c.id),groups})}));if(result)conversations.value=result.conversations;orderBusy.value=false;if(!result){const latest=await attempt(()=>api('/conversations'));if(latest)conversations.value=latest.conversations;}}
+async function saveRows(rows){let group=null;const next=[],groups={};for(const row of rows){if(row.kind==='group'){group=row.id;continue;}if(row.kind==='slot'||row.kind==='pins'||row.pinned)continue;next.push(row.agent);groups[row.id]=group;}
+ // The other sources keep their own order after this one's; a pinned agent keeps its
+ // own place, to go back to when unpinned.
+ const shown=new Set(next.map(c=>c.id));next.push(...conversations.value.filter(c=>!shown.has(c.id)&&!isPinned(c.id)));
+ conversations.value.forEach((c,index)=>{if(!shown.has(c.id)&&isPinned(c.id))next.splice(index,0,c);});orderBusy.value=true;const result=await attempt(()=>api('/conversations/reorder',{method:'POST',body:JSON.stringify({ids:next.map(c=>c.id),groups})}));if(result)conversations.value=result.conversations;orderBusy.value=false;if(!result){const latest=await attempt(()=>api('/conversations'));if(latest)conversations.value=latest.conversations;}}
 
 function onChatsIn(){cancelHistoryPaging();if(selected.value){writeUrl(null);opening++;}selected.value=null;detail.value=null;terminalOpen.value=false;}
 const terminalOpen=ref(false);
@@ -171,6 +173,22 @@ async function markAllRead(){
  if(done)conversations.value=conversations.value.map(c=>c.unread?{...c,unread:0}:c);
  markingAllRead.value=false;
 }
+// 釘選 in Edit mode: the chosen agents go to the top;
+// when every one of them is pinned already, the same button unpins them.
+const pinBusy=ref(false);
+const chosenPinned=computed(()=>chosenList.value.length>0&&chosenList.value.every(c=>isPinned(c.id)));
+async function togglePins(){
+ const chosen=chosenList.value;
+ if(!chosen.length||pinBusy.value)return;
+ const drop=new Set(chosen.map(c=>c.id));
+ const pins=chosenPinned.value?listPins.value.filter(id=>!drop.has(id)):[...listPins.value,...chosen.filter(c=>!isPinned(c.id)).map(c=>c.id)];
+ pinBusy.value=true;
+ await attempt(()=>agentPreferences.saveListPreferences({pins}));
+ pinBusy.value=false;
+}
+// A tap on a row in Edit mode chooses it, as its circle does; the drag handle and the
+// row's own buttons keep their own work.
+function editRowTap(e,id){if(e?.target?.closest?.('.sortable-handler, .agent-select, .agent-delete, .agent-rename, a.link, button'))return;toggleChosen(id);}
 const attachmentDrafts=useAttachmentDrafts(selected,user,busy,ct);
 const {files,fileInput,pickFiles,dropFiles,pasteFiles,removeFile,chooseFiles,previewDraft,status:sendStatus}=attachmentDrafts;
 const drafts=new Map();
@@ -335,18 +353,26 @@ const filtered=computed(()=>conversations.value.filter(c=>(mixed()||sourceOfAgen
 // owner's order. An empty group shows only while editing, so it can be filled or
 // removed; a search shows only the groups with a match.
 const listGroups=agentPreferences.listGroups;
+// Pinned agents come first, in a small section of their own above the sources and groups,
+// in the order pinned; while pinned an agent leaves its group and its place, and goes back
+// there when unpinned (its group and order are left as they were).
+const listPins=agentPreferences.listPins;
+const pinnedIds=computed(()=>new Set(listPins.value));
+const isPinned=id=>pinnedIds.value.has(id);
+const unpinned=computed(()=>filtered.value.filter(c=>!pinnedIds.value.has(c.id)));
+const pinnedShown=computed(()=>{const shown=new Map(filtered.value.map(c=>[c.id,c]));return listPins.value.map(id=>shown.get(id)).filter(Boolean);});
 function sourceSections(source){
- const groups=listGroups.value.filter(g=>(g.source||'native')===source),known=new Set(groups.map(g=>g.id)),items=filtered.value.filter(c=>sourceOfAgent(c)===source);
+ const groups=listGroups.value.filter(g=>(g.source||'native')===source),known=new Set(groups.map(g=>g.id)),items=unpinned.value.filter(c=>sourceOfAgent(c)===source);
  const out=[{id:null,name:'',items:items.filter(c=>!c.listGroup||!known.has(c.listGroup))},...groups.map(g=>({id:g.id,name:g.name,items:items.filter(c=>c.listGroup===g.id)}))];
  return out.filter(section=>section.items.length||(section.id===null?!groups.length:editMode.value&&!search.value));
 }
 // All shows the source's title row and each saved group.
 const byActivity=(a,b)=>String(b.activeAt||'').localeCompare(String(a.activeAt||''));
-const sections=computed(()=>listSource.value==='recent'?[{id:null,name:'',items:[...filtered.value].sort(byActivity)}]:listSource.value!=='all'?sourceSections(listSource.value):['native'].flatMap(source=>{
+const sections=computed(()=>[...(pinnedShown.value.length?[{pins:true,items:pinnedShown.value}]:[]),...(listSource.value==='recent'?[{id:null,name:'',items:[...unpinned.value].sort(byActivity)}]:listSource.value!=='all'?sourceSections(listSource.value):['native'].flatMap(source=>{
  // A source with agents shown; while editing, with its empty groups too, to drop into.
  const own=sourceSections(source).filter(section=>section.items.length||section.id);
  return own.some(section=>section.items.length)?[{source,items:[]},...own]:[];
-}));
+}))]);
 // The same, as the rows of the one list: a title row per group, then its agents.
 // An empty group has a slot in Edit mode, a row of its own to drop an agent on:
 // the group's title alone, with a hint under it, was a target Framework7 split in
@@ -359,7 +385,7 @@ const COLLAPSED_KEY='cc-agent-collapsed-groups';
 const collapsedGroups=ref((()=>{try{const v=JSON.parse(localStorage.getItem(COLLAPSED_KEY)||'[]');return Array.isArray(v)?v.filter(x=>typeof x==='string'):[];}catch{return [];}})());
 function toggleGroupCollapse(id){const next=collapsedGroups.value.includes(id)?collapsedGroups.value.filter(x=>x!==id):[...collapsedGroups.value,id];collapsedGroups.value=next;try{localStorage.setItem(COLLAPSED_KEY,JSON.stringify(next));}catch{}}
 const folded=section=>!!section.id&&!editMode.value&&!search.value&&collapsedGroups.value.includes(section.id);
-const listRows=computed(()=>sections.value.flatMap(section=>section.source?[{kind:'source',id:'source:'+section.source,name:SOURCES[section.source].name,icon:SOURCES[section.source].icon}]:[...(section.id?[{kind:'group',id:section.id,name:section.name,empty:!section.items.length,collapsed:folded(section),members:section.items}]:[]),...(section.id&&!section.items.length&&editMode.value?[{kind:'slot',id:'slot:'+section.id,group:section.id}]:[]),...(folded(section)?[]:section.items).map((c,index)=>({kind:'agent',id:c.id,agent:c,group:section.id,last:index===section.items.length-1}))]));
+const listRows=computed(()=>sections.value.flatMap(section=>section.pins?[{kind:'pins',id:'pins',name:ct('已釘選')},...section.items.map(c=>({kind:'agent',id:c.id,agent:c,group:null,pinned:true}))]:section.source?[{kind:'source',id:'source:'+section.source,name:SOURCES[section.source].name,icon:SOURCES[section.source].icon}]:[...(section.id?[{kind:'group',id:section.id,name:section.name,empty:!section.items.length,collapsed:folded(section),members:section.items}]:[]),...(section.id&&!section.items.length&&editMode.value?[{kind:'slot',id:'slot:'+section.id,group:section.id}]:[]),...(folded(section)?[]:section.items).map((c,index)=>({kind:'agent',id:c.id,agent:c,group:section.id,last:index===section.items.length-1}))]));
 // Group names are the owner's own text, and Framework7 action sheets take HTML.
 const escapeHtml=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 // Edit mode holds the list still between polls, so a change here reloads it itself.
@@ -1123,7 +1149,7 @@ async function tick(){
  try{await attempt(refresh);}finally{fetching=false;}
  if(liveChanged)tick();
 }
-watch(user,async(next,prev)=>{if(next?.id===prev?.id)return;signedIn=false;opening++;cancelHistoryPaging();closeNew();busy.value=false;operations.value={};operationErrors.value={};drafts.clear();conversations.value=[];listLoaded.value=false;agentPreferences.listGroups.value=[];selected.value=null;detail.value=null;draft.value='';terminalOpen.value=false;// No one yet is also the moment before the sign-in check answers: the cover stays
+watch(user,async(next,prev)=>{if(next?.id===prev?.id)return;signedIn=false;opening++;cancelHistoryPaging();closeNew();busy.value=false;operations.value={};operationErrors.value={};drafts.clear();conversations.value=[];listLoaded.value=false;agentPreferences.listGroups.value=[];agentPreferences.listPins.value=[];selected.value=null;detail.value=null;draft.value='';terminalOpen.value=false;// No one yet is also the moment before the sign-in check answers: the cover stays
 // (it shows only to someone signed in), for the look that follows it.
 if(!next)return;
 // The start page is left eight seconds after signing in however the first load is
@@ -1146,6 +1172,6 @@ onMounted(()=>{
  poll=setInterval(tick,1200);});
 onUnmounted(()=>{boxWatch?.disconnect();document.removeEventListener('keydown',onEscape);document.removeEventListener('keydown',onFind);window.removeEventListener('popstate',restoreUrl);notifications.stop();document.removeEventListener('visibilitychange',onAppVisible);window.removeEventListener('focus',onAppFocus);unwatchWidth?.();disposed=true;cancelHistoryPaging();operations.value={};clearInterval(poll);live?.close();live=null;wakeRun++;});
 
-return {handToAgent,replyDraft,startReply,cancelReply,unreadOf,unreadLabel,unreadTotal,markAllRead,markingAllRead,mixedList:computed(mixed),chosenByPresence,chooseByPresence,atStart,directOpening,toGroups,openingId,toList,cancelOpening,toggleGroupCollapse,openGroup,mention,pickMention,checklistOpen,checklistPanelVisible,checklistPopupOpen,toggleChecklist,usageOpen,usagePanelVisible,usagePopupOpen,toggleUsage,usageRefreshing,refreshUsage,openAutoCompactChoice,typingBubble,searchPanelVisible,searchPopupOpen,toggleSearch,enterConversation,searchOpen,searchText,foundMessage,searchMessages,showMessage,noteInBubble,pauseAgent,startAgent,allChosen,toggleAllChosen,slash,composerKeydown,chosenList,isChosen,toggleChosen,groupChosen,toggleGroupChosen,terminalSide,chatHidden,terminalWidthCss,startTerminalResize,moveGroups,listRows,sections,listGroups,listSources,listSource,chooseSource,addGroup,editingGroup,startGroupRename,cancelGroupRename,finishGroupRename,deleteGroup,uploadAvatar,resetAvatar,autoSort:agentPreferences.autoSort,backgroundProgress,agentAvatar,presence,embedded,recoverOrphanedConversation,activity,progressInBubble,progressInBar,showViewSwitch,showTerminalSwitch,showSubnavbar,olderBusy,pagingBack,atBottom,loadOlder,onMessagesScroll,onHistoryWheel,onHistoryTouchStart,onHistoryTouchMove,onHistoryTouchEnd,onHistoryTouchCancel,toLatest,
+return {isPinned,chosenPinned,togglePins,pinBusy,editRowTap,handToAgent,replyDraft,startReply,cancelReply,unreadOf,unreadLabel,unreadTotal,markAllRead,markingAllRead,mixedList:computed(mixed),chosenByPresence,chooseByPresence,atStart,directOpening,toGroups,openingId,toList,cancelOpening,toggleGroupCollapse,openGroup,mention,pickMention,checklistOpen,checklistPanelVisible,checklistPopupOpen,toggleChecklist,usageOpen,usagePanelVisible,usagePopupOpen,toggleUsage,usageRefreshing,refreshUsage,openAutoCompactChoice,typingBubble,searchPanelVisible,searchPopupOpen,toggleSearch,enterConversation,searchOpen,searchText,foundMessage,searchMessages,showMessage,noteInBubble,pauseAgent,startAgent,allChosen,toggleAllChosen,slash,composerKeydown,chosenList,isChosen,toggleChosen,groupChosen,toggleGroupChosen,terminalSide,chatHidden,terminalWidthCss,startTerminalResize,moveGroups,listRows,sections,listGroups,listSources,listSource,chooseSource,addGroup,editingGroup,startGroupRename,cancelGroupRename,finishGroupRename,deleteGroup,uploadAvatar,resetAvatar,autoSort:agentPreferences.autoSort,backgroundProgress,agentAvatar,presence,embedded,recoverOrphanedConversation,activity,progressInBubble,progressInBar,showViewSwitch,showTerminalSwitch,showSubnavbar,olderBusy,pagingBack,atBottom,loadOlder,onMessagesScroll,onHistoryWheel,onHistoryTouchStart,onHistoryTouchMove,onHistoryTouchEnd,onHistoryTouchCancel,toLatest,
  inspectorOpen,inspectorVisible,showInspectorButton,profilePanelOpen,profilePanelVisible,openProfile,wideScreen,inspectId,inspectData,inspectBusy,inspectError,inspect,toggleInspector,clearInspection,agentLocked,agentOperationTitle,agentOperationSteps,agentOperationPercent,agentOperationError,newProfile,profileDraft,profileSaving,saveProfile,profileDirty,closeProfile,guardOperation,syncProfileVersion,profileConflicts,files,fileInput,pickFiles,dropFiles,pasteFiles,removeFile,chooseFiles,previewDraft,sendStatus,ct,generation,user,busy,error,theme,menuConversation,menuPoint,preferenceThreshold,editMode,orderBusy,toggleEdit,bulkBusy,pauseEveryAgent,startEveryAgent,restartEveryAgent,reorderChats,onChatsIn,terminalOpen,conversations,selected,detail,search,draft,scroll,newOpen,infoOpen,newTitle,memoryDraft,filtered,statusLabel,awaitingReply,canSend,conversationMenu,renameConversation,deleteConversation,savePreferences,wakingId,waking,wakeError,closeNew,openNewChat,create,select,bottom,send,enterSend,action,interrupting,canInterrupt,interruptTurn,pause,restart,handoff,importHistory,saveMemory,time,renderMarkdown,renderTypedMarkdown};
 }

@@ -55,8 +55,12 @@ export async function saveAgentPreferences(patch) {
 // Its groups, in order, titled like the sections of Settings.
 export const autoSort = ref(false);
 export const listGroups = ref([]);
+// The agents pinned at the top, in the order pinned.
+export const listPins = ref([]);
 export function absorbList(preferences) {
   autoSort.value = preferences?.autoSort === true;
+  const nextPins = Array.isArray(preferences?.pins) ? preferences.pins.filter((id) => typeof id === 'string') : [];
+  if (JSON.stringify(listPins.value) !== JSON.stringify(nextPins)) listPins.value = nextPins;
   const nextGroups = Array.isArray(preferences?.groups) ? preferences.groups : [];
   if (JSON.stringify(listGroups.value) !== JSON.stringify(nextGroups)) listGroups.value = nextGroups;
   return preferences;

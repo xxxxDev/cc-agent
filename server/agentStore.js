@@ -304,10 +304,24 @@ const GROUP_ID=/^[A-Za-z0-9-]{1,64}$/;
 // of the agents in it, or Claude Code's when it is empty.
 function listGroups(owner){return (state.agentSettings?.listGroups?.[owner]||[]).map(g=>({id:g.id,name:g.name,source:SOURCES.includes(g.source)?g.source:groupSource(owner,g.id)}));}
 function groupSource(owner,id){const c=state.conversations.find(c=>c.owner===owner&&!c.archived&&c.listGroup===id);return c?sourceFor(c):'native';}
-function listPreferences(owner){return {autoSort:autoSort(owner),groups:listGroups(owner)};}
-function setListPreferences(owner,{autoSort:on,groups}={}){
- if(on===undefined&&groups===undefined)throw error('沒有要更新的設定');
+// Pinned agents: one's own agents at the top of the
+// list, in the order they were pinned, newest last. Kept per person as ids; only one's
+// own agents that are still on the list come back, so a deleted one drops out until it
+// is restored. Unknown ids sent are dropped, not refused: an agent deleted in another
+// tab must not make every later pin fail.
+const MAX_PINS=50;
+const ownAgentIds=owner=>new Set(state.conversations.filter(c=>c.owner===owner&&!c.archived).map(c=>c.id));
+function listPins(owner){const own=ownAgentIds(owner);const kept=state.agentSettings?.listPins?.[owner];return Array.isArray(kept)?kept.filter(id=>own.has(id)):[];}
+function listPreferences(owner){return {autoSort:autoSort(owner),groups:listGroups(owner),pins:listPins(owner)};}
+function setListPreferences(owner,{autoSort:on,groups,pins}={}){
+ if(on===undefined&&groups===undefined&&pins===undefined)throw error('沒有要更新的設定');
  if(on!==undefined&&typeof on!=='boolean')throw error('自動排序設定必須是開或關');
+ let pinned;
+ if(pins!==undefined){
+  if(!Array.isArray(pins)||pins.length>MAX_PINS*4||pins.some(id=>typeof id!=='string'))throw error('釘選清單格式不正確');
+  const own=ownAgentIds(owner);pinned=[...new Set(pins)].filter(id=>own.has(id));
+  if(pinned.length>MAX_PINS)throw error(`最多釘選 ${MAX_PINS} 個 Agent`);
+ }
  let next;
  if(groups!==undefined){
   if(!Array.isArray(groups)||groups.length>MAX_GROUPS)throw error(`群組最多 ${MAX_GROUPS} 個`);
@@ -332,6 +346,7 @@ function setListPreferences(owner,{autoSort:on,groups}={}){
   for(const c of state.conversations)if(c.owner===owner&&c.listGroup&&!kept.has(c.listGroup)){delete c.listGroup;moved=true;}
   if(moved)save(owner);
  }
+ if(pinned){const owners={...(state.agentSettings?.listPins||{})};if(pinned.length)owners[owner]=pinned;else delete owners[owner];state.agentSettings={...state.agentSettings,listPins:owners};}
  saveSettings();
  return listPreferences(owner);
 }

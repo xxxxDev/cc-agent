@@ -1,6 +1,6 @@
 <template>
  <f7-page @page:afterin="onChatsIn" @page:position="onPosition" name="chats" class="page-large-static">
-  <f7-navbar large class="navbar-transparent no-hairline navbar-glass-blur"><f7-nav-left><f7-link :disabled="orderBusy" :aria-label="ct('編輯 Agent 清單')" @click="fromColumn(toggleEdit)">{{editMode?'Done':'Edit'}}</f7-link><template v-if="editMode&&user?.role==='admin'"><f7-link icon-only icon-f7="pause_circle" class="bulk-agents" :class="{disabled:!!bulkBusy}" :aria-label="ct(chosenList.length?'暫停選取的 Agent':'全部暫停')" :title="ct(chosenList.length?'暫停選取的 Agent':'全部暫停')" @click="!bulkBusy&&pauseEveryAgent()"/><f7-link icon-only icon-f7="play_circle" class="bulk-agents" :class="{disabled:!!bulkBusy}" :aria-label="ct(chosenList.length?'啟動選取的 Agent':'全部啟動')" :title="ct(chosenList.length?'啟動選取的 Agent':'全部啟動')" @click="!bulkBusy&&startEveryAgent()"/><f7-link icon-only icon-f7="arrow_clockwise_circle" class="bulk-agents" :class="{disabled:!!bulkBusy}" :aria-label="ct(chosenList.length?'重啟選取的 Agent':'全部重啟')" :title="ct(chosenList.length?'重啟選取的 Agent':'全部重啟')" @click="!bulkBusy&&restartEveryAgent()"/><span v-if="chosenList.length" class="bulk-count" role="status">{{ct('已選')}} {{chosenList.length}}</span></template></f7-nav-left><f7-nav-title sliding>Agents</f7-nav-title><f7-nav-right><f7-link v-if="user?.role==='admin'&&wideScreen" icon-only icon-f7="square_grid_2x2" class="split-open external" href="/?split=1" :aria-label="ct('分割畫面')"/><f7-link v-if="user?.role==='admin'" icon-only icon-f7="trash" class="deleted-open" :aria-label="ct('已刪除的 Agent')" :title="ct('已刪除的 Agent')" @click="openDeleted"/><f7-link v-if="user?.role==='admin'" icon-only icon-f7="plus" :aria-label="ct('新增 agent')" @click="openNewChat"/></f7-nav-right><f7-nav-title-large>Agents</f7-nav-title-large></f7-navbar>
+  <f7-navbar large class="navbar-transparent no-hairline navbar-glass-blur"><f7-nav-left><f7-link :disabled="orderBusy" :aria-label="ct('編輯 Agent 清單')" @click="toggleEdit">{{editMode?'Done':'Edit'}}</f7-link><template v-if="editMode&&user?.role==='admin'"><f7-link icon-only icon-f7="pause_circle" class="bulk-agents" :class="{disabled:!!bulkBusy}" :aria-label="ct(chosenList.length?'暫停選取的 Agent':'全部暫停')" :title="ct(chosenList.length?'暫停選取的 Agent':'全部暫停')" @click="!bulkBusy&&pauseEveryAgent()"/><f7-link icon-only icon-f7="play_circle" class="bulk-agents" :class="{disabled:!!bulkBusy}" :aria-label="ct(chosenList.length?'啟動選取的 Agent':'全部啟動')" :title="ct(chosenList.length?'啟動選取的 Agent':'全部啟動')" @click="!bulkBusy&&startEveryAgent()"/><f7-link icon-only icon-f7="arrow_clockwise_circle" class="bulk-agents" :class="{disabled:!!bulkBusy}" :aria-label="ct(chosenList.length?'重啟選取的 Agent':'全部重啟')" :title="ct(chosenList.length?'重啟選取的 Agent':'全部重啟')" @click="!bulkBusy&&restartEveryAgent()"/><span v-if="chosenList.length" class="bulk-count" role="status">{{ct('已選')}} {{chosenList.length}}</span></template></f7-nav-left><f7-nav-title sliding>Agents</f7-nav-title><f7-nav-right><f7-link v-if="user?.role==='admin'&&wideScreen" icon-only icon-f7="square_grid_2x2" class="split-open external" href="/?split=1" :aria-label="ct('分割畫面')"/><f7-link v-if="user?.role==='admin'" icon-only icon-f7="trash" class="deleted-open" :aria-label="ct('已刪除的 Agent')" :title="ct('已刪除的 Agent')" @click="openDeleted"/><f7-link v-if="user?.role==='admin'" icon-only icon-f7="plus" :aria-label="ct('新增 agent')" @click="openNewChat"/></f7-nav-right><f7-nav-title-large>Agents</f7-nav-title-large></f7-navbar>
   <!-- The search row: the search pill, and
        beside it a round source button. Each source is one way of starting agents,
        with its own list; nothing mixes them. -->
@@ -11,15 +11,19 @@
   <GlassDropdown :open="sourcesOpen" :point="sourcesPoint" :items="listSources" :selected="listSource" @close="sourcesOpen=false" @select="chooseSource"/>
   <f7-block v-if="error" role="alert">{{error}}</f7-block>
   <!-- New group sits at the right of Select all, in reach as Edit opens; a member, who has no Select all, sees it alone. -->
-  <!-- Mark all read closes the row at its right end, for every account: each has its own unread counts. -->
-  <div v-if="editMode" class="select-all-row" :class="{crowded:user?.role==='admin'&&filtered.length}">
-   <template v-if="user?.role==='admin'&&filtered.length">
+  <!-- Mark all read closes the row at its right end, for every account: each has its own unread counts.
+       Pin sits at its left and pins the chosen agents, or unpins them when every one is pinned
+       already. Every account chooses its own agents for that; the pause, start and restart
+       buttons above stay an admin's. -->
+  <div v-if="editMode" class="select-all-row" :class="{crowded:filtered.length}">
+   <template v-if="filtered.length">
     <f7-button class="agent-select" :icon-f7="allChosen?'checkmark_circle_fill':'circle'" role="checkbox" :aria-checked="String(allChosen)" :aria-label="ct('全選')" @click="toggleAllChosen"/>
     <span class="select-all-label" @click="toggleAllChosen">{{allChosen?ct('取消全選'):ct('全選')}}</span>
     <button type="button" class="presence-choose" :class="{active:chosenByPresence(true)}" data-presence="online" @click="chooseByPresence(true)"><span class="tag-dot online"></span>{{ct('在線')}}</button>
     <button type="button" class="presence-choose" :class="{active:chosenByPresence(false)}" data-presence="offline" @click="chooseByPresence(false)"><span class="tag-dot"></span>{{ct('未上線')}}</button>
    </template>
    <span v-if="!search&&!mixedList" class="agent-group-add"><f7-button small round tonal icon-f7="folder_badge_plus" :aria-label="ct('新增群組')" :title="ct('新增群組')" @click="addGroup"><span class="row-button-label">{{ct('新增群組')}}</span></f7-button></span>
+   <span v-if="filtered.length" class="pin-chosen"><f7-button small round tonal :icon-f7="chosenPinned?'pin_fill':'pin'" :disabled="!chosenList.length||pinBusy" :aria-label="ct(chosenPinned?'取消釘選':'釘選')" :title="ct(chosenPinned?'取消釘選':'釘選')" @click="togglePins"><span class="row-button-label">{{ct(chosenPinned?'取消釘選':'釘選')}}</span></f7-button></span>
    <span class="mark-all-read"><f7-button small round tonal icon-f7="checkmark" :disabled="!unreadTotal||markingAllRead" :aria-label="ct('全部已讀')" :title="ct('全部已讀')" @click="markAllRead"><span class="row-button-label">{{ct('全部已讀')}}</span></f7-button></span>
   </div>
   <!-- Groups, titled like the sections of Settings.
@@ -31,12 +35,13 @@
   <f7-list inset media-list sortable :class="{editing:editMode}" :sortable-enabled="editMode&&!search&&!orderBusy&&listSource!=='recent'&&(!autoSort||listGroups.length>0)" :sortable-move-elements="false" @sortable:sort="reorderChats" class="conversation-list">
    <template v-for="row in listRows" :key="row.kind+':'+row.id">
     <!-- In All, each source's part of the list opens with its logo and name. -->
-    <li v-if="row.kind==='source'" class="agent-source-title" :data-source="row.id"><img v-if="row.icon" :src="row.icon" alt="" width="20" height="20"/><span>{{row.name}}</span></li>
+    <!-- The pinned agents' small section, first of all. -->
+    <li v-if="row.kind==='pins'" class="agent-pins-title disallow-sorting"><i class="icon f7-icons" aria-hidden="true">pin_fill</i><span>{{row.name}}</span></li>
+    <li v-else-if="row.kind==='source'" class="agent-source-title" :data-source="row.id"><img v-if="row.icon" :src="row.icon" alt="" width="20" height="20"/><span>{{row.name}}</span></li>
     <li v-else-if="row.kind==='group'" class="agent-group-row" :class="{'agent-group-block':editMode,'in-source':listSource==='all'}" :data-group="row.id">
      <div class="agent-group-title">
-      <span v-if="editMode&&user?.role==='admin'&&row.empty" class="agent-select-spacer" aria-hidden="true"></span>
-      <f7-button v-if="editMode&&user?.role==='admin'&&!row.empty" class="agent-select" :icon-f7="groupChosen(row)?'checkmark_circle_fill':'circle'" role="checkbox" :aria-checked="String(groupChosen(row))" :aria-label="ct('選取')+' '+row.name" @click.stop="toggleGroupChosen(row)"/>
-      <f7-button v-if="editMode" class="agent-delete agent-group-delete" color="red" icon-f7="minus_circle_fill" :aria-label="ct('刪除群組')+' '+row.name" @click.stop="deleteGroup(row)"/>
+      <span v-if="editMode&&row.empty" class="agent-select-spacer" aria-hidden="true"></span>
+      <f7-button v-if="editMode&&!row.empty" class="agent-select" :icon-f7="groupChosen(row)?'checkmark_circle_fill':'circle'" role="checkbox" :aria-checked="String(groupChosen(row))" :aria-label="ct('選取')+' '+row.name" @click.stop="toggleGroupChosen(row)"/>
       <input v-if="editMode&&editingGroup===row.id" v-focus class="agent-group-name-input" :value="row.name" maxlength="40" :aria-label="ct('群組名稱')" @keydown.enter.prevent="$event.target.blur()" @keydown.esc.prevent="cancelGroupRename" @blur="finishGroupRename(row,$event.target.value)"/>
       <span v-else-if="editMode" class="agent-group-name" role="button" tabindex="0" :title="ct('點一下改名')" @click="startGroupRename(row)" @keydown.enter="startGroupRename(row)">{{row.name}}</span>
       <!-- Outside Edit, a tap on the title folds the group or opens it again; folded,
@@ -46,6 +51,8 @@
        <span v-if="row.collapsed" class="agent-group-count">{{row.members.length}}</span>
        <i class="icon f7-icons agent-group-chevron" :class="{collapsed:row.collapsed}" aria-hidden="true">chevron_down</i>
       </button>
+      <!-- Delete at the right end, before the handle. -->
+      <f7-button v-if="editMode" class="agent-delete agent-group-delete" color="red" icon-f7="minus_circle_fill" :aria-label="ct('刪除群組')+' '+row.name" @click.stop="deleteGroup(row)"/>
      </div>
      <!-- Folded, its agents' names as small tags:
           one working spins, and a tap opens that agent. -->
@@ -55,9 +62,12 @@
      <div v-if="editMode&&listSource!=='recent'" class="sortable-handler agent-group-handle" :aria-label="ct('拖曳整個群組')" @touchstart.stop @mousedown.stop @pointerdown.stop="startGroupDrag($event,moveGroups)"/>
     </li>
     <li v-else-if="row.kind==='slot'" class="agent-group-slot in-group group-end" :data-group="row.group"><p class="agent-group-empty">{{ct('把 Agent 拖到這裡')}}</p></li>
-   <f7-list-item v-else :swipeout="!editMode" :class="{'row-current':(openingId||selected)===row.agent.id,'row-opening':openingId===row.agent.id,'in-source':listSource==='all','disallow-sorting':autoSort,'in-group':editMode&&!!row.group,'group-end':editMode&&!!row.group&&row.last,'waiting-choice':!!waitingChoice(row.agent)}" :data-id="row.agent.id" :link="editMode?false:'#'" :title="editMode&&user?.role==='admin'?undefined:row.agent.title" :text="waitingChoice(row.agent)||row.agent.preview||ct('尚無對話')" :badge="editMode?null:unreadLabel(unreadOf(row.agent))" badge-color="red" @click.prevent="!editMode&&!justSwiped($event)&&select(row.agent.id)" @swipeout="swiped" @contextmenu.prevent="user?.role==='admin'&&conversationMenu(row.agent,$event)" @keydown.shift.f10.prevent="user?.role==='admin'&&conversationMenu(row.agent,$event)">
-    <!-- Agents are an admin's to create, rename and delete; a member only reorders. -->
-    <template v-if="editMode&&user?.role==='admin'" #content-start><f7-button class="agent-select" :icon-f7="isChosen(row.agent.id)?'checkmark_circle_fill':'circle'" role="checkbox" :aria-checked="String(isChosen(row.agent.id))" :aria-label="ct('選取')+' '+row.agent.title" @click.stop="toggleChosen(row.agent.id)"/><f7-button class="agent-delete" color="red" icon-f7="minus_circle_fill" :aria-label="ct('刪除')+' '+row.agent.title" @click.stop="deleteConversation(row.agent)"/></template>
+   <f7-list-item v-else :swipeout="!editMode" :class="{'row-current':(openingId||selected)===row.agent.id,'row-opening':openingId===row.agent.id,'in-source':listSource==='all'&&!row.pinned,'agent-pinned':row.pinned,'disallow-sorting':autoSort||row.pinned,'in-group':editMode&&!!row.group,'group-end':editMode&&!!row.group&&row.last,'waiting-choice':!!waitingChoice(row.agent)}" :data-id="row.agent.id" :link="editMode?false:'#'" :title="editMode&&user?.role==='admin'?undefined:row.agent.title" :text="waitingChoice(row.agent)||row.agent.preview||ct('尚無對話')" :badge="editMode?null:unreadLabel(unreadOf(row.agent))" badge-color="red" @click.prevent="editMode?editRowTap($event,row.agent.id):!justSwiped($event)&&select(row.agent.id)" @swipeout="swiped" @contextmenu.prevent="user?.role==='admin'&&conversationMenu(row.agent,$event)" @keydown.shift.f10.prevent="user?.role==='admin'&&conversationMenu(row.agent,$event)">
+    <!-- Agents are an admin's to create, rename and delete; a member reorders, and
+         chooses agents to pin or mark read. Delete sits at the right end, before the
+         drag handle. -->
+    <template v-if="editMode" #content-start><f7-button class="agent-select" :icon-f7="isChosen(row.agent.id)?'checkmark_circle_fill':'circle'" role="checkbox" :aria-checked="String(isChosen(row.agent.id))" :aria-label="ct('選取')+' '+row.agent.title" @click.stop="toggleChosen(row.agent.id)"/></template>
+    <template v-if="editMode&&user?.role==='admin'" #content-end><f7-button class="agent-delete" color="red" icon-f7="minus_circle_fill" :aria-label="ct('刪除')+' '+row.agent.title" @click.stop="deleteConversation(row.agent)"/></template>
     <template #media><div class="agent-avatar"><img v-if="row.agent.avatar" :src="row.agent.avatar" :class="'agent-avatar-'+avatarShape(row.agent.avatar)" alt="" width="45" height="45"/><img v-else :src="defaultAvatar(row.agent)" class="agent-avatar-icon" alt=""/><span class="presence-dot" :class="{online:row.agent.connected&&!activity(row.agent),working:!!activity(row.agent),thinking:thinking(row.agent)}" role="img" :aria-label="ct(presenceLabel(row.agent))" :title="ct(presenceLabel(row.agent))"><f7-preloader v-if="thinking(row.agent)" :size="14"/></span></div></template>
     <!-- Swiped left outside Edit mode, a row offers round buttons: pause or start,
          whichever its state calls for, and, for an admin, delete. -->
@@ -66,7 +76,9 @@
      <f7-swipeout-button v-else close class="swipe-round pause" :aria-label="ct('暫停')+' '+row.agent.title" @click="swipePause($event,row.agent)"><span class="swipe-circle"><i class="icon f7-icons">pause_fill</i></span></f7-swipeout-button>
      <f7-swipeout-button v-if="user?.role==='admin'" close class="swipe-round delete" :aria-label="ct('刪除')+' '+row.agent.title" @click="swipeDelete($event,row.agent)"><span class="swipe-circle"><i class="icon f7-icons">trash_fill</i></span></f7-swipeout-button>
     </f7-swipeout-actions>
-    <template v-if="editMode&&user?.role==='admin'" #title><f7-link class="agent-rename" :aria-label="ct('重新命名')+' '+row.agent.title" @click.stop="renameConversation(row.agent)">{{row.agent.title}}</f7-link></template>
+    <!-- A pinned row's mark, after its name in the title. -->
+    <template v-if="!editMode&&row.pinned" #title><i class="icon f7-icons agent-pin-mark" role="img" :aria-label="ct('已釘選')" :title="ct('已釘選')">pin_fill</i></template>
+    <template v-else-if="editMode&&user?.role==='admin'" #title><f7-link class="agent-rename" :aria-label="ct('重新命名')+' '+row.agent.title" @click.stop="renameConversation(row.agent)">{{row.agent.title}}</f7-link></template>
    </f7-list-item>
    </template>
   </f7-list>
@@ -86,8 +98,9 @@ import {inject,ref,computed,nextTick} from "vue";import {listIsColumn} from "../
  const presenceLabel=c=>w.activity(c)?'Agent 正在處理':thinking(c)?(c.phase==='busy'?'Agent 思考中':'Agent 背景工作中'):c.connected?'Agent 在線':'Agent 離線';
  // Deleted agents, restored or kept from their own page.
  const openDeleted=()=>fromColumn(()=>f7.views.get('#view-chat')?.router.navigate('/deleted-agents/'));
- // Beside a conversation (listDetail.js), Edit and the deleted agents take the whole
- // width again: the list widens back first, then they open as they always do.
+ // Beside a conversation (listDetail.js), the deleted agents take the whole width
+ // again: the list widens back first, then they open as they always do. Edit stays in
+ // the column, the conversation open beside it.
  const listPage=()=>document.querySelector('#view-chat > .page[data-name="chats"]');
  async function fromColumn(then){
   if(!listIsColumn(listPage()))return then();
@@ -130,7 +143,14 @@ import {inject,ref,computed,nextTick} from "vue";import {listIsColumn} from "../
 .agent-source img {width:42px;height:42px;border-radius:100px;display:block;}
 .agent-source .icon {font-size:42px;}
 .conversation-list :deep(.item-text) {display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;white-space:normal;overflow:hidden;overflow-wrap:anywhere;text-overflow:ellipsis;margin-right:calc(var(--f7-list-chevron-icon-area,20px) + 8px);height:auto;max-height:calc(2 * var(--f7-list-item-text-line-height,21px));}
-.agent-delete {flex-shrink:0;width:32px;min-width:32px;padding:0;margin-right:8px;}
+.agent-delete {flex-shrink:0;width:32px;min-width:32px;padding:0;margin-left:8px;}
+/* Delete at the right end of the row: where the row has
+   a drag handle, the delete keeps the handle's room after it, which Framework7 otherwise
+   keeps inside the row's text. A row of another source dimmed during a drag keeps it too,
+   so nothing rewraps. */
+.list.conversation-list.sortable-enabled :deep(li:not(.disallow-sorting) .item-content > .agent-delete) {margin-right:calc(var(--f7-sortable-handler-width) + var(--f7-safe-area-right));}
+.list.conversation-list.sortable-enabled :deep(li:not(.disallow-sorting) .item-content:has(> .agent-delete) > .item-inner) {padding-right:0;}
+.list.conversation-list.editing :deep(.item-content:has(> .agent-delete) > .item-inner) {padding-right:0;}
 /* Ticking agents for the pause and start buttons. */
 .agent-select {flex-shrink:0;width:28px;min-width:28px;padding:0;margin-right:4px;color:var(--cc-color-text-secondary);}
 .agent-select[aria-checked="true"] {color:#34c759;}
@@ -220,7 +240,7 @@ import {inject,ref,computed,nextTick} from "vue";import {listIsColumn} from "../
 /* An agent picked up to move to another group leaves its stretch of line behind. */
 .list.conversation-list > ul > li.sorting::before {display:none;}
 .agent-group-block .agent-group-name {cursor:text;}
-.agent-group-delete {margin-right:4px;}
+.agent-group-delete {margin-left:auto;margin-right:-18px;}
 .agent-group-name-input {flex:1;min-width:0;font:inherit;color:inherit;background:transparent;border:0;border-bottom:1px solid var(--cc-color-accent,#d97757);padding:2px 0;outline:none;-webkit-user-select:text;user-select:text;}
 /* Dragging must not select the text it passes over. */
 .conversation-list.sortable-enabled {-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
@@ -247,17 +267,28 @@ import {inject,ref,computed,nextTick} from "vue";import {listIsColumn} from "../
 .list.conversation-list:not(.editing) > ul > li.in-source {margin-left:18px;}
 .list.conversation-list > ul > li.agent-source-title + li.agent-group-row {margin-top:22px;}
 .agent-group-add :deep(.button) {display:inline-flex;gap:6px;width:auto;padding:0 12px;}
-.mark-all-read {margin-left:auto;flex:0 0 auto;}
-.agent-group-add + .mark-all-read {margin-left:0;}
-.mark-all-read :deep(.button) {display:inline-flex;gap:6px;width:auto;padding:0 12px;white-space:nowrap;}
+.mark-all-read,.pin-chosen {margin-left:auto;flex:0 0 auto;}
+.agent-group-add + .pin-chosen,.agent-group-add + .mark-all-read,.pin-chosen + .mark-all-read {margin-left:0;}
+.mark-all-read :deep(.button),.pin-chosen :deep(.button) {display:inline-flex;gap:6px;width:auto;padding:0 12px;white-space:nowrap;}
+/* The pinned agents' section title, as a source's, and the small mark on their rows
+   outside Edit mode. */
+.list.conversation-list > ul > li.agent-pins-title {display:flex;align-items:center;gap:6px;background:transparent;border-radius:0;overflow:visible;margin:0 0 14px;padding:0 16px;font-size:13px;font-weight:600;color:var(--dp-color-text-secondary);text-transform:uppercase;letter-spacing:.04em;}
+.agent-pins-title .icon {font-size:14px;}
+.list.conversation-list > ul > li.agent-pinned + li.agent-source-title,.list.conversation-list > ul > li.agent-pinned + li.agent-group-row {margin-top:32px;}
+.agent-pin-mark {font-size:12px;line-height:1;margin-left:6px;vertical-align:0;color:var(--dp-color-text-secondary);}
 /* Too narrow for every name on one line (a phone, a split cell): New group and Mark
    all read keep their icons, their names in the tooltip, and the row stays one line. */
 @container (max-width:520px){
- .crowded .agent-group-add :deep(.button),.crowded .mark-all-read :deep(.button) {width:32px;padding:0;justify-content:center;}
+ .crowded .agent-group-add :deep(.button),.crowded .mark-all-read :deep(.button),.crowded .pin-chosen :deep(.button) {width:32px;padding:0;justify-content:center;}
  .crowded .row-button-label {display:none;}
 }
+/* With Pin as well, a phone's row sits a little tighter to stay one line. */
+@container (max-width:400px){
+ .select-all-row.crowded {gap:3px;}
+ .crowded .presence-choose {margin-left:0;padding:4px 7px;}
+}
 @container (max-width:240px){
- .agent-group-add :deep(.button),.mark-all-read :deep(.button) {width:32px;padding:0;justify-content:center;}
+ .agent-group-add :deep(.button),.mark-all-read :deep(.button),.pin-chosen :deep(.button) {width:32px;padding:0;justify-content:center;}
  .row-button-label {display:none;}
 }
 /* A picture chosen in Agent Profile: a photo fills the tile, an icon with a

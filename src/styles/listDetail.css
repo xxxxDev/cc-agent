@@ -137,6 +137,69 @@
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .conversation-list > ul > li.agent-source-title + li.agent-group-row {
     margin-top: 10px;
   }
+  /* The pinned agents' title, as a source's. */
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .conversation-list > ul > li.agent-pins-title {
+    margin: 0 0 8px;
+    padding: 0 8px;
+    font-size: 12px;
+  }
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .conversation-list > ul > li.agent-pinned + li:is(.agent-source-title, .agent-group-row) {
+    margin-top: 20px;
+  }
+
+  /* Edit in the column: the list stays a column and the
+   * conversation stays open beside it. The navbar keeps Done and the bulk buttons, and leaves
+   * out split view, deleted agents and new agent, which have no room beside them; the select
+   * row wraps its buttons onto a second line when they do not fit; the rows keep the drag
+   * handle's room, and a group's frame its handle's. */
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]):has(.conversation-list.editing) .navbar .right {
+    display: none;
+  }
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .navbar .left {
+    min-width: 0;
+    flex-wrap: nowrap;
+  }
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .navbar .bulk-agents {
+    min-width: 36px;
+    width: 36px;
+  }
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .select-all-row {
+    flex-wrap: wrap;
+    row-gap: 8px;
+    margin-bottom: -16px;
+    padding: 4px 10px 4px 16px;
+  }
+  /* A narrow column has no room for the chosen count beside the bulk buttons; the ticks on the
+   * rows say it. */
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) {
+    container: list-column / inline-size;
+  }
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .conversation-list.editing > ul > li.agent-group-row.agent-group-block {
+    margin: 14px 10px 10px;
+    padding: 6px 48px 6px 6px;
+  }
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .conversation-list.editing .agent-group-delete {
+    margin-right: -12px;
+  }
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .conversation-list.editing .item-content {
+    padding-left: 6px;
+  }
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .conversation-list.editing .item-media {
+    padding-right: 0;
+  }
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .conversation-list.sortable-enabled li:not(.disallow-sorting) .item-content:not(:has(> .agent-delete)) > .item-inner {
+    padding-right: calc(var(--f7-sortable-handler-width) + 4px);
+  }
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .conversation-list.editing .item-content:has(> .agent-delete) > .item-inner {
+    padding-right: 0;
+  }
+}
+@media (min-width: 1280px) {
+  @container list-column (max-width: 359px) {
+    html.list-detail-on #view-chat > .page[data-name="chats"] .navbar .bulk-count {
+      display: none;
+    }
+  }
 }
 @keyframes list-detail-in {
   from { opacity: 0; transform: translate3d(48px, 0, 0); }
