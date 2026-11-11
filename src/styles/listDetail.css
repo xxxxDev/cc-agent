@@ -65,14 +65,6 @@
     margin-top: 12px;
     margin-bottom: 16px;
   }
-  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .agent-source,
-  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .agent-source img {
-    width: 34px;
-    height: 34px;
-  }
-  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .agent-source .icon {
-    font-size: 34px;
-  }
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .conversation-list > ul > li:not(.agent-group-row):not(.agent-source-title):not(.agent-group-slot) {
     margin-bottom: 6px;
   }
