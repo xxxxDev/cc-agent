@@ -4,8 +4,14 @@ import vue from '@vitejs/plugin-vue';
 import { VitePWA } from 'vite-plugin-pwa';
 import { describeSourceBuild, resolveBuildId } from './build/buildId.js';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+const require = createRequire(import.meta.url);
+// server/.env first, as the service reads it (scripts/start.mjs), so a port or public
+// address set there reaches the dev server's proxy and allowed host too. A value already
+// in the environment wins.
+require('dotenv').config({ path: fileURLToPath(new URL('./server/.env', import.meta.url)), quiet: true });
 // The public address and the service port (server/siteConfig.js, one place).
-const site = createRequire(import.meta.url)('./server/siteConfig.js');
+const site = require('./server/siteConfig.js');
 
 // Build id: `git describe` of the last commit that could change the output —
 // `v2026.9.11` on a release, `v2026.9.11-3-gabc1234` after it, `-dirty` for
