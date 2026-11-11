@@ -11,8 +11,11 @@
     --list-column: var(--list-column-set, clamp(320px, 25vw, 360px));
     --list-detail-motion: .32s cubic-bezier(.2, .8, .2, 1);
   }
+  /* The list takes its column at once, with the conversation's own entrance as the motion: a
+   * narrowing width let the conversation arrive first and the column's buttons and row edges
+   * settle a third of a second later (2026-11-11). */
   html.list-detail-on #view-chat > .page[data-name="chats"] {
-    transition: width var(--list-detail-motion);
+    transition: none;
   }
   /* The column. */
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) {
