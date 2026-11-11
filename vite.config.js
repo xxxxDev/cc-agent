@@ -1,4 +1,3 @@
-import {readFileSync} from 'node:fs';
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -18,9 +17,6 @@ const site = require('./server/siteConfig.js');
 // unsaved source. One marker for the Settings footer, the update prompt and
 // /version.json; contract and rationale in build/buildId.js.
 const BUILD_ID = resolveBuildId({ describe: describeSourceBuild });
-// The release named in package.json, for the diagnostics text only.
-// Read beside this file, whatever folder vite was started from.
-const APP_VERSION=JSON.parse(readFileSync(new URL('./package.json',import.meta.url),'utf8')).appVersion;
 
 // Publishes the build id the server is serving so a running app can detect that
 // it is on an older build. Deliberately excluded from the precache below: a
@@ -48,7 +44,6 @@ export default defineConfig({
   base: '/',
   define: {
     __BUILD_ID__: JSON.stringify(BUILD_ID),
-    __APP_VERSION__: JSON.stringify(APP_VERSION),
   },
   plugins: [
     versionEndpoint(),

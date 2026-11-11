@@ -47,6 +47,5 @@
     "vite-plugin-pwa": "^1.3.0"
   },
   "engines": {"node": ">=22.12.0"},
-  "version": "2026.10.10",
-  "appVersion": "v2026.10.10"
+  "version": "2026.10.10"
 }

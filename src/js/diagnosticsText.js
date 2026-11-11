@@ -7,14 +7,14 @@ import {api} from './api.js';
 // are left out, and the text says so.
 export const REPORT_MAX_BYTES=512*1024;
 const bytes=s=>new TextEncoder().encode(s).length;
-const version=()=>typeof __APP_VERSION__==='undefined'?'dev':__APP_VERSION__;
+// The build id the Settings footer shows (a Git description: the release tag, and after it
+// how far past), so the text and the footer never name two different versions.
 export const buildId=()=>typeof __BUILD_ID__==='undefined'?'dev':__BUILD_ID__;
 function assemble(detail,status,trace){
  const d=detail||{};
  return [
   'CC Agent',
-  `Version: ${version()}`,
-  `Build: ${buildId()}`,
+  `Version: ${buildId()}`,
   `Agent ID: ${d.id}`,
   ...(d.unavailable?['Agent: no longer available to this account']:[
   `Session ID: ${d.sessionId}`,
