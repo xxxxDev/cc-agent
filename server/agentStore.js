@@ -1433,7 +1433,7 @@ const COMPACT_GONE_MS=30000;
 const COMPACT_PENDING_MS=15*60*1000;
 const COMPACT_DRAWN=/Compacting conversation|Running PreCompact hooks/;
 // How long after PostCompact the main transcript may take to record the compaction.
-const POSTCOMPACT_WAIT_MS=Number(process.env.CC_AGENT_POSTCOMPACT_WAIT_MS)||4000;
+const POSTCOMPACT_WAIT_MS=4000;
 // Every action bridge() handles, and exactly those the channel sends: channel/server.mjs
 // (the MCP tools, poll, permission-request and permission-ack), channel/runner.mjs (error,
 // starting, heartbeat) and channel/hook.mjs (precompact, postcompact, result, failure).
@@ -2706,7 +2706,7 @@ function setAccessFor(owner,id,access,callerRole){
 // the later full-access agents running; what could not be stopped or written is
 // returned for the admin.
 // An owner's file that could not be written is tried again each minute until it is.
-const savingAgain=new Map(),SAVE_RETRY_MS=Number(process.env.CC_AGENT_SAVE_RETRY_MS)||60_000;
+const savingAgain=new Map(),SAVE_RETRY_MS=60_000;
 function saveAgain(owner){
  if(savingAgain.has(owner))return;
  const t=setInterval(()=>{try{save(owner);clearInterval(t);savingAgain.delete(owner);console.error(`conversations of ${owner} written again`);}catch(e){console.error(`conversations of ${owner} still not written: ${e.message}`);}},SAVE_RETRY_MS);

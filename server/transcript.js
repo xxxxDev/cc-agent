@@ -414,7 +414,7 @@ function relays(stateRoot, conversation) {
   return state ? [...state.relays.values()] : [];
 }
 
-const READ_SLICE = Number(process.env.CC_AGENT_TRANSCRIPT_SLICE) || 16 * 1024 * 1024;
+const READ_SLICE = 16 * 1024 * 1024;
 function read(file) {
   let stat;
   try { stat = fs.statSync(file); } catch { readers.delete(file); return null; }
