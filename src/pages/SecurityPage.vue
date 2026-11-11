@@ -106,7 +106,7 @@
 import { computed, ref } from 'vue';
 import { f7 } from 'framework7-vue';
 import { t, lang } from '../js/i18n.js';
-import { ct } from '../js/agent-i18n.js';
+import { ct, listJoin, labelled } from '../js/agent-i18n.js';
 import { api } from '../js/auth.js';
 import { describeAgent } from '../js/qrLogin.js';
 import { sheetSwipe } from '../js/sheetSwipe.js';
@@ -160,7 +160,7 @@ function blockFooter(b) {
   return `${b.auto ? ct('自動') : ct('手動')} · ${ct('封鎖到')} ${timeText(b.until)}${b.strikes ? ` · ${ct('第')} ${b.strikes} ${ct('次')}` : ''}`;
 }
 function sourceFooter(s) {
-  return [countryName(s.country), `${s.fails} ${ct('次失敗')}`, s.usernames.length ? `${ct('試過')} ${s.usernames.join('、')}` : ''].filter(Boolean).join(' · ');
+  return [countryName(s.country), `${s.fails} ${ct('次失敗')}`, s.usernames.length ? `${ct('試過')} ${listJoin(s.usernames)}` : ''].filter(Boolean).join(' · ');
 }
 const REASONS = { 'no-such-user': '帳號不存在', 'wrong-password': '密碼錯誤', 'wrong-code': '驗證碼錯誤', inactive: '帳號停用', passkey: '通行密鑰驗證失敗', blocked: '封鎖中被擋下', 'codes-spent': '當天驗證碼次數已用完', account: '帳號保護中被擋下' };
 const TWO_STEP = { on: '開啟兩步驟驗證', off: '關閉兩步驟驗證', reset: '重設兩步驟驗證' };
@@ -196,8 +196,8 @@ function signTitle(s) {
 }
 function signFooter(s) {
   if (s.sign === 'burst') return `${ct('10 次失敗只花了')} ${s.minutes} ${ct('分鐘，像是自動程式')}`;
-  if (s.sign === 'guessing') return `${s.usernames.join('、')}：${ct('在猜帳號')}`;
-  if (s.sign === 'new-country') return `${ct('過去 180 天沒有從這裡成功登入過')}：${countryName(s.country)}`;
+  if (s.sign === 'guessing') return labelled(listJoin(s.usernames), ct('在猜帳號'));
+  if (s.sign === 'new-country') return labelled(ct('過去 180 天沒有從這裡成功登入過'), countryName(s.country));
   return '';
 }
 </script>

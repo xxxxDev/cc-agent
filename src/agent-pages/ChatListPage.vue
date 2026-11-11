@@ -6,7 +6,7 @@
        with its own list; nothing mixes them. -->
   <div class="agent-search-row">
    <f7-searchbar class="agent-search" :inline="true" :disable-button="false" :clear-button="true" :placeholder="ct('搜尋 Agent 或聊天記錄')" :value="search" @input="search=$event.target.value" @searchbar:clear="search=''"/>
-   <a class="link agent-source" href="#" role="button" :aria-label="ct('Agent 來源')+'：'+sourceLabel" :title="sourceLabel" @click.prevent="openSources($event)"><img v-if="sourceIcon" :src="sourceIcon" alt="" width="42" height="42"/><i v-else class="icon f7-icons">ellipsis_circle</i></a>
+   <a class="link agent-source" href="#" role="button" :aria-label="labelled(ct('Agent 來源'),sourceLabel)" :title="sourceLabel" @click.prevent="openSources($event)"><img v-if="sourceIcon" :src="sourceIcon" alt="" width="42" height="42"/><i v-else class="icon f7-icons">ellipsis_circle</i></a>
   </div>
   <GlassDropdown :open="sourcesOpen" :point="sourcesPoint" :items="listSources" :selected="listSource" @close="sourcesOpen=false" @select="chooseSource"/>
   <f7-block v-if="error" role="alert">{{error}}</f7-block>
@@ -89,7 +89,7 @@
 
 </template>
 <script>
-import {inject,ref,computed,nextTick} from "vue";import {listIsColumn} from "../js/listDetail.js";import GlassDropdown from "../components/GlassDropdown.vue";import {f7} from "framework7-vue";import TerminalPane from "../TerminalPane.vue";import MessageSearchResults from "../components/MessageSearchResults.vue";import {startGroupDrag} from "../js/groupDrag.js";import {fenceSourceDrag} from "../js/sourceFence.js";import {avatarShape,defaultAvatar} from "../js/avatarShape.js";export default {components:{TerminalPane,MessageSearchResults,GlassDropdown},mounted(){for(const name of ['pointerdown','touchstart','mousedown'])this.$el.addEventListener(name,fenceSourceDrag,{capture:true,passive:true});},beforeUnmount(){for(const name of ['pointerdown','touchstart','mousedown'])this.$el.removeEventListener(name,fenceSourceDrag,{capture:true});},directives:{focus:{mounted:el=>{el.focus();el.select?.();}}},setup(){const w=inject("workspace");
+import {inject,ref,computed,nextTick} from "vue";import {listIsColumn} from "../js/listDetail.js";import GlassDropdown from "../components/GlassDropdown.vue";import {f7} from "framework7-vue";import TerminalPane from "../TerminalPane.vue";import MessageSearchResults from "../components/MessageSearchResults.vue";import {startGroupDrag} from "../js/groupDrag.js";import {fenceSourceDrag} from "../js/sourceFence.js";import {avatarShape,defaultAvatar} from "../js/avatarShape.js";import {labelled} from "../js/agent-i18n.js";export default {components:{TerminalPane,MessageSearchResults,GlassDropdown},mounted(){for(const name of ['pointerdown','touchstart','mousedown'])this.$el.addEventListener(name,fenceSourceDrag,{capture:true,passive:true});},beforeUnmount(){for(const name of ['pointerdown','touchstart','mousedown'])this.$el.removeEventListener(name,fenceSourceDrag,{capture:true});},directives:{focus:{mounted:el=>{el.focus();el.select?.();}}},setup(){const w=inject("workspace");
  // While an agent is answering, its light turns into a small spinner, on this list
  // only: the conversation has its typing bubble.
  // Work left running in the background (a subagent, a command) spins too, after
@@ -131,7 +131,7 @@ import {inject,ref,computed,nextTick} from "vue";import {listIsColumn} from "../
  // message, so the list says who waits on the owner.
  // Only an admin answers such menus (ConversationPage's TerminalPromptCard).
  const waitingChoice=c=>{const p=c.terminalPrompt;if(!p||w.user.value?.role!=='admin')return '';const what=(p.title||'').replace(/^[☐☒✔\s]+/,'').trim()||p.body?.split('\n')[0]?.trim()||p.options?.[0]?.label||'';return w.ct('終端機在等你選擇')+(what?'：'+what:'');};
- return {...w,fromColumn,onPosition,waitingChoice,sourcesOpen,sourcesPoint,openSources,sourceIcon,sourceLabel,thinking,presenceLabel,startGroupDrag,avatarShape,defaultAvatar,openDeleted,isStopped,swipePause,swipeStart,swipeDelete,swiped,justSwiped};}};
+ return {...w,labelled,fromColumn,onPosition,waitingChoice,sourcesOpen,sourcesPoint,openSources,sourceIcon,sourceLabel,thinking,presenceLabel,startGroupDrag,avatarShape,defaultAvatar,openDeleted,isStopped,swipePause,swipeStart,swipeDelete,swiped,justSwiped};}};
 </script>
 
 <style scoped>

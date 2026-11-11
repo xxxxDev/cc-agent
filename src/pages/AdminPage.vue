@@ -74,7 +74,7 @@
 </template>
 
 <script setup>
-import {ct,compactCount,compactPolicy,handoffCount,autoCompactLabel} from '../js/agent-i18n.js';
+import {ct,listJoin,labelled,compactCount,compactPolicy,handoffCount,autoCompactLabel} from '../js/agent-i18n.js';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { f7 } from 'framework7-vue';
 import { t } from '../js/i18n.js';
@@ -137,8 +137,8 @@ function editSubagentDefault(){
 // start again: listed, and restarted only on "apply now".
 function offerApply(title,pending,endpoint){
   if(pending.length)setTimeout(()=>f7.dialog.create({title,
-    text:pending.length+' '+ct('個 agent 要重新啟動才會套用：')+pending.map(a=>escapeHtml(a.title)+(a.busy?ct('（工作中）'):'')).join('、')+'<br><br>'+ct('現在套用：閒著的馬上重新啟動，工作中的等這次回覆結束；稍後：各自下次啟動時套用。'),
-    buttons:[{text:ct('稍後')},{text:ct('現在套用'),strong:true,onClick:async()=>{try{const n=await api(endpoint,{method:'POST',body:JSON.stringify({ids:pending.map(a=>a.id)})});toast(ct('已套用')+'：'+ct('已重新啟動')+' '+(n.now||0)+'，'+ct('回覆結束後')+' '+(n['after-reply']||0));}catch(e){f7.dialog.alert(e.message);}}}],destroyOnClose:true}).open(),350);
+    text:pending.length+' '+ct('個 agent 要重新啟動才會套用：')+listJoin(pending.map(a=>escapeHtml(a.title)+(a.busy?ct('（工作中）'):'')))+'<br><br>'+ct('現在套用：閒著的馬上重新啟動，工作中的等這次回覆結束；稍後：各自下次啟動時套用。'),
+    buttons:[{text:ct('稍後')},{text:ct('現在套用'),strong:true,onClick:async()=>{try{const n=await api(endpoint,{method:'POST',body:JSON.stringify({ids:pending.map(a=>a.id)})});toast(labelled(ct('已套用'),listJoin([ct('已重新啟動')+' '+(n.now||0),ct('回覆結束後')+' '+(n['after-reply']||0)])));}catch(e){f7.dialog.alert(e.message);}}}],destroyOnClose:true}).open(),350);
 }
 // When every agent's Claude Code compacts unless it has its own (issue #12).
 async function saveAutoCompact(value){
@@ -213,7 +213,7 @@ async function saveRetention(value){
   if(days!==null){
    const {agents:deleted=[]}=await api('/archived-agents');
    const due=deleted.filter(a=>!a.keep&&Date.parse(a.archivedAt)<=Date.now()-days*86400000);
-   if(due.length&&!await ask(due.map(a=>a.title).join('、')+'\n'+ct('這些已刪除的 Agent 超過天數，6 小時內會被永久刪除，在平台上建立的連 session 一起清掉。'),retentionLabel(days)))return;
+   if(due.length&&!await ask(listJoin(due.map(a=>a.title))+'\n'+ct('這些已刪除的 Agent 超過天數，6 小時內會被永久刪除，在平台上建立的連 session 一起清掉。'),retentionLabel(days)))return;
   }
   await saveAgentPreferences({archiveRetentionDays:days});toast(t('settingsSaved'));
  }catch(e){f7.dialog.alert(e.message);}

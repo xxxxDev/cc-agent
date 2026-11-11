@@ -75,7 +75,7 @@
 <script>
 import {computed, ref, watch} from 'vue';
 import {api} from '../js/auth.js';
-import {ct, duration} from '../js/agent-i18n.js';
+import {ct, duration, listJoin} from '../js/agent-i18n.js';
 import {modelLabel as labelFor} from '../js/agent-models.js';
 import {estimatedCost} from '../js/usageCost.js';
 export default {
@@ -114,7 +114,7 @@ export default {
   const subLine = a => {
    const from = Date.parse(a.startedAt || ''), to = Date.parse(a.endedAt || '');
    const took = Number.isFinite(from) && Number.isFinite(to) && to > from ? duration(Math.round((to - from) / 1000)) : '';
-   return [clock(a.startedAt), took, `${ct('工具呼叫')} ${n(a.tools)}`, (a.models || []).map(labelFor).join('、')].filter(Boolean).join(' · ');
+   return [clock(a.startedAt), took, `${ct('工具呼叫')} ${n(a.tools)}`, listJoin((a.models || []).map(labelFor))].filter(Boolean).join(' · ');
   };
   return {ct, n, total, usageLine, elapsed, label, blockLabel, estimatedCost, subagents, openSub, subLine, subCost, subTotal};
  },

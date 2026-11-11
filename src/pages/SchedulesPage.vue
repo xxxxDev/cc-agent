@@ -66,7 +66,7 @@
               <li v-if="isCheck && checkMissing" class="item-content impact-missing"><div class="item-media"><i class="icon f7-icons">exclamationmark_triangle_fill</i></div><div class="item-inner"><div class="item-title">{{ ct('你的本機設定裡已經沒有這個檢查，時間到時不會執行。') }}</div></div></li>
               <li v-if="isFeed" class="item-content impact-network"><div class="item-media"><i class="icon f7-icons">globe</i></div><div class="item-inner"><div class="item-title">{{ feedUrlOk ? ct('會讀取：') + hostOf(draft.feedUrl.trim()) : ct('填好 RSS 網址後才會讀取') }}</div></div></li>
               <li v-if="isFeed" class="item-content impact-feed"><div class="item-media"><i class="icon f7-icons">sparkles</i></div><div class="item-inner"><div class="item-title">{{ ct('只把沒看過的新文章交給 Agent，第一次交最新 3 篇') }}</div></div></li>
-              <li v-if="isScript" class="item-content impact-network"><div class="item-media"><i class="icon f7-icons">globe</i></div><div class="item-inner"><div class="item-title">{{ scriptDomains.domains.length ? ct('會連線：') + scriptDomains.domains.join('、') : ct('不會連網') }}</div></div></li>
+              <li v-if="isScript" class="item-content impact-network"><div class="item-media"><i class="icon f7-icons">globe</i></div><div class="item-inner"><div class="item-title">{{ scriptDomains.domains.length ? ct('會連線：') + listJoin(scriptDomains.domains) : ct('不會連網') }}</div></div></li>
               <li class="item-content impact-result"><div class="item-media"><i class="icon f7-icons">{{ draft.onResult === 'agent' ? 'bubble_left' : 'bell' }}</i></div><div class="item-inner"><div class="item-title">{{ draft.onResult === 'agent' ? ct('結果：交給 Agent 處理') : ct('結果：推播給你') }}</div></div></li>
               <li v-if="draft.onResult !== 'agent'" class="item-content impact-quiet"><div class="item-media"><i class="icon f7-icons">moon_zzz</i></div><div class="item-inner"><div class="item-title">{{ ct('不會叫醒 Agent') }}</div></div></li>
               <li v-if="runTimeout" class="item-content impact-timeout"><div class="item-media"><i class="icon f7-icons">timer</i></div><div class="item-inner"><div class="item-title">{{ ct('時間上限：') }}{{ seconds(runTimeout) }}</div></div></li>
@@ -241,7 +241,7 @@ import { computed, inject, nextTick, onMounted, onUnmounted, ref, watch, Telepor
 import { f7 } from 'framework7-vue';
 import { api } from '../js/api.js';
 import { t, lang } from '../js/i18n.js';
-import { ct } from '../js/agent-i18n.js';
+import { ct, listJoin } from '../js/agent-i18n.js';
 import { activeTab } from '../js/tab-session.js';
 import { sheetSwipe, guardSheet, closeAsking } from '../js/sheetSwipe.js';
 import { MAX_DOMAINS, WEEKDAYS, WEEK_ORDER, editableFrequency, frequencyFor, frequencyText, interpreterLabel, parseDomains, scheduleFocus, shortHash, shortTime, timeoutFor, untilText, validDate, validTime, weekdayLabel } from '../js/schedules.js';
@@ -411,7 +411,7 @@ const scriptLines = computed(() => (isScript.value ? draft.value.script.source.s
 const scriptDomains = computed(() => parseDomains(isScript.value ? draft.value.domainsText : ''));
 const domainError = computed(() => {
   const { domains, bad } = scriptDomains.value;
-  if (bad.length) return ct('不是網站名稱：') + bad.join('、');
+  if (bad.length) return ct('不是網站名稱：') + listJoin(bad);
   return domains.length > MAX_DOMAINS ? ct('最多 10 個網站') : '';
 });
 // A script needs no instruction of its own; its settings have to be valid instead.
