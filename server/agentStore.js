@@ -7,7 +7,7 @@ const attachments=require('./attachments');
 const agentProfile=require('./agentProfile');
 const checklists=require('./checklists');
 const terminalPrompt=require('./terminalPrompt');
-const transcript=require('./transcript');const contextUsage=require('./contextUsage');
+const transcript=require('./transcript');const contextUsage=require('./contextUsage');const modelFollow=require('./modelFollow');
 const compactScreen=require('./compactScreen');
 const offThread=require('./offThread');
 const slashCommands=require('./slashCommands');
@@ -1776,6 +1776,8 @@ function bridge(c,action,data={}) {
     .then(screen=>{if(screen!==null&&same()&&takeCompactScreen(g,screen))save(c);})
     .catch(()=>{}).finally(()=>capturing.delete(key));
   }
+  // A model picked with /model in the terminal (followSessionModel); it writes only on a change.
+  try{followSessionModel(c);}catch(e){console.error(`model follow for ${c.id}: ${e.message}`);}
   return {ok:true};
  }
  else throw error('Unknown bridge action',404);
@@ -2358,6 +2360,31 @@ function setAutoCompact(c,value){
 }
 // The yes to that question for one agent, the same restart the subagents' setting uses.
 function applyAgentAutoCompact(c){return autoCompactPending(c)?applySubagents(c):'none';}
+// Agent Profile follows a /model typed in the agent's own terminal (2026-11-10; the rules
+// are modelFollow.decide's). Run at each heartbeat of a live Claude session. What the session
+// runs now (g.model, g.effort: what it was launched with until then) moves to what it reports;
+// the profile is saved only with a model and effort its owner's role may hold, as a save in
+// Agent Profile would check them (agentProfile.validate), with profileVersion bumped, so an
+// open draft is refused as stale, and audited. A model saved in Agent Profile stops the
+// running session at once (the profile route), so the old session never takes it back.
+function followSessionModel(c){
+ if(c.archived||c.mode!=='claude')return false;
+ const g=active(c);
+ if(!g.ready||!['ready','busy'].includes(g.phase)||!g.launchedAt)return false;
+ const main=contextUsage.view({dir:controlDir(c,g),alive:true,launchedAt:g.launchedAt}).main;
+ const saved=agentProfile.profile(c),role=ownerIsActiveAdmin(c.owner)?'admin':'member';
+ const check=want=>{try{const p=agentProfile.validate({model:want.model,effort:want.effort},c,role);return p.model===want.model&&p.effort===want.effort;}catch{return false;}};
+ const r=modelFollow.decide({report:main&&{model:main.model,effort:main.effort,at:Date.parse(main.at),stale:main.stale},session:{model:g.model,effort:g.effort},saved:{model:saved.model,effort:saved.effort},launchedAt:g.launchedAt,check});
+ if(r.kind==='none')return false;
+ g.model=r.session.model;g.effort=r.session.effort;
+ if(r.kind==='save'){
+  const from={model:saved.model,effort:saved.effort};
+  c.model=r.profile.model;c.effort=r.profile.effort;c.profileVersion=(c.profileVersion||0)+1;c.updatedAt=new Date().toISOString();
+  try{require('./services/audit').audit({source:'agent-session',action:'profile-model-follow',conversation:c.id,owner:c.owner,from,to:r.profile,...(r.reason?{reason:r.reason}:{})});}catch(e){console.error('model follow audit:',e.message);}
+  console.log(`agent ${c.id} profile follows its session: ${from.model}/${from.effort} -> ${r.profile.model}/${r.profile.effort}`);
+ }
+ save(c);return r.kind==='save';
+}
 // What an Agent Profile save asks next, once for everything it changed: needs is none,
 // next-start, idle or busy, as restartNeeds; what names the settings that are waiting for
 // it ('subagents', 'autoCompact').
@@ -3157,7 +3184,7 @@ const heldUntil=(x,kind)=>kind==='result'?x.resultPending?.after:kind==='failure
 const pendingScheduleNotifications=(now=Date.now())=>scheduleStore.list().flatMap(x=>Object.entries(NOTIFY_FIELD).filter(([kind,f])=>x[f]&&!(Date.parse(heldUntil(x,kind)||0)>now)).map(([kind])=>({schedule:x,kind})));
 const markScheduleNotified=(id,kind='proposal')=>{scheduleStore.patch(id,{[NOTIFY_FIELD[kind]]:false});};
 const scheduleCheckList=()=>scheduleChecks.list().map(scheduleChecks.view);
-module.exports={diagnosticReports:diagnostics,pendingDiagnosticNotifications:()=>diagnostics.pending(),markDiagnosticsNotified:ids=>{diagnostics.markNotified(ids);},CHECKLIST_RETENTION_CHOICES,checklistRetentionDays,loginShutdown:signal=>claudeLogin.shutdown(signal),loginView:()=>claudeLogin.view(),loginStart:()=>claudeLogin.start(),loginCode:text=>claudeLogin.code(text),loginCancel,loginResend,loginFailed,loginProven,reviveSilentChannels,peerLinkDigest,peerExchange,peerKey,peerLink,peerConfig,peerWidens,setPeerConfig,peerDraft,peerView,relaunchMarked,tmuxSocket,subagentList,runLimitResumes,runWrapUps,setWrapUp,mentionsFor,commandInGroup,groupList,reorderGroups,groupFor,groupView,createGroup,updateGroup,removeGroup,updateGroupChecklist,sendToGroup,searchGroup,deliverGroups,chooseTerminalOption,updateChecklist:(c,data,by)=>{const r=checklists.apply(c,data,by);save(c);return r;},syncAllRelays,syncRelays,scheduleCheckList,schedulesFor,addSchedule,approveSchedule,updateSchedule,removeSchedule,rejectSchedule,runSchedules,runScheduleNow,testSchedule,SCHEDULE_WAIT_MS,pendingScheduleNotifications,markScheduleNotified,searchMessages,runCommand,commandsFor,setThreshold,setSubagents,applyAgentSubagents,applySubagentDefault,subagentEnv,setAutoCompact,applyAgentAutoCompact,profileRestartNeeds,applyAgentRestart,applyAutoCompactDefault,autoCompactEnv,AUTO_COMPACT_PRESETS,listPreferences,setListPreferences,setAvatar,clearAvatar,avatarLocation,AVATAR_MAX_BYTES,clearFullAccessFor,pendingReportNotifications,markReportsNotified,archiveFor,setAccessFor,accessReports:()=>reports.list().map(reportView),accessReport:id=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(r);},resolveAccessReport:(id,patch)=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(reports.update(id,patch));},grantAccess,reconcile,reconnect,purgeOwner,sweepRetention,stopAgentsOf,bridgeActions:()=>[...BRIDGE_ACTIONS],archivedList,restoreArchived,keepArchived,purgeArchived,archiveRetentionDays,RETENTION_MAX_DAYS,UNSENT_ATTACHMENT_HOURS,STALE_MS,STARTUP_SLOW_MS,STARTUP_LIMIT_MS,messageTranscript,importHistory,interrupt,markViewing,markAllRead,isViewing,attachableFolders,MESSAGE_PAGE,updateProfile,reorder,pendingNotifications,getPreferences,setPreferences,decidePermission,confirmWorkspace,confirmChannel,compact,stateRoot,create,get,list,publicView,launch,stop,send,rotate,bridge,byToken,active,save,error};
+module.exports={followSessionModel,diagnosticReports:diagnostics,pendingDiagnosticNotifications:()=>diagnostics.pending(),markDiagnosticsNotified:ids=>{diagnostics.markNotified(ids);},CHECKLIST_RETENTION_CHOICES,checklistRetentionDays,loginShutdown:signal=>claudeLogin.shutdown(signal),loginView:()=>claudeLogin.view(),loginStart:()=>claudeLogin.start(),loginCode:text=>claudeLogin.code(text),loginCancel,loginResend,loginFailed,loginProven,reviveSilentChannels,peerLinkDigest,peerExchange,peerKey,peerLink,peerConfig,peerWidens,setPeerConfig,peerDraft,peerView,relaunchMarked,tmuxSocket,subagentList,runLimitResumes,runWrapUps,setWrapUp,mentionsFor,commandInGroup,groupList,reorderGroups,groupFor,groupView,createGroup,updateGroup,removeGroup,updateGroupChecklist,sendToGroup,searchGroup,deliverGroups,chooseTerminalOption,updateChecklist:(c,data,by)=>{const r=checklists.apply(c,data,by);save(c);return r;},syncAllRelays,syncRelays,scheduleCheckList,schedulesFor,addSchedule,approveSchedule,updateSchedule,removeSchedule,rejectSchedule,runSchedules,runScheduleNow,testSchedule,SCHEDULE_WAIT_MS,pendingScheduleNotifications,markScheduleNotified,searchMessages,runCommand,commandsFor,setThreshold,setSubagents,applyAgentSubagents,applySubagentDefault,subagentEnv,setAutoCompact,applyAgentAutoCompact,profileRestartNeeds,applyAgentRestart,applyAutoCompactDefault,autoCompactEnv,AUTO_COMPACT_PRESETS,listPreferences,setListPreferences,setAvatar,clearAvatar,avatarLocation,AVATAR_MAX_BYTES,clearFullAccessFor,pendingReportNotifications,markReportsNotified,archiveFor,setAccessFor,accessReports:()=>reports.list().map(reportView),accessReport:id=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(r);},resolveAccessReport:(id,patch)=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(reports.update(id,patch));},grantAccess,reconcile,reconnect,purgeOwner,sweepRetention,stopAgentsOf,bridgeActions:()=>[...BRIDGE_ACTIONS],archivedList,restoreArchived,keepArchived,purgeArchived,archiveRetentionDays,RETENTION_MAX_DAYS,UNSENT_ATTACHMENT_HOURS,STALE_MS,STARTUP_SLOW_MS,STARTUP_LIMIT_MS,messageTranscript,importHistory,interrupt,markViewing,markAllRead,isViewing,attachableFolders,MESSAGE_PAGE,updateProfile,reorder,pendingNotifications,getPreferences,setPreferences,decidePermission,confirmWorkspace,confirmChannel,compact,stateRoot,create,get,list,publicView,launch,stop,send,rotate,bridge,byToken,active,save,error};
 
 // Account deletion checks the agents an account actually has running.
 module.exports.lifecycleInventory=async()=>({sources:[{provider:"claude",providerLabel:"Claude Code",ok:true}],schedules:state.conversations.filter(c=>!['stopped','error'].includes(active(c).phase)).map(c=>({id:c.id,ownerUserId:c.owner,provider:"claude",status:active(c).phase,running:active(c).phase==="busy"}))});
