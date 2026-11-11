@@ -9,11 +9,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import {fileURLToPath} from 'node:url';
 import {createRequire} from 'node:module';
 
 const MAX=256*1024;
 const fail=(code=1)=>{process.stdout.write('{"error":"exchange failed"}\n');process.exit(code);};
 const require=createRequire(import.meta.url);
+// The same settings the service starts with (scripts/start.mjs): SSH runs this with a
+// bare environment, so a port or key file set in server/.env would otherwise be missed
+// and the exchange sent to the default port. A value already in the environment wins.
+try{require('dotenv').config({path:path.join(path.dirname(fileURLToPath(import.meta.url)),'..','server','.env'),quiet:true});}catch{fail();}
 const keyFile=process.env.CC_AGENT_PEER_KEY_FILE||path.join(os.homedir(),'.config','cc-agent','peer-key');
 
 function readKey(){

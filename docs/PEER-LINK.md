@@ -46,7 +46,7 @@ You need SSH from machine A to machine B, with the host key known and pinned.
    command="/absolute/path/to/node /absolute/path/to/cc-agent/scripts/peer-exchange.mjs",restrict ssh-ed25519 AAAA… cc-agent-peer
    ```
 
-   `restrict` turns off forwarding, the terminal and agent forwarding. With this key, the forced command is the only program SSH can run. The program ignores `SSH_ORIGINAL_COMMAND`.
+   `restrict` turns off forwarding, the terminal and agent forwarding. With this key, the forced command is the only program SSH can run. The program ignores `SSH_ORIGINAL_COMMAND`. It reads `server/.env` as the service does, so a port set there with `CC_AGENT_PORT` applies to it too.
 
 4. **On machine A, tell CC Agent how to call.** Add the two settings below to `server/.env`, then restart CC Agent. A machine without these settings is the answering side.
 
