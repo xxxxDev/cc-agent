@@ -2069,7 +2069,7 @@ function sweepRetention({now=Date.now()}={}){
     if(!entry.endsWith('.json'))continue;
     const meta=path.join(dir,id,entry);
     let data;try{data=JSON.parse(fs.readFileSync(meta,'utf8'));}catch{continue;}
-    if(sent.has(data.id))continue;
+    if(sent.has(data.id)||data.terminal===true)continue;
     if(!(data.createdAt<now-UNSENT_ATTACHMENT_HOURS*3600000))continue;
     try{fs.rmSync(path.join(dir,id,data.file),{force:true});fs.rmSync(meta,{force:true});files+=1;}catch{}
    }
@@ -2373,7 +2373,11 @@ function terminalFileAccess(c){return terminalFiles.access({mode:c.mode,archived
 function attachTerminalFile(c,fileId){
  const ok=terminalFileAccess(c);
  if(!ok.ok)throw error(ok.reason==='unreadable'?'這個 Agent 讀不到附件資料夾，檔案請放到聊天室。':'這個 Agent 沒有終端機可以放檔案。',409);
- return {path:attachments.location(stateRoot,c,fileId).path};
+ const at=attachments.location(stateRoot,c,fileId).path;
+ // Handed to the terminal: kept as a sent file is, outside the unsent cap and sweep
+ // (attachments.markTerminal). The mirror still takes it as the typed prompt's own.
+ attachments.markTerminal(stateRoot,c,fileId);
+ return {path:at};
 }
 // What the agent's owner types straight into its terminal, and the agent's answer, shown in
 // the chat as well (2026-11-10). The transcript reader keeps them
@@ -2402,7 +2406,9 @@ function mirrorTerminal(c){
   if(seen.has(e.uuid)||!(Date.parse(e.at)>=from))continue;
   if(e.kind==='prompt'){
    const files=terminalTurnFiles(c,e);
-   if(!e.text&&!files.length)continue;
+   // Nothing to show (a picture alone that could not be kept): looked at once, not again at
+   // every heartbeat (2026-11-11); terminalTurnFiles said why.
+   if(!e.text&&!files.length){seen.add(e.uuid);c.terminalMirror.seen=[...(c.terminalMirror.seen||[]),e.uuid].slice(-TERMINAL_SEEN_MAX);changed=true;continue;}
    add(c,'user',e.text,{via:'terminal',sourceUuid:e.uuid,generation:found.generation,...(files.length?{attachments:files}:{})});
   }else if(e.kind==='answer'){
    // Only under a prompt that is in the chat: an answer to one from before is not shown alone.
