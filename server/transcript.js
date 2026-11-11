@@ -11,6 +11,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 
+const terminalTurns = require('./terminalTurns');
 const PROJECTS = path.join(os.homedir(), '.claude', 'projects');
 
 // US$ per million tokens, as [input, output, cache read if not a tenth of input].
@@ -99,6 +100,7 @@ const blank = () => ({
   lastAt: null,
   quotaReset: null,
   compactions: [],
+  terminal: terminalTurns.blank(),
 });
 
 // Hook feedback is the same turn continuing, so it does not reset the count.
@@ -273,6 +275,8 @@ function absorb(state, record) {
   trackSkills(state, record);
   trackQueue(state, record);
   trackRelays(state, record);
+  // Prompts typed in the terminal and their answers, for the chat (terminalTurns.js).
+  terminalTurns.track(state.terminal, record);
   const message = record.message;
   if (!message) return;
   // A prompt is activity too: a turn that has only just opened is in it.
@@ -878,6 +882,24 @@ function history(stateRoot, conversation, skipped = new Set()) {
   return turns.slice(-MAX_IMPORT);
 }
 
+// The prompts typed in the current run's terminal and the answers to them, as
+// terminalTurns.track kept them, oldest first (agentStore.mirrorTerminal), with the run's
+// number. Only the active run's own transcript, located by its workspace and session.
+function terminalEvents(stateRoot, conversation) {
+  if (conversation?.mode !== 'claude') return null;
+  const run = (conversation.runs || []).at(-1);
+  if (!run) return null;
+  // Looked up without remembering an absence: this runs from the heartbeat, before a new
+  // session has written its transcript, and a remembered "none" would hide it from every
+  // other reader for LOOKUP_TTL_MS. A session kept in another project folder is found once
+  // another reader has located it.
+  const cwd = path.join(stateRoot, 'workspaces', conversation.id, 'g' + run.number);
+  const own = path.join(PROJECTS, cwd.replace(/[^a-zA-Z0-9]/g, '-'), run.sessionId + '.jsonl');
+  const file = fs.existsSync(own) ? own : located.get(run.sessionId)?.file || null;
+  const state = file ? read(file) : null;
+  return state ? {generation: run.number, events: state.terminal.events} : null;
+}
+
 // The current run's skills, for the slash menu.
 function skills(stateRoot, conversation) {
   const run = (conversation?.runs || []).at(-1);
@@ -977,4 +999,4 @@ function subagents(stateRoot, conversation) {
   return out.sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt))).slice(0, SUBAGENT_MAX);
 }
 
-module.exports = {turnEndedSince, workedSince, subagents, lastCompaction, usage, progress, currentWork, quotaReset, waiting, skills, connectors, relays, segment, history, messageCost, priceOf, PRICES, WEB_SEARCH_USD};
+module.exports = {terminalEvents, turnEndedSince, workedSince, subagents, lastCompaction, usage, progress, currentWork, quotaReset, waiting, skills, connectors, relays, segment, history, messageCost, priceOf, PRICES, WEB_SEARCH_USD};

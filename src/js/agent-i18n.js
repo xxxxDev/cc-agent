@@ -611,6 +611,7 @@ const english = {
   "對話資訊": "Conversation information",
   "輸入訊息…": "Type a message…",
   "放開即可附加": "Drop to attach",
+  "來自終端機": "from the terminal",
   "附加到給 {name} 的訊息，送出前可以再刪": "They go with your message to {name}; you can remove them before sending",
   "{count} 個檔案": "{count} files",
   "送出訊息": "Send message",

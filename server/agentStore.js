@@ -1735,6 +1735,8 @@ function bridge(c,action,data={}) {
   try{fileBlocked(c,g);}catch(e){console.error('access report scan failed:',e.message);}
   if(data.failed){g.phase='error';g.lastError=String(data.error||'Claude 執行失敗').slice(0,1000);}
   handOverDue(c,g);
+  // A turn typed in the terminal ends here; its closing records follow the hook (mirrorTerminal).
+  if(c.mode==='claude')setTimeout(()=>{try{if(active(c)===g)mirrorTerminal(c);}catch(e){console.error(`terminal mirror for ${c.id}: ${e.message}`);}},1500).unref?.();
   save(c);if(c.pendingRotation&&g.phase==='ready')setTimeout(()=>{if(active(c)===g&&c.pendingRotation&&g.phase==='ready'){try{rotate(c);}catch{}}},1500);return {ok:true};
  }
  else if(action==='failure'){
@@ -1778,6 +1780,8 @@ function bridge(c,action,data={}) {
   }
   // A model picked with /model in the terminal (followSessionModel); it writes only on a change.
   try{followSessionModel(c);}catch(e){console.error(`model follow for ${c.id}: ${e.message}`);}
+  // Turns typed in the terminal, into the chat (mirrorTerminal); it writes only what is new.
+  try{mirrorTerminal(c);}catch(e){console.error(`terminal mirror for ${c.id}: ${e.message}`);}
   return {ok:true};
  }
  else throw error('Unknown bridge action',404);
@@ -2360,6 +2364,76 @@ function setAutoCompact(c,value){
 }
 // The yes to that question for one agent, the same restart the subagents' setting uses.
 function applyAgentAutoCompact(c){return autoCompactPending(c)?applySubagents(c):'none';}
+// What the agent's owner types straight into its terminal, and the agent's answer, shown in
+// the chat as well (2026-11-10). The transcript reader keeps them
+// (terminalTurns.js decides what is a typed prompt and what answers it); this adds the new
+// ones to the conversation, run at each heartbeat and just after a turn ends. Stored as any
+// message, flagged via:'terminal' and sourceUuid (the record's, as importHistory keys its
+// turns, so an import never brings them in twice). Never queued for delivery (no delivery
+// field: the agent already has them, and nothing waits for a reply); the answer is quiet (not
+// unread, its owner was at the terminal) and never pushed (no notifyPending).
+// Only this conversation's own transcript is read, and only events after both this run's
+// launch and the first time this conversation was looked at (terminalMirror.since), so
+// turns from before the feature existed, or a service restart re-reading the file, add
+// nothing; terminalMirror.seen remembers what was added, at most TERMINAL_SEEN_MAX.
+const TERMINAL_SEEN_MAX=200;
+const PICTURE_EXT={'image/png':'.png','image/jpeg':'.jpg','image/gif':'.gif','image/webp':'.webp'};
+function mirrorTerminal(c){
+ if(c.archived||c.mode!=='claude')return false;
+ const g=active(c);
+ if(!g.launchedAt)return false;
+ let changed=false;
+ if(!c.terminalMirror||typeof c.terminalMirror.since!=='string'){c.terminalMirror={since:new Date().toISOString(),seen:[]};changed=true;}
+ const found=transcript.terminalEvents(stateRoot,c);
+ const from=Math.max(Date.parse(c.terminalMirror.since)||0,g.launchedAt);
+ const seen=new Set(c.terminalMirror.seen||[]);
+ for(const e of found?.events||[]){
+  if(seen.has(e.uuid)||!(Date.parse(e.at)>=from))continue;
+  if(e.kind==='prompt'){
+   const files=terminalTurnFiles(c,e);
+   if(!e.text&&!files.length)continue;
+   add(c,'user',e.text,{via:'terminal',sourceUuid:e.uuid,generation:found.generation,...(files.length?{attachments:files}:{})});
+  }else if(e.kind==='answer'){
+   // Only under a prompt that is in the chat: an answer to one from before is not shown alone.
+   const asked=c.messages.findLast(m=>m.via==='terminal'&&m.role==='user'&&m.sourceUuid===e.prompt);
+   if(!asked)continue;
+   add(c,'assistant',e.text,{via:'terminal',sourceUuid:e.uuid,generation:found.generation,inReplyTo:asked.id,quiet:true});
+  }else continue;
+  seen.add(e.uuid);c.terminalMirror.seen=[...(c.terminalMirror.seen||[]),e.uuid].slice(-TERMINAL_SEEN_MAX);changed=true;
+ }
+ if(changed)save(c);
+ return changed;
+}
+// The pictures of a typed prompt, and the files of this chat's own attachment folder its text
+// names (a file dropped on the terminal, attachTerminalFile), as the message's attachments. A
+// file already in that folder and not yet sent is the same attachment, taken as sent now; a
+// picture is otherwise kept as a new one from the transcript's copy, within the store's
+// limits (attachments.put). Paths anywhere else are never read: only names in this
+// conversation's own folder, matched by their id.
+function terminalTurnFiles(c,e){
+ const dir=attachments.directory(stateRoot,c),out=[],used=new Set();
+ // The folder as named and as the disk resolves it (on macOS /var is /private/var).
+ let real=dir;try{real=fs.realpathSync.native(dir);}catch{}
+ const sent=new Set(c.messages.flatMap(m=>(m.attachments||[]).map(a=>a.id)));
+ const ID=/^([-a-f0-9]{36})(?:\.data)?(?:\.[A-Za-z0-9]{1,16})?$/;
+ const own=p=>{const m=typeof p==='string'&&[dir,real].includes(path.dirname(p))?ID.exec(path.basename(p)):null;if(!m||sent.has(m[1])||used.has(m[1]))return null;try{const meta=attachments.location(stateRoot,c,m[1]).meta;used.add(meta.id);return {id:meta.id,name:meta.name,size:meta.size};}catch{return null;}};
+ const pictures=e.pictures||[];
+ pictures.forEach((p,i)=>{
+  if(out.length>=attachments.MAX_FILES)return;
+  const same=pictures.length===(e.sources||[]).length?own(e.sources[i]):null;
+  if(same){out.push(same);return;}
+  const d=new Date(Date.parse(e.at)||Date.now()),two=n=>String(n).padStart(2,'0');
+  const name='terminal-'+d.getFullYear()+two(d.getMonth()+1)+two(d.getDate())+'-'+two(d.getHours())+two(d.getMinutes())+two(d.getSeconds())+(pictures.length>1?'-'+(i+1):'')+(PICTURE_EXT[p.type]||'.png');
+  try{out.push(attachments.put(stateRoot,c,name,Buffer.from(p.data,'base64')));}catch(err){console.error(`terminal picture for ${c.id}: ${err.message}`);}
+ });
+ // A path as a terminal types it: backslash escapes and quotes taken off first.
+ const plain=String(e.text||'').replace(/\\(.)/g,'$1').replace(/['"]/g,' ');
+ for(const m of plain.matchAll(/(\/[^\s]*?\/[-a-f0-9]{36}(?:\.data)?(?:\.[A-Za-z0-9]{1,16})?)(?=\s|$)/g)){
+  if(out.length>=attachments.MAX_FILES)break;
+  const f=own(m[1]);if(f)out.push(f);
+ }
+ return out;
+}
 // Agent Profile follows a /model typed in the agent's own terminal (2026-11-10; the rules
 // are modelFollow.decide's). Run at each heartbeat of a live Claude session. What the session
 // runs now (g.model, g.effort: what it was launched with until then) moves to what it reports;
@@ -3184,7 +3258,7 @@ const heldUntil=(x,kind)=>kind==='result'?x.resultPending?.after:kind==='failure
 const pendingScheduleNotifications=(now=Date.now())=>scheduleStore.list().flatMap(x=>Object.entries(NOTIFY_FIELD).filter(([kind,f])=>x[f]&&!(Date.parse(heldUntil(x,kind)||0)>now)).map(([kind])=>({schedule:x,kind})));
 const markScheduleNotified=(id,kind='proposal')=>{scheduleStore.patch(id,{[NOTIFY_FIELD[kind]]:false});};
 const scheduleCheckList=()=>scheduleChecks.list().map(scheduleChecks.view);
-module.exports={followSessionModel,diagnosticReports:diagnostics,pendingDiagnosticNotifications:()=>diagnostics.pending(),markDiagnosticsNotified:ids=>{diagnostics.markNotified(ids);},CHECKLIST_RETENTION_CHOICES,checklistRetentionDays,loginShutdown:signal=>claudeLogin.shutdown(signal),loginView:()=>claudeLogin.view(),loginStart:()=>claudeLogin.start(),loginCode:text=>claudeLogin.code(text),loginCancel,loginResend,loginFailed,loginProven,reviveSilentChannels,peerLinkDigest,peerExchange,peerKey,peerLink,peerConfig,peerWidens,setPeerConfig,peerDraft,peerView,relaunchMarked,tmuxSocket,subagentList,runLimitResumes,runWrapUps,setWrapUp,mentionsFor,commandInGroup,groupList,reorderGroups,groupFor,groupView,createGroup,updateGroup,removeGroup,updateGroupChecklist,sendToGroup,searchGroup,deliverGroups,chooseTerminalOption,updateChecklist:(c,data,by)=>{const r=checklists.apply(c,data,by);save(c);return r;},syncAllRelays,syncRelays,scheduleCheckList,schedulesFor,addSchedule,approveSchedule,updateSchedule,removeSchedule,rejectSchedule,runSchedules,runScheduleNow,testSchedule,SCHEDULE_WAIT_MS,pendingScheduleNotifications,markScheduleNotified,searchMessages,runCommand,commandsFor,setThreshold,setSubagents,applyAgentSubagents,applySubagentDefault,subagentEnv,setAutoCompact,applyAgentAutoCompact,profileRestartNeeds,applyAgentRestart,applyAutoCompactDefault,autoCompactEnv,AUTO_COMPACT_PRESETS,listPreferences,setListPreferences,setAvatar,clearAvatar,avatarLocation,AVATAR_MAX_BYTES,clearFullAccessFor,pendingReportNotifications,markReportsNotified,archiveFor,setAccessFor,accessReports:()=>reports.list().map(reportView),accessReport:id=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(r);},resolveAccessReport:(id,patch)=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(reports.update(id,patch));},grantAccess,reconcile,reconnect,purgeOwner,sweepRetention,stopAgentsOf,bridgeActions:()=>[...BRIDGE_ACTIONS],archivedList,restoreArchived,keepArchived,purgeArchived,archiveRetentionDays,RETENTION_MAX_DAYS,UNSENT_ATTACHMENT_HOURS,STALE_MS,STARTUP_SLOW_MS,STARTUP_LIMIT_MS,messageTranscript,importHistory,interrupt,markViewing,markAllRead,isViewing,attachableFolders,MESSAGE_PAGE,updateProfile,reorder,pendingNotifications,getPreferences,setPreferences,decidePermission,confirmWorkspace,confirmChannel,compact,stateRoot,create,get,list,publicView,launch,stop,send,rotate,bridge,byToken,active,save,error};
+module.exports={mirrorTerminal,followSessionModel,diagnosticReports:diagnostics,pendingDiagnosticNotifications:()=>diagnostics.pending(),markDiagnosticsNotified:ids=>{diagnostics.markNotified(ids);},CHECKLIST_RETENTION_CHOICES,checklistRetentionDays,loginShutdown:signal=>claudeLogin.shutdown(signal),loginView:()=>claudeLogin.view(),loginStart:()=>claudeLogin.start(),loginCode:text=>claudeLogin.code(text),loginCancel,loginResend,loginFailed,loginProven,reviveSilentChannels,peerLinkDigest,peerExchange,peerKey,peerLink,peerConfig,peerWidens,setPeerConfig,peerDraft,peerView,relaunchMarked,tmuxSocket,subagentList,runLimitResumes,runWrapUps,setWrapUp,mentionsFor,commandInGroup,groupList,reorderGroups,groupFor,groupView,createGroup,updateGroup,removeGroup,updateGroupChecklist,sendToGroup,searchGroup,deliverGroups,chooseTerminalOption,updateChecklist:(c,data,by)=>{const r=checklists.apply(c,data,by);save(c);return r;},syncAllRelays,syncRelays,scheduleCheckList,schedulesFor,addSchedule,approveSchedule,updateSchedule,removeSchedule,rejectSchedule,runSchedules,runScheduleNow,testSchedule,SCHEDULE_WAIT_MS,pendingScheduleNotifications,markScheduleNotified,searchMessages,runCommand,commandsFor,setThreshold,setSubagents,applyAgentSubagents,applySubagentDefault,subagentEnv,setAutoCompact,applyAgentAutoCompact,profileRestartNeeds,applyAgentRestart,applyAutoCompactDefault,autoCompactEnv,AUTO_COMPACT_PRESETS,listPreferences,setListPreferences,setAvatar,clearAvatar,avatarLocation,AVATAR_MAX_BYTES,clearFullAccessFor,pendingReportNotifications,markReportsNotified,archiveFor,setAccessFor,accessReports:()=>reports.list().map(reportView),accessReport:id=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(r);},resolveAccessReport:(id,patch)=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(reports.update(id,patch));},grantAccess,reconcile,reconnect,purgeOwner,sweepRetention,stopAgentsOf,bridgeActions:()=>[...BRIDGE_ACTIONS],archivedList,restoreArchived,keepArchived,purgeArchived,archiveRetentionDays,RETENTION_MAX_DAYS,UNSENT_ATTACHMENT_HOURS,STALE_MS,STARTUP_SLOW_MS,STARTUP_LIMIT_MS,messageTranscript,importHistory,interrupt,markViewing,markAllRead,isViewing,attachableFolders,MESSAGE_PAGE,updateProfile,reorder,pendingNotifications,getPreferences,setPreferences,decidePermission,confirmWorkspace,confirmChannel,compact,stateRoot,create,get,list,publicView,launch,stop,send,rotate,bridge,byToken,active,save,error};
 
 // Account deletion checks the agents an account actually has running.
 module.exports.lifecycleInventory=async()=>({sources:[{provider:"claude",providerLabel:"Claude Code",ok:true}],schedules:state.conversations.filter(c=>!['stopped','error'].includes(active(c).phase)).map(c=>({id:c.id,ownerUserId:c.owner,provider:"claude",status:active(c).phase,running:active(c).phase==="busy"}))});
