@@ -22,6 +22,8 @@ const data=path.resolve(process.env.CC_AGENT_DATA_DIR||path.join(root,'.local'))
 // (services/audit.js, agentStore.js).
 if(!process.env.CC_AGENT_AUDIT_LOG)process.env.CC_AGENT_AUDIT_LOG=data!==path.join(root,'.local')?path.join(data,'logs','api-audit.log'):path.join(root,'server','logs','api-audit.log');
 if(!process.env.CC_AGENT_PEER_KEY_FILE)process.env.CC_AGENT_PEER_KEY_FILE=path.join(os.homedir(),'.config','cc-agent','peer-key');
+// One process at a time on a data folder: this server, or server/scripts/rotate-push-keys.js
+// while it writes the push stores (it makes this same lock, with its own pid).
 const lock=path.join(data,'server.lock');
 // Accounts without the secret that signs their logins: a new secret and a new seed
 // password would be made beside them, so the start is refused before anything is
@@ -29,7 +31,7 @@ const lock=path.join(data,'server.lock');
 if(fs.existsSync(path.join(data,'auth','users.db'))&&!fs.existsSync(path.join(data,'local-access.json')))throw new Error('Auth exists without its secret; refusing bootstrap.');
 try {fs.writeFileSync(lock,String(process.pid),{flag:'wx',mode:0o600});}catch{
  const pid=Number(fs.readFileSync(lock,'utf8'));let live=true;try{process.kill(pid,0);}catch(e){if(e.code==='ESRCH')live=false;}
- if(live)throw new Error('Another CC Agent server is already running on this data folder.');fs.unlinkSync(lock);fs.writeFileSync(lock,String(process.pid),{flag:'wx',mode:0o600});
+ if(live)throw new Error('Another CC Agent process (a running server, or rotate-push-keys.js) is using this data folder.');fs.unlinkSync(lock);fs.writeFileSync(lock,String(process.pid),{flag:'wx',mode:0o600});
 }
 // Removed at exit only while it is still the file this process made: not a link, the same
 // file, and still naming this process. One replaced meanwhile, by another start that

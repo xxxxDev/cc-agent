@@ -163,15 +163,29 @@ function restorePushKeyFiles(backupDirectory, dbDir) {
     plan.push({ basename, backup, target: path.resolve(dbDir, basename), mode: entry.mode });
   }
   ensurePrivateDirectory(dbDir);
+  // A `.db~` beside a store is NeDB's half-finished rewrite, left by a crash (during an
+  // apply, say). NeDB reads it only when the `.db` itself is missing, and the restore puts
+  // a `.db` in place, so it is removed once its store is back; only a regular file is.
   for (const item of plan) {
     if (fs.existsSync(item.target)) regularFileInfo(item.target);
-    if (fs.existsSync(`${item.target}~`)) {
-      throw migrationError('Restore target has an unresolved NeDB companion file', { file: item.basename });
+    item.companion = `${item.target}~`;
+    let companion = null;
+    try { companion = fs.lstatSync(item.companion); } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
     }
+    if (companion && (companion.isSymbolicLink() || !companion.isFile())) {
+      throw migrationError('Restore target has a NeDB companion that is not a regular file', { file: item.basename });
+    }
+    item.hasCompanion = Boolean(companion);
   }
   const restored = [];
+  const removedCompanions = [];
   for (const item of plan) {
     swapFileFromBackup(item.backup, item.target, item.mode);
+    if (item.hasCompanion) {
+      fs.unlinkSync(item.companion);
+      removedCompanions.push(`${item.basename}~`);
+    }
     const size = fs.statSync(item.target).size;
     const mode = fs.statSync(item.target).mode & 0o777;
     const sha256 = sha256File(item.target);
@@ -181,7 +195,7 @@ function restorePushKeyFiles(backupDirectory, dbDir) {
     }
     restored.push({ file: item.basename, size, mode, sha256 });
   }
-  return { restored };
+  return { restored, removedCompanions };
 }
 
 // A stored session fingerprint resolves to: itself (already current-key), the
@@ -279,6 +293,9 @@ async function planPushKeyRotation(subscriptionsDB, deliveriesDB, sessionsDB, en
     subscriptionsSessionStale: 0,
     subscriptionsOnCurrentVapidKey: 0,
     subscriptionsOnPreviousVapidKey: 0,
+    // Only rows still sent to: a device that subscribed again leaves its old row inactive
+    // (pushStore.js), and such a row stays on the previous key for good.
+    activeSubscriptionsOnPreviousVapidKey: 0,
     subscriptionsOnUnknownVapidKey: 0,
   };
   const subscriptionUpdates = [];
@@ -301,8 +318,10 @@ async function planPushKeyRotation(subscriptionsDB, deliveriesDB, sessionsDB, en
     if (verdict.needsSessionFingerprint) counts.subscriptionsSessionRefingerprinted += 1;
     if (verdict.staleSession) counts.subscriptionsSessionStale += 1;
     if (verdict.vapidClass === 'current') counts.subscriptionsOnCurrentVapidKey += 1;
-    else if (verdict.vapidClass === 'previous') counts.subscriptionsOnPreviousVapidKey += 1;
-    else counts.subscriptionsOnUnknownVapidKey += 1;
+    else if (verdict.vapidClass === 'previous') {
+      counts.subscriptionsOnPreviousVapidKey += 1;
+      if (row.active === true) counts.activeSubscriptionsOnPreviousVapidKey += 1;
+    } else counts.subscriptionsOnUnknownVapidKey += 1;
     if (verdict.changed) {
       subscriptionsChanged += 1;
       subscriptionUpdates.push({ id: row._id, update: verdict.update });
