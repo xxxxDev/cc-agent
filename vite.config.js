@@ -98,7 +98,7 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api\//, /^\/bridge\//, /^\/terminal\//, /\.[a-z0-9]+$/i],
         cleanupOutdatedCaches: true,
         maximumFileSizeToCacheInBytes: 4194304,
-        // The generated Workbox worker owns caching; this reviewed sidecar adds
+        // The generated Workbox worker owns caching; this sidecar adds
         // only Web Push display/click handling and never intercepts fetches. Its
         // product values come first (public/push-config.js).
         importScripts: ['/push-config.js', '/push-handler.js'],

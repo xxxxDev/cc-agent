@@ -70,8 +70,8 @@ const NEDB_LINE_HOOKS = Object.freeze({
 // wherever it is), so every other byte stays as it was.
 const RAW_NEDB_LINE_BREAKS = Object.freeze([
   { name: 'U+0085', bytes: Buffer.from('\u0085', 'utf8'), escape: Buffer.from('\\u0085', 'ascii') },
-  { name: 'U+2028', bytes: Buffer.from(' ', 'utf8'), escape: Buffer.from('\\u2028', 'ascii') },
-  { name: 'U+2029', bytes: Buffer.from(' ', 'utf8'), escape: Buffer.from('\\u2029', 'ascii') },
+  { name: 'U+2028', bytes: Buffer.from('\u2028', 'utf8'), escape: Buffer.from('\\u2028', 'ascii') },
+  { name: 'U+2029', bytes: Buffer.from('\u2029', 'utf8'), escape: Buffer.from('\\u2029', 'ascii') },
 ]);
 
 // The bytes with every raw U+0085, U+2028 and U+2029 written as its JSON escape, and how

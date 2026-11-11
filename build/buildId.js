@@ -23,7 +23,7 @@ const runGit = (args) =>
 
 // Describes the last commit that could have changed the output, rather than HEAD.
 // Still one deterministic string for one source state, so two builds of unchanged
-// source stay identical - the release check depends on that.
+// source stay identical (the release check depends on that).
 export function describeSourceBuild({ run = runGit } = {}) {
   const sourceCommit = run(['log', '-1', '--format=%H', '--', ...NON_SOURCE_PATHSPECS]);
   // A tree whose entire history is documentation still deserves a marker.

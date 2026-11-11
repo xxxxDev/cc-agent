@@ -23,8 +23,8 @@ export function wasUpdateAttempted(scope = globalThis) {
   return new URLSearchParams(search).has(UPDATE_ATTEMPT_PARAM);
 }
 
-// Reading the marker has to consume it. It answers exactly one question - did
-// this load come from an update the user just asked for? - but forceAppUpdate
+// Reading the marker has to consume it. It answers exactly one question (did
+// this load come from an update the user just asked for?), but forceAppUpdate
 // leaves it in the URL and nothing else removes it. Without this, a device that
 // once used Force Update has every later deploy announced as a failed update
 // instead of an offer, and the user is told to clear site data for an update
@@ -87,7 +87,7 @@ export function startVersionChecks({
   // question it was asking: same build means the update worked, a different one
   // means it did not. Keeping it set made every later deploy look like a failed
   // update to a tab that had been left open (clearing the URL only helps the
-  // next load - this flag is what the current load actually reads).
+  // next load: this flag is what the current load actually reads).
   let updateAttemptPending = updateAttempted;
 
   const checkNow = async () => {

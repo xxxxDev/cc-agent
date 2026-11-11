@@ -44,7 +44,7 @@ const PRODUCT = Object.freeze({
   accountDbDir: '.local/auth',
   // The start of folder names a process other than the service writes in under the
   // system's temporary folder (services/audit.js, services/securityLog.js):
-  // `${tempPrefix}-audit-<pid>`.
+  // `${tempPrefix}-audit-` or `${tempPrefix}-security-`, then random characters (mkdtemp).
   tempPrefix: 'cc-agent',
   // services/securityLog.js, stored data: the folder it is kept in (the one the
   // environment setting dirEnv names), its file, and the label account names are hashed
