@@ -35,7 +35,7 @@ CC Agent 跑在你自己的 Mac 上。你建立的每個 agent，都是 tmux 裡
 
 所有功能的詳細說明，請看 [docs/FEATURES.zh-TW.md](docs/FEATURES.zh-TW.md)。
 
-## 特色
+## 功能
 
 <table>
 <tr>
@@ -101,9 +101,9 @@ CC Agent 跑在你自己的 Mac 上。你建立的每個 agent，都是 tmux 裡
   <img src=".github/assets/screens/desktop-transcript-dark.png" alt="Transcript 檢視：工具使用、token 與費用">
 </p>
 
-## 需要安裝的東西
+## 需求
 
-CC Agent 跑在你自己的電腦上，目前在 macOS（Apple Silicon）上開發與使用；Linux 也許可以，但沒有測試過。
+一台 Apple 晶片的 Mac，CC Agent 就是在上面開發與使用的。其他系統見[限制](#限制)。
 
 請盡量使用各項的最新版，它們會定期推出安全修正。括號裡是 CC Agent 最近一次測試用的版本。
 
@@ -115,9 +115,9 @@ CC Agent 跑在你自己的電腦上，目前在 macOS（Apple Silicon）上開�
 | Xcode Command Line Tools（macOS） | 選用，排程背景腳本用 Python 時提供 python3 |
 | git | 選用，App 顯示的版本號會用到 |
 
-要在家裡網路以外用手機連，請加上 HTTPS。建議用 [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)；用其他反向代理之前，請先讀 [SECURITY.md](SECURITY.md)。推播和通行密鑰都需要 HTTPS。
+CC Agent 只在這台電腦上接受連線（`127.0.0.1`）。其他任何裝置，包括同一個家用網路裡的手機，都要透過 HTTPS 和 `CC_AGENT_PUBLIC_ORIGIN` 設定的網址連線。建議用 [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)；用其他反向代理之前，請先讀 [SECURITY.md](SECURITY.md)。推播和通行密鑰也都需要 HTTPS。
 
-## 開始使用
+## 快速開始
 
 ```sh
 git clone https://github.com/xxxxDev/cc-agent.git
@@ -132,16 +132,6 @@ npm start
 第一次啟動時，它會建立資料夾 `.local/`、自己的密鑰和推播金鑰，以及一個 `admin` 帳號，隨機密碼存在 `.local/local-access.json`（只有你讀得到）。用 `admin` 和這組密碼登入、改掉密碼、開啟兩步驟驗證或加一把通行密鑰，接著建立一個 agent、幫它選個資料夾，跟它打聲招呼。
 
 被鎖在外面時，在執行 CC Agent 的電腦上跑 `node scripts/sign-in-rescue.mjs two-step <帳號>` 可以關掉那個帳號的兩步驟驗證，`protection <帳號>` 解除帳號的登入保護，`block <IP 位址>` 解除 IP 的封鎖。之後在一天內重新啟動 CC Agent 就會套用。
-
-## 在其他系統上執行
-
-CC Agent 目前只在 Apple 晶片的 macOS 上部署過。要在其他系統上執行，請自行驗證。以下幾點可以當起點：
-
-- **Linux：** `npm install` 之前先裝好 C++ 編譯工具。終端機檢視用的 node-pty 沒有 Linux 的現成版本，安裝時會現場編譯。限定範圍的 agent 另外需要 `bubblewrap` 和 `socat`，Claude Code 的沙盒要用到。
-- **Windows（實驗性）：** 可以在 Windows 11 原生執行，用 [psmux](https://psmux.pages.dev) 取代 tmux（`scoop install psmux` 會把 `tmux.exe` 放進 PATH），也可以在 WSL 裡執行。原生執行需要原生安裝的 `claude.exe`，只有 npm 的 `claude.cmd` 無法啟動 agent。另外還需要 [Git for Windows](https://git-scm.com/download/win)：Claude Code 的 shell 工具要透過 Git 的 `bash.exe` 執行，CC Agent 會自己找到它（也可以用 `CLAUDE_CODE_GIT_BASH_PATH` 指定）。Windows 上的差異：只能執行**完整權限**的 agent，新建的 agent 也預設完整權限。Windows 上的 Claude Code 沒有沙盒，限定範圍的 agent 會拒絕啟動並說明原因。
-- **只能在 macOS 用的部分：** 排程的背景腳本在 macOS 沙盒裡執行；Claude 用量從 macOS 鑰匙圈讀 Claude Code 的登入（Windows 上改讀 `~/.claude/.credentials.json`）。在其他系統上，這兩項目前還不能用。
-
-如果你在新的系統上跑起來了，歡迎開 issue 分享需要改哪些地方。
 
 ## 一個起點，不是成品
 
@@ -158,6 +148,22 @@ CC Agent 目前只在 Apple 晶片的 macOS 上部署過。要在其他系統上
 - **[castpane](https://github.com/xxxxDev/castpane)**：在瀏覽器裡看並操作你的 Mac，手機或另一台電腦都可以。Mac 裝一個 App，手機不用裝任何東西，一個網頁還能看多台 Mac。
 - **[agent-courier](https://github.com/xxxxDev/agent-courier)**：讓你自己幾台電腦上的一般 Claude Code session 透過 SSH 互傳訊息，就像 CC Agent 的跨機連線之於它的 agent。
 
+## 限制
+
+- **只在 Apple 晶片的 macOS 上測試過。** 在其他系統上請自行確認：下面幾點可以當起點，也歡迎開 issue 說明你改了哪些地方。
+- **Linux：** `npm install` 之前先裝好 C++ 編譯工具。終端機檢視用的 node-pty 沒有 Linux 的現成版本，安裝時會現場編譯。限定範圍的 agent 另外需要 `bubblewrap` 和 `socat`，Claude Code 的沙盒要用到。
+- **Windows（實驗性）：** 可以在 Windows 11 原生執行，用 [psmux](https://psmux.pages.dev) 取代 tmux（`scoop install psmux` 會把 `tmux.exe` 放進 PATH），也可以在 WSL 裡執行。原生執行需要原生安裝的 `claude.exe`，只有 npm 的 `claude.cmd` 無法啟動 agent。另外還需要 [Git for Windows](https://git-scm.com/download/win)：Claude Code 的 shell 工具要透過 Git 的 `bash.exe` 執行，CC Agent 會自己找到它（也可以用 `CLAUDE_CODE_GIT_BASH_PATH` 指定）。Windows 上的差異：只能執行**完整權限**的 agent，新建的 agent 也預設完整權限。Windows 上的 Claude Code 沒有沙盒，限定範圍的 agent 會拒絕啟動並說明原因。
+- **只能在 macOS 用的部分：** 排程的背景腳本只在 macOS 上執行，用它的沙盒。Claude 用量從 macOS 鑰匙圈讀 Claude Code 的登入，Windows 上改讀 `~/.claude/.credentials.json`；Linux 上沒有這項。
+
+## 文件
+
+- [docs/FEATURES.zh-TW.md](docs/FEATURES.zh-TW.md)：所有功能的詳細說明。
+- [docs/PEER-LINK.md](docs/PEER-LINK.md)：配對兩套安裝，讓兩邊的 agent 互傳訊息（英文）。
+- [docs/push-keys.md](docs/push-keys.md)：更換推播金鑰（英文）。
+- [SECURITY.md](SECURITY.md)：CC Agent 該怎麼執行，以及怎麼回報漏洞（英文）。
+- [CONTRIBUTING.md](CONTRIBUTING.md)：怎麼提出修改（英文）。
+- [BRAND.md](BRAND.md)：角色圖，不在 MIT 授權內（英文）。
+
 ## 安全
 
 agent 用你的使用者權限執行。完整權限的 agent 能在那台電腦上做任何你能做的事，所以只把完整權限給你願意交出終端機的 agent。限定範圍的 agent 有 Claude Code 沙盒和 CC Agent 自己的檢查，但沒有沙盒是完美的。把 CC Agent 開放到網路上之前，請先讀 [SECURITY.md](SECURITY.md)，回報漏洞也照那裡的方式。
@@ -168,8 +174,8 @@ agent 用你的使用者權限執行。完整權限的 agent 能在那台電腦�
 
 ## 授權
 
-程式碼以 [MIT 授權](LICENSE) 釋出。
+程式碼以 [MIT License](LICENSE) 釋出。角色圖不在此授權內，見 [BRAND.md](BRAND.md)。
 
-CC Agent 的角色圖（本頁與 App 圖示裡的藍色液態角色）屬於 [V-AX](https://v-ax.com)，**不在** MIT 授權範圍內，詳見 [BRAND.md](BRAND.md)。
+CC Agent 是獨立專案，並非由 Anthropic 製作，也與其沒有關係或背書。Claude 與 Claude Code 是 Anthropic 的商標。
 
-CC Agent 是獨立專案，不是 Anthropic 製作，也沒有與 Anthropic 合作或經其背書。Claude 與 Claude Code 是 Anthropic 的商標。
+由 [V-AX](https://v-ax.com) 製作。

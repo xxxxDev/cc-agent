@@ -35,7 +35,7 @@ It uses the Claude Code you already have and the subscription you are already si
 
 For every feature in detail, see [docs/FEATURES.md](docs/FEATURES.md).
 
-## Highlights
+## Features
 
 <table>
 <tr>
@@ -101,9 +101,9 @@ Open an agent's profile to set its job, memory, model and what it may touch. Swi
   <img src=".github/assets/screens/desktop-transcript-dark.png" alt="The transcript inspector with tool calls, tokens and cost">
 </p>
 
-## What you need
+## Requirements
 
-CC Agent runs on your own computer. It has been built and used on macOS (Apple Silicon). Linux may work, but it has not been tested.
+A Mac with Apple silicon, where CC Agent is built and used. For other systems, see [Limits](#limits).
 
 Use the latest release of each dependency: they regularly ship security fixes. The versions in brackets are the ones CC Agent was last tested with.
 
@@ -115,9 +115,9 @@ Use the latest release of each dependency: they regularly ship security fixes. T
 | Xcode Command Line Tools (macOS) | Optional; provides python3 for background scripts written in Python |
 | git | Optional; used for the version shown in the app |
 
-To reach it from your phone outside your home network, put it behind HTTPS. [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) is the supported way; if you use another reverse proxy, read [SECURITY.md](SECURITY.md) first. Push notifications and passkeys need HTTPS.
+CC Agent listens on this computer only (`127.0.0.1`). Any other device, a phone on the same home network included, reaches it through HTTPS at the address you set in `CC_AGENT_PUBLIC_ORIGIN`. [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) is the supported way; if you use another reverse proxy, read [SECURITY.md](SECURITY.md) first. Push notifications and passkeys need HTTPS too.
 
-## Getting started
+## Quick start
 
 ```sh
 git clone https://github.com/xxxxDev/cc-agent.git
@@ -132,16 +132,6 @@ It listens on `http://127.0.0.1:4280` by default. To change the port, or to tell
 On the first start it creates its data folder (`.local/`), its own secrets and push keys, and an `admin` account with a random password saved in `.local/local-access.json`, readable only by you. Sign in as `admin` with that password, change it, turn on two-step sign-in or add a passkey, then create an agent, pick a folder for it, and say hello.
 
 Locked out? On the computer CC Agent runs on, `node scripts/sign-in-rescue.mjs two-step <username>` turns that account's two-step sign-in off, `protection <username>` lifts the account's sign-in protection, and `block <ip address>` lifts an address's block. Restart CC Agent within a day to apply it.
-
-## Running on other systems
-
-So far CC Agent has only been deployed on macOS with Apple silicon. If you run it on another system, please verify it yourself. Some notes to start from:
-
-- **Linux:** install a C++ build toolchain before `npm install`. node-pty, used by the terminal view, ships no prebuilt binary for Linux and is compiled on install. Scoped agents also need `bubblewrap` and `socat` for Claude Code's sandbox.
-- **Windows (experimental):** it runs natively on Windows 11 with [psmux](https://psmux.pages.dev) in place of tmux (`scoop install psmux` puts a `tmux.exe` on your PATH), or inside WSL. Natively you need a native `claude.exe` installation; the npm `claude.cmd` alone cannot start an agent. You also need [Git for Windows](https://git-scm.com/download/win): Claude Code runs its shell tool through Git's `bash.exe`, which CC Agent finds by itself (or set `CLAUDE_CODE_GIT_BASH_PATH`). The difference there: only **full-access** agents run, and a new agent starts with full access. Claude Code has no sandbox on Windows, so a scoped agent refuses to start and says why.
-- **macOS-only parts:** background scripts in schedules run in the macOS sandbox, and the Claude usage meter reads Claude Code's login from the macOS Keychain (on Windows, from `~/.claude/.credentials.json`). Elsewhere, these two do not work yet.
-
-If you get it running somewhere new, an issue describing what you had to change is welcome.
 
 ## A starting point, not a finished product
 
@@ -158,6 +148,22 @@ Most of the product's own values (storage keys, labels, settings) live in `serve
 - **[castpane](https://github.com/xxxxDev/castpane)**: see and control your Mac from a phone or another computer, in the browser. One Mac app, nothing to install on the phone, several Macs in one web app.
 - **[agent-courier](https://github.com/xxxxDev/agent-courier)**: messages between plain Claude Code sessions on your own machines, over SSH, as CC Agent's peer link does for its agents.
 
+## Limits
+
+- **Tested on macOS with Apple silicon only.** On another system, check it yourself: the notes below are a starting point, and an issue saying what you had to change is welcome.
+- **Linux:** install a C++ build toolchain before `npm install`. node-pty, used by the terminal view, ships no prebuilt binary for Linux and is compiled on install. Scoped agents also need `bubblewrap` and `socat` for Claude Code's sandbox.
+- **Windows (experimental):** it runs natively on Windows 11 with [psmux](https://psmux.pages.dev) in place of tmux (`scoop install psmux` puts a `tmux.exe` on your PATH), or inside WSL. Natively you need a native `claude.exe` installation; the npm `claude.cmd` alone cannot start an agent. You also need [Git for Windows](https://git-scm.com/download/win): Claude Code runs its shell tool through Git's `bash.exe`, which CC Agent finds by itself (or set `CLAUDE_CODE_GIT_BASH_PATH`). The difference there: only **full-access** agents run, and a new agent starts with full access. Claude Code has no sandbox on Windows, so a scoped agent refuses to start and says why.
+- **macOS-only parts:** background scripts in schedules run only on macOS, in its sandbox. The Claude usage meter reads Claude Code's login from the macOS Keychain, or on Windows from `~/.claude/.credentials.json`; on Linux it is not available.
+
+## Documentation
+
+- [docs/FEATURES.md](docs/FEATURES.md): every feature in detail.
+- [docs/PEER-LINK.md](docs/PEER-LINK.md): pairing two installations so their agents can message each other.
+- [docs/push-keys.md](docs/push-keys.md): rotating the push notification keys.
+- [SECURITY.md](SECURITY.md): how CC Agent is meant to run, and how to report a vulnerability.
+- [CONTRIBUTING.md](CONTRIBUTING.md): how to propose a change.
+- [BRAND.md](BRAND.md): the character artwork, which the MIT License does not cover.
+
 ## Security
 
 Agents run with your user's permissions. A full-access agent can do anything you can do on that machine, so only grant full access to agents you would trust with your terminal. Scoped agents are fenced by Claude Code's sandbox and CC Agent's own checks, but no sandbox is perfect. Please read [SECURITY.md](SECURITY.md) before exposing CC Agent to the internet, and report vulnerabilities as described there.
@@ -168,8 +174,8 @@ Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-The code is released under the [MIT License](LICENSE).
-
-The CC Agent character artwork (the blue liquid character in this README and the app icons) belongs to [V-AX](https://v-ax.com) and is **not** covered by the MIT License. See [BRAND.md](BRAND.md).
+The code is under the [MIT License](LICENSE). The character artwork isn't: see [BRAND.md](BRAND.md).
 
 CC Agent is an independent project. It is not made by, affiliated with or endorsed by Anthropic. Claude and Claude Code are trademarks of Anthropic.
+
+Made by [V-AX](https://v-ax.com).
