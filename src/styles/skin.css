@@ -766,9 +766,13 @@ img[src$="/sources/anthropic-native.svg"] {
 }
 /* A phone sheet pushed as an iOS card (popup push) has its grab handle 5px from its top, so the
  * buttons and title start lower than a page's, as an iOS 26 sheet's do: 20px above (measured on the Photos picker), 8px below. */
+.cc-app {
+  --cc-sheet-navbar-above: 20px;
+  --cc-sheet-navbar-below: 8px;
+}
 .cc-app .popup.sheet-swipe :is(.page, .navbar) {
-  --cc-navbar-above: 20px;
-  --cc-navbar-below: 8px;
+  --cc-navbar-above: var(--cc-sheet-navbar-above);
+  --cc-navbar-below: var(--cc-sheet-navbar-below);
 }
 /* Every pushed sheet's grab handle (src/js/sheetSwipe.js), inside the navbar's top: above the
  * view, which Framework7 lifts to z-index 5000. Framework7's push stands the sheet almost full
@@ -966,16 +970,44 @@ html .ios .toast.toast-bottom {bottom:var(--viewport-overflow,0px);}
 /* Notices at the top centre as one pill on every width (App.vue toast params): Framework7 draws
  * a phone's as a full-width bar under the status bar and a computer's as a 568px bar. Here it
  * sizes to its text, centred, just below the navbar row so it covers none of its buttons,
- * sliding down from above. */
+ * sliding down from above. --cc-toast-anchor is the row it sits
+ * under; --cc-toast-floor keeps it under the recording badge; the slide starts 12px above the
+ * screen's top from wherever it lands. */
 html .ios .toast.toast-top {
+  --cc-toast-anchor: calc(var(--f7-safe-area-top) + var(--f7-navbar-height, 54px) + 8px);
+  --cc-toast-top: max(var(--cc-toast-anchor), var(--cc-toast-floor, 0px));
   left: 50%;
   right: auto;
   width: max-content;
   max-width: min(var(--f7-toast-max-width), calc(100vw - 32px));
   margin: 0;
-  top: calc(var(--f7-safe-area-top) + var(--f7-navbar-height, 54px) + 8px);
+  top: var(--cc-toast-top);
   border-radius: var(--f7-toast-border-radius);
-  transform: translate3d(-50%, calc(-100% - var(--f7-safe-area-top) - var(--f7-navbar-height, 54px) - 20px), 0);
+  transform: translate3d(-50%, calc(-100% - var(--cc-toast-top) - 12px), 0);
+}
+/* Where something else holds buttons under the page's navbar row, the notice goes below that
+ * instead:
+ * - the recording badge (RecordingBadge.vue: 6px under the navbar row, 28px tall), 8px below it;
+ * - a phone's pushed sheet (Framework7's popup push: its card starts 10px below
+ *   --f7-popup-push-offset, its navbar the sheet rule's 44px row), 8px below the sheet's navbar;
+ * - the split view (SplitView.vue: its 52px bar and 1px line, then each cell's 36px bar),
+ *   8px below the cells' bars. */
+html:has(.recording-badge-layer) .ios .toast.toast-top {
+  --cc-toast-floor: calc(var(--f7-safe-area-top) + var(--f7-navbar-height, 54px) + 6px + 28px + 8px);
+}
+html:has(.popup-push-in) .ios .toast.toast-top {
+  --cc-toast-anchor: calc(var(--f7-popup-push-offset) + 10px + 44px + var(--cc-sheet-navbar-above) + var(--cc-sheet-navbar-below) + 8px);
+}
+html:has(.split-view) .ios .toast.toast-top {
+  --cc-toast-anchor: calc(52px + 1px + 36px + 8px);
+}
+/* A computer's popup stands centred (Framework7 tablet popup, 630px wide); on a short window its
+ * navbar is level with the notice, so the notice stays narrower than the space between the
+ * popup's side buttons: 16px in, up to 96px of button (保存 / Approve), 8px clear, each side. */
+@media (min-width: 630px) and (min-height: 630px) {
+  html:has(.popup.modal-in) .ios .toast.toast-top {
+    max-width: min(var(--f7-toast-max-width), calc(100vw - 32px), calc(var(--f7-popup-tablet-width) - 2 * (16px + 96px + 8px)));
+  }
 }
 html .ios .toast.toast-top.modal-in {
   transform: translate3d(-50%, 0, 0);
