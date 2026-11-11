@@ -462,6 +462,8 @@ function read(file) {
     } catch { return state; }
     finally { if (fd !== undefined) try { fs.closeSync(fd); } catch {} }
   }
+  // Read to the end: earlier failed background reads no longer count (readSoon).
+  if (state.offset >= stat.size) catchUpFailures.delete(file);
   return state;
 }
 
@@ -476,16 +478,24 @@ const CATCH_UP_SLICE = Math.min(READ_SLICE, 4 * 1024 * 1024);
 const catching = new Map();
 // A transcript that can be looked at but not opened or read (EACCES) would fail its
 // background read at once every time, and the agent would count as in a turn for good.
-// After CATCH_UP_TRIES failures in a row it is read on the spot as before, which takes
-// what can be read and says nothing more about the rest.
+// After CATCH_UP_TRIES failures in a row, spread over at least CATCH_UP_SPAN_MS (three of
+// them can come within 60 ms, which says nothing about a passing hold-up), it is read on
+// the spot as before, which takes what can be read and says nothing more about the rest.
+// Any read that gets to the end, in the background or on the spot, clears the count, so
+// a file readable again goes back to the background read when it falls far behind.
 const CATCH_UP_TRIES = 3;
+const CATCH_UP_SPAN_MS = 3000;
 const catchUpFailures = new Map();
+const givenUp = file => {
+  const f = catchUpFailures.get(file);
+  return !!f && f.count >= CATCH_UP_TRIES && Date.now() - f.since >= CATCH_UP_SPAN_MS;
+};
 function readSoon(file) {
   let size;
   try { size = fs.statSync(file).size; } catch { return read(file); }
   const state = readers.get(file);
   const from = state && size >= state.offset ? state.offset : 0;
-  if (size - from <= SOON_BYTES || (catchUpFailures.get(file) || 0) >= CATCH_UP_TRIES && !catching.has(file)) return read(file);
+  if (size - from <= SOON_BYTES || givenUp(file) && !catching.has(file)) return read(file);
   catchUp(file);
   return null;
 }
@@ -512,8 +522,12 @@ function catchUp(file) {
     } catch { failed = true; } finally {
       if (handle) await handle.close().catch(() => {});
       catching.delete(file);
-      if (failed) catchUpFailures.set(file, (catchUpFailures.get(file) || 0) + 1);
-      else catchUpFailures.delete(file);
+      if (!failed) catchUpFailures.delete(file);
+      else {
+        const f = catchUpFailures.get(file);
+        if (f) f.count++;
+        else catchUpFailures.set(file, {count: 1, since: Date.now()});
+      }
     }
   })();
   catching.set(file, job);

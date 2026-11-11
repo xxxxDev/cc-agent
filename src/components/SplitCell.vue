@@ -324,7 +324,7 @@ async function send(){
    if(draft.value===text)draft.value='';
    if(!ran?.command?.card)emit('open-terminal');
    await refresh();
-  }catch(e){f7.dialog.alert(e.message);}
+  }catch(e){f7.dialog.alert(ct(e.message));}
   finally{sending.value=false;}
   return;
  }
@@ -342,7 +342,7 @@ async function send(){
 async function interrupt(){
  if(interrupting.value)return;interrupting.value=true;
  try{await api(`/conversations/${props.conversationId}/interrupt`,{method:'POST',body:'{}'});await refresh();}
- catch(e){f7.dialog.alert(e.message);}
+ catch(e){f7.dialog.alert(ct(e.message));}
  finally{interrupting.value=false;}
 }
 async function reconnect(){if(await action('stop'))await action('start');}

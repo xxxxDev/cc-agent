@@ -217,7 +217,10 @@ function snippetAt(body,at){
 // Busy as the page should show it: answering a web message, or in a turn Claude
 // started itself (a task notice, the terminal), which only its transcript tells.
 // Said instead of acting on an agent whose transcript is still being read after a restart.
+// With a code, so a page or another app can tell it apart; the web page shows it in its
+// own language (agent-i18n).
 const CATCHING_TEXT='還在讀取這個 Agent 的對話紀錄，暫時不知道它是否在回覆中。請稍候幾秒再試。';
+const catchingError=()=>Object.assign(error(CATCHING_TEXT,409),{code:'CATCHING'});
 function busyElsewhere(c,g,work=transcript.currentWork(stateRoot,c)){return c.mode==='claude'&&g.phase==='ready'&&g.ready&&!g.compacting&&!g.manualCompact&&work.inTurn;}
 function publicView(c,full=false,window) {
  const g=active(c),{memory,...profile}=agentProfile.profile(c);
@@ -600,7 +603,7 @@ function interrupt(c) {
  // catching) the agent shows as busy but nobody knows whether it is in a turn: Escape is
  // not sent and no message is marked interrupted on a guess.
  const work=g.phase==='busy'?null:transcript.currentWork(stateRoot,c);
- if(work?.catching)throw error(CATCHING_TEXT,409);
+ if(work?.catching)throw catchingError();
  if(g.phase!=='busy'&&!busyElsewhere(c,g,work))throw error('目前沒有進行中的回覆',409);
  try{execFileSync('tmux',['-L',tmuxSocket,'send-keys','-t',g.tmux,'Escape'],{timeout:5000,stdio:'ignore'});}
  catch{throw error('無法送出中斷，Claude 可能已離線，請重新連線',409);}
@@ -1346,9 +1349,13 @@ function groupRelay(c,peerId,text,at){
  groupStore.save();
 }
 // Stops a member's turn if it is working for this group: Esc only, so what the
-// owner queued for it in its own chat stays queued.
+// owner queued for it in its own chat stays queued. A member whose transcript is still
+// being read after a restart is left alone, as interrupt() does: nobody knows it is in
+// a turn.
 function haltForGroup(c,x){
- const g=active(c);if(c.groupContext?.id!==x.id||!(g.phase==='busy'||busyElsewhere(c,g)))return;
+ const g=active(c);if(c.groupContext?.id!==x.id)return;
+ const work=g.phase==='busy'?null:transcript.currentWork(stateRoot,c);
+ if(work?.catching||!(g.phase==='busy'||busyElsewhere(c,g,work)))return;
  try{execFileSync('tmux',['-L',tmuxSocket,'send-keys','-t',g.tmux,'Escape'],{timeout:5000,stdio:'ignore'});}catch{return;}
  // A turn stopped with Esc gets no Stop hook: closed here, as interrupt() does, but
  // only the group's message; the rest of its queue stays.
@@ -1887,7 +1894,7 @@ function runCommand(c,text){
  const g=active(c);
  const work=transcript.currentWork(stateRoot,c);
  if(!g.ready||g.phase!=='ready'||g.compacting||g.manualCompact)throw error('Claude 正在處理，請等這一輪結束再執行指令。',409);
- if(work.catching)throw error(CATCHING_TEXT,409);
+ if(work.catching)throw catchingError();
  if(busyElsewhere(c,g,work))throw error('Claude 正在處理，請等這一輪結束再執行指令。',409);
  if(command.name==='compact')compact(c,command.args);
  else{

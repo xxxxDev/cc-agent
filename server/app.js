@@ -247,5 +247,6 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(wwwDir, 'index.html'));
 });
 
-app.use((err,req,res,next)=>{res.status(err.status||500).json({message:err.status?err.message:'伺服器發生錯誤'});if(!err.status)console.error(err);});
+// A code given with the error (agentStore's CATCHING) goes with it, for the page to read.
+app.use((err,req,res,next)=>{res.status(err.status||500).json({message:err.status?err.message:'伺服器發生錯誤',...(err.status&&typeof err.code==='string'?{code:err.code}:{})});if(!err.status)console.error(err);});
 module.exports={app};

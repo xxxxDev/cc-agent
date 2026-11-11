@@ -882,7 +882,14 @@ const english = {
   "已過期": "Expired",
   "被拒": "Refused",
   "未送出": "Not sent",
-  "另一台電腦": "Another machine"
+  "另一台電腦": "Another machine",
+// What the server says when an agent cannot be interrupted or sent a command
+// (agentStore interrupt, runCommand).
+"還在讀取這個 Agent 的對話紀錄，暫時不知道它是否在回覆中。請稍候幾秒再試。":"Still reading this agent's transcript, so it is not yet known whether it is replying. Try again in a few seconds.",
+"目前沒有進行中的回覆":"No reply is in progress",
+"只有 Claude Agent 可以中斷":"Only a Claude agent can be interrupted",
+"無法送出中斷，Claude 可能已離線，請重新連線":"Could not send the interrupt. Claude may be offline: reconnect",
+"Claude 正在處理，請等這一輪結束再執行指令。":"Claude is working. Wait for this turn to end before running a command."
 };
 // {product} in a text is the product's name (productConfig.js), so the account and
 // settings texts need no product name of their own.

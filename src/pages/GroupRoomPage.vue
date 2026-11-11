@@ -148,7 +148,7 @@ async function send(){
   if(target&&isAdmin.value&&await slash.resolveTerminal(slashDraft.value)){await commandInGroup(id,target.member.id,slashDraft.value.trim());draft.value='';terminalFor.value=target.member;return;}
   await sendToGroup(id,text,mention.current.value.map(m=>m.id));draft.value='';toBottom();
  }
- catch(e){f7.dialog.alert(e.message,ct('傳送失敗'));}
+ catch(e){f7.dialog.alert(ct(e.message),ct('傳送失敗'));}
  finally{sending.value=false;}
 }
 const checklistSource=computed(()=>({lists:room.value?.checklists||[],change:body=>changeGroupChecklist(id,body)}));
