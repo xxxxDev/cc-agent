@@ -2,7 +2,9 @@
 
 ## How CC Agent is meant to run
 
-CC Agent is a self-hosted app that starts Claude Code sessions on your computer, as your user. Keep these facts in mind:
+CC Agent is a self-hosted app that starts Claude Code sessions on your computer, as your user.
+
+## Keep in mind
 
 - **A full-access agent can do whatever you can do** on that machine: read and change your files, run programs, use your network. Give full access only to agents you would trust with your terminal.
 - **Messaging plugins stay with you, not your agents.** Claude Code's official Discord channel plugin runs a bot with your token; if it is installed on the host, an agent that loaded it would act as that bot. CC Agent therefore switches it off for its agents (it writes `"enabledPlugins": {"discord@claude-plugins-official": false}` to `.claude/settings.local.json` in the agent's workspace and in the git repositories above it) and refuses `/plugin enable` for it from the chat. Other plugins you install are loaded by full-access agents as usual: review them with the same care.
@@ -22,3 +24,5 @@ CC Agent is a self-hosted app that starts Claude Code sessions on your computer,
 Please do not open a public issue for a security problem. Email [support@v-ax.com](mailto:support@v-ax.com) instead. You can also use GitHub's **Report a vulnerability** button on this repository.
 
 Include steps to reproduce and the version you saw it in (Settings, at the bottom of the page).
+
+Do not send passwords, tokens, private keys, account data, or raw private logs. Include only the information needed to reproduce the problem.
