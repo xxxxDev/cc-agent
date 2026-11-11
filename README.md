@@ -64,7 +64,7 @@ For every feature in detail, see [docs/FEATURES.md](docs/FEATURES.md).
 
 - **Install it like an app.** Add it to the home screen on iPhone, Android or desktop. It opens full screen, with its own icon, no app store.
 - **Push notifications** on every platform that supports web push, including iOS home-screen apps.
-- **One codebase, every screen.** A sidebar layout on a computer, a tab bar on a phone.
+- **One codebase, every screen.** On a computer, a sidebar folded to icons and the agent list beside the chat; on a phone, a tab bar.
 - **Always current.** When a new build is served, open pages notice within seconds and offer the update. Nothing reloads under you while you type.
 - **Your machine, your data.** The server runs on your computer. Conversations, accounts and files stay in a folder you own.
 
