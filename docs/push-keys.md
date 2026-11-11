@@ -40,7 +40,9 @@ The service accepts a current and a previous key of each kind, so notifications 
    }
    ```
 
-4. **Check what would change.** `--db-dir` is the `auth` folder inside the data folder. A dry run changes nothing. It prints a report and exits with 1 while there is something to change.
+4. **Check what would change.** `--db-dir` is the `auth` folder inside the data folder. A dry run only reads: it parses `push-subscriptions.db`, `push-deliveries.db` and `sessions.db` itself and never opens them for writing, so no file is created, rewritten or compacted. It prints a report and exits with 1 while there is something to change.
+
+   A dry run or an apply refuses a `--db-dir` that does not exist or lacks one of those three files, so a mistyped path cannot pass for an install with nothing to move; a restore needs the folder to exist. Every run also refuses while CC Agent is running on that data folder: `scripts/start.mjs` keeps `server.lock` beside `auth`, naming its process, and a lock whose process is still alive stops the script. A service started some other way leaves no such lock, so stopping it stays your job.
 
    ```bash
    node server/scripts/rotate-push-keys.js --dry-run --db-dir .local/auth --keys .local/push-keys.json
@@ -52,8 +54,8 @@ The service accepts a current and a previous key of each kind, so notifications 
    node server/scripts/rotate-push-keys.js --apply --db-dir .local/auth --keys .local/push-keys.json --backup-dir ~/push-backup --ack-quiesced
    ```
 
-   To put the backup back, run it with `--restore --db-dir .local/auth --backup-dir ~/push-backup --ack-quiesced`.
+   To put the backup back, stop CC Agent and run it with `--restore --db-dir .local/auth --backup-dir ~/push-backup --ack-quiesced`. This restores the two push stores only, not `push-keys.json`: the restored rows are still under the old keys, so keep the `_PREVIOUS` entries in `push-keys.json`, or put back the old `push-keys.json` from the copy made in step 1, before starting CC Agent again.
 
 6. **Start CC Agent.** Each device moves to the new VAPID key by itself the next time it opens the app.
 
-7. **Remove the previous keys** once a dry run shows nothing to change and no subscription on the previous VAPID key (`subscriptionsOnPreviousVapidKey` is 0). Delete the `_PREVIOUS` entries from `push-keys.json` and restart CC Agent. A device that has not opened the app by then gets no notifications until it next does.
+7. **Remove the previous keys** once no subscription is left on the previous VAPID key. Stop CC Agent and run the dry run from step 4 again. When it shows nothing to change and `subscriptionsOnPreviousVapidKey` is 0, delete the `_PREVIOUS` entries from `push-keys.json` and start CC Agent. If devices are still on the previous key, start CC Agent with the file unchanged and check again later. A device that has not opened the app by the time the keys go gets no notifications until it next does.
