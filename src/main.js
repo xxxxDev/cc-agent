@@ -16,6 +16,7 @@ import './styles/tokens.css';
 import './styles/skin.css';
 import './styles/blue-accent.css';
 import './styles/mobile.css';
+import './styles/listDetail.css';
 import {initTheme} from './theme.js';
 initTheme();
 import { startSwUpdateChecks } from './js/sw-update.js';

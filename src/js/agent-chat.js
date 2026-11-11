@@ -22,6 +22,7 @@ import {loadUsage} from './usage.js';
 import {secondClock} from './secondClock.js';
 import {SOURCES} from './agent-models.js';
 import {defaultAvatar} from './avatarShape.js';
+import {listDetailActive} from './listDetail.js';
 import {refuseDrop,wasRefused} from './sourceFence.js';
 import {f7} from 'framework7-vue';
 import {currentUser as user,verifyAuth} from './auth.js';
@@ -802,7 +803,9 @@ function toList(){
  cancelOpening();writeUrl(null);
  const router=f7.views?.get('#view-chat')?.router;if(!router)return;
  const h=router.history||[];
- if(h.length>=2&&h[h.length-2]==='/')router.back();else router.back('/',{force:true});
+ // Beside the list (listDetail.js), the list widens back by itself (styles/listDetail.css).
+ const animate=!listDetailActive.value;
+ if(h.length>=2&&h[h.length-2]==='/')router.back({animate});else router.back('/',{force:true,animate});
 }
 // A tap on a notification (or an address naming the agent) shows the conversation
 // straight away, loading, with no slide in from the list; a tap on the list slides in once the conversation has loaded.
@@ -854,7 +857,9 @@ async function select(id,{direct=false}={}){
   const router=f7.views?.get('#view-chat')?.router;if(!router)return;
   selected.value=id;detail.value=d;draft.value=drafts.get(id)||'';
   writeUrl(id);
-  if(!(await toConversation(router,run,true)))return;
+  // Beside the list, the list narrows and the conversation comes in by CSS instead of
+  // Framework7's slide (styles/listDetail.css); from then on it is the same page.
+  if(!(await toConversation(router,run,!listDetailActive.value)))return;
   await bottom();
  }finally{if(run===opening){selecting.value=false;openingId.value=null;directOpening.value=false;}}
 }

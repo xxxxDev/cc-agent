@@ -299,6 +299,8 @@ const english = {
   "收合選單":"Collapse the menu",
   "自動收合電腦版選單":"Auto-collapse the menu on a computer",
   "選單平常收成一排圖示，滑鼠移上去才展開，移開就收回。只影響這台裝置。":"The menu stays a row of icons and opens while the mouse is on it. This device only.",
+  "清單在左、聊天在右":"List on the left, chat on the right",
+  "視窗夠寬時（1280 px 以上），點 Agent 後清單縮到左邊，聊天室開在右邊，點另一個 Agent 直接切換。只影響這台裝置。":"In a window at least 1280 px wide, tapping an agent moves the list into a column on the left and opens the chat on the right; tapping another agent switches to it. This device only.",
   
 "新增群組":"New group","全部已讀":"Mark all read",
 "群組名稱":"Group name",

@@ -42,6 +42,11 @@
       <f7-list-item v-if="desktop" :title="ct('自動收合電腦版選單')" :footer="ct('選單平常收成一排圖示，滑鼠移上去才展開，移開就收回。只影響這台裝置。')" class="sidebar-auto">
         <template #media><f7-icon f7="sidebar_left"/></template><template #after><label class="toggle"><input type="checkbox" :aria-label="ct('自動收合電腦版選單')" :checked="sidebarAuto" @change="setSidebarAuto($event.target.checked)"/><span class="toggle-icon"></span></label></template>
       </f7-list-item>
+      <!-- The Agents list kept in a column beside the conversation on a wide window
+           (2026-11-10); a computer only, kept on each device (listDetail.js). -->
+      <f7-list-item v-if="desktop" :title="ct('清單在左、聊天在右')" :footer="ct('視窗夠寬時（1280 px 以上），點 Agent 後清單縮到左邊，聊天室開在右邊，點另一個 Agent 直接切換。只影響這台裝置。')" class="list-detail-setting">
+        <template #media><f7-icon f7="square_split_2x1"/></template><template #after><label class="toggle"><input type="checkbox" :aria-label="ct('清單在左、聊天在右')" :checked="listDetailOn" @change="setListDetail($event.target.checked)"/><span class="toggle-icon"></span></label></template>
+      </f7-list-item>
       <f7-list-item :title="ct('版本更新提示')" class="update-dialog"><template #media><f7-icon f7="arrow_down_circle"/></template><template #after><label class="toggle"><input type="checkbox" :aria-label="ct('版本更新提示')" :checked="updateDialog" @change="setUpdateDialog($event.target.checked)"/><span class="toggle-icon"></span></label></template></f7-list-item>
       <f7-list-item link :title="t('checkForUpdate')" class="check-update" @click.prevent="checkForUpdate">
         <template #media><f7-icon f7="arrow_2_circlepath" /></template>
@@ -105,6 +110,7 @@ import { forceAppUpdate } from '../js/pwa-update.js';
 import { isHandheld } from '../js/qrLogin.js';
 import { updateDialog, setUpdateDialog } from '../js/updatePrompt.js';
 import { sidebarAuto, setSidebarAuto } from '../js/sidebarState.js';
+import { listDetailOn, setListDetail } from '../js/listDetail.js';
 // The menu setting is for the computer's layout only (App.vue's breakpoint).
 const desktopQuery = typeof window !== 'undefined' ? window.matchMedia?.('(min-width: 1024px)') : null;
 const desktop = ref(!!desktopQuery?.matches);

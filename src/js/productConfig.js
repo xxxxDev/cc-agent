@@ -18,6 +18,7 @@ export const PRODUCT = Object.freeze({
     updateDialog: 'cc-agent-update-dialog', // updatePrompt.js
     sidebarFolded: 'cc-agent-sidebar-folded', // sidebarState.js
     sidebarAuto: 'cc-agent-sidebar-auto', // sidebarState.js
+    listDetail: 'cc-agent-list-detail', // listDetail.js
     language: 'cc-agent-lang', // i18n.js
   }),
   // push.js: the kinds of notification a device has before it says otherwise.
