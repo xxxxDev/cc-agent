@@ -891,6 +891,9 @@ export function ct(text) { if (text == null) return ''; return String(lang.value
 // Names in running text: 「、」 in Chinese, a comma in English (ct('、') reads " and ", which suits
 // two or three field names but not a list of agents).
 export function listJoin(items) { return items.join(lang.value === 'zh-TW' ? '、' : ', '); }
+// Separate results, such as two counts: 「，」 in Chinese, not the list mark 「、」, and a
+// comma in English.
+export function resultsJoin(items) { return items.join(lang.value === 'zh-TW' ? '，' : ', '); }
 // A name, then what happened to it: 「名稱：原因」 in Chinese, "name: reason" in English.
 export function labelled(name, text) { return name + (lang.value === 'zh-TW' ? '：' : ': ') + text; }
 export function duration(seconds) {

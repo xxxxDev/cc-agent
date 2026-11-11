@@ -207,7 +207,7 @@ const typingText=computed(()=>typing.value?(secondClock.value,status.progressTex
 const typingNote=computed(()=>typing.value?(secondClock.value,status.progressNote(detail.value)):'');
 const backgroundText=computed(()=>(secondClock.value,status.backgroundText(detail.value,{locked:locked.value})));
 const canSend=computed(()=>!!(draft.value.trim()||files.value.length)&&!sending.value&&!locked.value&&(detail.value?.phase==='ready'||detail.value?.phase==='busy'&&!detail.value?.compacting||detail.value?.dormant));
-const canInterrupt=computed(()=>detail.value?.mode==='claude'&&detail.value?.phase==='busy'&&!detail.value?.compacting&&(secondClock.value,!status.settlingAfterReply(detail.value)));
+const canInterrupt=computed(()=>detail.value?.mode==='claude'&&detail.value?.phase==='busy'&&!detail.value?.catching&&!detail.value?.compacting&&(secondClock.value,!status.settlingAfterReply(detail.value)));
 
 function toBottom(){nextTick(()=>{const el=scroller.value;if(el)el.scrollTop=el.scrollHeight;});}
 function toLatest(){atBottom.value=true;const el=scroller.value;if(el)el.scrollTo({top:el.scrollHeight,behavior:'smooth'});}

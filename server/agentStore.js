@@ -216,6 +216,8 @@ function snippetAt(body,at){
 }
 // Busy as the page should show it: answering a web message, or in a turn Claude
 // started itself (a task notice, the terminal), which only its transcript tells.
+// Said instead of acting on an agent whose transcript is still being read after a restart.
+const CATCHING_TEXT='還在讀取這個 Agent 的對話紀錄，暫時不知道它是否在回覆中。請稍候幾秒再試。';
 function busyElsewhere(c,g,work=transcript.currentWork(stateRoot,c)){return c.mode==='claude'&&g.phase==='ready'&&g.ready&&!g.compacting&&!g.manualCompact&&work.inTurn;}
 function publicView(c,full=false,window) {
  const g=active(c),{memory,...profile}=agentProfile.profile(c);
@@ -225,7 +227,7 @@ function publicView(c,full=false,window) {
  const preview=String(lastMessage?.text||lastMessage?.attachments?.map(f=>f.name).join(', ')||'').replace(/\s+/g,' ').trim();
  // outsideChat: open to outside people now or before (outsideTaken), so the admin's
  // 交給 agent never offers it another person's diagnostic report.
- return {preview:Array.from(preview).slice(0,500).join('')+(Array.from(preview).length>500?'…':''),activeAt:lastMessage?.at||c.createdAt||null,id:c.id,...profile,...modelView(c),profileVersion:c.profileVersion||0,sessionModel:g.model||null,sessionEffort:g.effort||null,mode:c.mode,createdAt:c.createdAt,updatedAt:c.updatedAt,generation:c.generation,compactCount:g.compacts,threshold:c.threshold,thresholdOwn:!!c.thresholdOwn,wrapUp:c.wrapUpOff!==true,peerLink:peerView(c),outsideChat:outsideTaken(c),phase:alive&&busyElsewhere(c,g,work)?'busy':g.phase,background:work.background,compacting:!!(g.manualCompact||g.compacting),compactingSince:(g.manualCompact||g.compacting)&&g.compactSince?new Date(g.compactSince).toISOString():null,compactPercent:(g.manualCompact||g.compacting)&&Number.isFinite(g.compactPercent)?g.compactPercent:null,connected:alive&&g.ready,tmux:g.tmux,sessionId:g.sessionId,pendingRotation:c.pendingRotation,checklists:c.checklists||[],avatar:c.avatar?'/api/conversations/'+c.id+'/avatar?v='+c.avatar.version:null,listGroup:c.listGroup||null,lastError:g.lastError||'',unread:unreadCount(c),toolPolicy:g.toolPolicy||'legacy',terminalPrompt:alive&&prompts.get(c.id)?.session===g.sessionId?(({key,title,body,options,selected,hint,since})=>({key,title,body,options,selected,hint,since}))(prompts.get(c.id)):null,permissions:permissions.pending(g),dormant:!!(g.dormant&&g.phase==='stopped'),...(full?{handoffSetting:handoffSetting(),subagents:c.subagents?subagentClean(c.subagents):null,subagentDefault:subagentDefault(),subagentsApply:subagentsApply(c),subagentPending:subagentPending(c),subagentWaiting:!!c.relaunchOnStart&&subagentPending(c),autoCompactOwn:autoCompactOwn(c),autoCompact:autoCompactOwn(c)?autoCompactValue(c.autoCompact.window):null,autoCompactDefault:autoCompactDefault(),autoCompactEffective:autoCompactSetting(c),autoCompactApply:autoCompactApply(c),autoCompactPending:autoCompactPending(c),autoCompactWaiting:!!c.relaunchOnStart&&autoCompactPending(c),memory:c.memory,...messageWindow(c,window),runs:c.runs.map(({token,seen,permissions,...x})=>x),usage:transcript.usage(stateRoot,c),progress:transcript.progress(stateRoot,c),terminalFiles:terminalFileAccess(c),contextUsage:c.mode==='claude'?contextUsage.view({dir:controlDir(c,g),alive,launchedAt:g.launchedAt,autoCompact:g.autoCompactEnv?.CLAUDE_CODE_AUTO_COMPACT_WINDOW}):null}:{})};
+ return {preview:Array.from(preview).slice(0,500).join('')+(Array.from(preview).length>500?'…':''),activeAt:lastMessage?.at||c.createdAt||null,id:c.id,...profile,...modelView(c),profileVersion:c.profileVersion||0,sessionModel:g.model||null,sessionEffort:g.effort||null,mode:c.mode,createdAt:c.createdAt,updatedAt:c.updatedAt,generation:c.generation,compactCount:g.compacts,threshold:c.threshold,thresholdOwn:!!c.thresholdOwn,wrapUp:c.wrapUpOff!==true,peerLink:peerView(c),outsideChat:outsideTaken(c),phase:alive&&busyElsewhere(c,g,work)?'busy':g.phase,catching:!!(alive&&work.catching),background:work.background,compacting:!!(g.manualCompact||g.compacting),compactingSince:(g.manualCompact||g.compacting)&&g.compactSince?new Date(g.compactSince).toISOString():null,compactPercent:(g.manualCompact||g.compacting)&&Number.isFinite(g.compactPercent)?g.compactPercent:null,connected:alive&&g.ready,tmux:g.tmux,sessionId:g.sessionId,pendingRotation:c.pendingRotation,checklists:c.checklists||[],avatar:c.avatar?'/api/conversations/'+c.id+'/avatar?v='+c.avatar.version:null,listGroup:c.listGroup||null,lastError:g.lastError||'',unread:unreadCount(c),toolPolicy:g.toolPolicy||'legacy',terminalPrompt:alive&&prompts.get(c.id)?.session===g.sessionId?(({key,title,body,options,selected,hint,since})=>({key,title,body,options,selected,hint,since}))(prompts.get(c.id)):null,permissions:permissions.pending(g),dormant:!!(g.dormant&&g.phase==='stopped'),...(full?{handoffSetting:handoffSetting(),subagents:c.subagents?subagentClean(c.subagents):null,subagentDefault:subagentDefault(),subagentsApply:subagentsApply(c),subagentPending:subagentPending(c),subagentWaiting:!!c.relaunchOnStart&&subagentPending(c),autoCompactOwn:autoCompactOwn(c),autoCompact:autoCompactOwn(c)?autoCompactValue(c.autoCompact.window):null,autoCompactDefault:autoCompactDefault(),autoCompactEffective:autoCompactSetting(c),autoCompactApply:autoCompactApply(c),autoCompactPending:autoCompactPending(c),autoCompactWaiting:!!c.relaunchOnStart&&autoCompactPending(c),memory:c.memory,...messageWindow(c,window),runs:c.runs.map(({token,seen,permissions,...x})=>x),usage:transcript.usage(stateRoot,c),progress:transcript.progress(stateRoot,c),terminalFiles:terminalFileAccess(c),contextUsage:c.mode==='claude'?contextUsage.view({dir:controlDir(c,g),alive,launchedAt:g.launchedAt,autoCompact:g.autoCompactEnv?.CLAUDE_CODE_AUTO_COMPACT_WINDOW}):null}:{})};
 }
 // callerRole is a separate argument, never read from the request body: the body
 // is client-controlled, and the model and effort tiers in agentProfile depend on it.
@@ -594,7 +596,12 @@ function reconnect(c) {
 function interrupt(c) {
  if(c.mode!=='claude')throw error('只有 Claude Agent 可以中斷',400);
  const g=active(c);
- if(g.phase!=='busy'&&!busyElsewhere(c,g))throw error('目前沒有進行中的回覆',409);
+ // While its transcript is still being read after a restart (transcript.currentWork's
+ // catching) the agent shows as busy but nobody knows whether it is in a turn: Escape is
+ // not sent and no message is marked interrupted on a guess.
+ const work=g.phase==='busy'?null:transcript.currentWork(stateRoot,c);
+ if(work?.catching)throw error(CATCHING_TEXT,409);
+ if(g.phase!=='busy'&&!busyElsewhere(c,g,work))throw error('目前沒有進行中的回覆',409);
  try{execFileSync('tmux',['-L',tmuxSocket,'send-keys','-t',g.tmux,'Escape'],{timeout:5000,stdio:'ignore'});}
  catch{throw error('無法送出中斷，Claude 可能已離線，請重新連線',409);}
  permissions.cancel(g);
@@ -1116,12 +1123,17 @@ function leaveGroupFor(c,r,peerId){
  const gx=groupStore.get(c.groupContext.id);
  if(!gx||!peerId||!gx.members.includes(peerId))c.groupContext=null;
 }
-function syncRelays(c,now=Date.now()){
+// The relay timer leaves an agent whose transcript is still being read in the background
+// for a later round (transcript.relays); onSpot reads it on the spot, for a turn's end
+// and a final reply, which must see every message that has arrived.
+function syncRelays(c,now=Date.now(),onSpot=false){
  // Messages between sessions are an admin's.
  if(c.mode!=='claude'||c.archived||!c.runs?.length||!ownerIsActiveAdmin(c.owner))return;
  if(!c.relaySince){c.relaySince=new Date(now).toISOString();save(c);return;}
+ const found=transcript.relays(stateRoot,c,onSpot);
+ if(!found)return;
  let changed=false;
- for(const r of transcript.relays(stateRoot,c)){
+ for(const r of found){
   if(!r.at||r.at<c.relaySince)continue;
   const known=c.messages.find(m=>m.relayKey===r.key);
   if(known){if(r.handed&&!known.relay.handed){known.relay.handed=true;changed=true;leaveGroupFor(c,r,known.relay.peerId);}continue;}
@@ -1379,7 +1391,14 @@ function takeTerminalPrompt(c,g,prompt){
  if(kept?.key===prompt.key){Object.assign(kept,prompt);kept.seen++;}
  else prompts.set(c.id,{...prompt,session:g.sessionId,id:'prompt:'+c.id.slice(0,8)+':'+prompt.key+':'+Date.now(),since:new Date().toISOString(),seen:1});
  const t=prompts.get(c.id);
- if(t.seen===2&&!t.notified&&(g.phase==='busy'||busyElsewhere(c,g))){t.notified=true;t.notifyPending=true;t.notifyText=('終端機在等你選擇：'+(t.title||t.options[0].label)).slice(0,300);}
+ // Pushed when the menu is seen a second time while the agent is in a turn. While its
+ // transcript is still being read after a restart that is not known, so the question is
+ // put again once it is, rather than pushing on a guess.
+ if((t.seen===2||t.awaitKnown)&&!t.notified){
+  const work=g.phase==='busy'?null:transcript.currentWork(stateRoot,c);
+  if(work?.catching)t.awaitKnown=true;
+  else{delete t.awaitKnown;if(g.phase==='busy'||busyElsewhere(c,g,work)){t.notified=true;t.notifyPending=true;t.notifyText=('終端機在等你選擇：'+(t.title||t.options[0].label)).slice(0,300);}}
+ }
 }
 // The owner's choice in that menu, only if the same menu is still on the screen.
 function chooseTerminalOption(c,data){
@@ -1533,7 +1552,7 @@ function bridge(c,action,data={}) {
    const files=attachments.fromPaths(stateRoot,c,data.files,attachableFolders(c));
    const r=add(c,'assistant',data.text,{replyKey:data.replyKey,post:true,final:data.final,notifyPending:true,...(files.length?{attachments:files}:{})});
    if(groupFromAgent(c,{role:'assistant',text:data.text,post:true,final:data.final,...(files.length?{attachments:files,attachmentsFrom:c.id}:{})},x=>groupPush(x,c,data.text)))r.notifyPending=false;
-   if(data.final){try{syncRelays(c);}catch{}for(const m of owedRelays(c))m.relay.answered=true;}
+   if(data.final){try{syncRelays(c,undefined,true);}catch{}for(const m of owedRelays(c))m.relay.answered=true;}
    save(c);
   }
   return {ok:true};
@@ -1704,7 +1723,7 @@ function bridge(c,action,data={}) {
   delete g.stopReceipt;
   if(!data.failed&&g.ready){
    const pending=pendingReplies(c);
-   try{syncRelays(c);}catch{}
+   try{syncRelays(c,undefined,true);}catch{}
    const owed=owedRelays(c);
    // A message received from another session must get its final result posted to the chat with post; remind once.
    if(data.checkFinal===true&&data.stopHookActive!==true&&owed.some(m=>!m.relay.reminded)&&!pending.some(m=>!m.finalReminder)){
@@ -1866,7 +1885,10 @@ function runCommand(c,text){
  // Discord stays off in agents: an installed Discord plugin would otherwise use its bot token (see pluginNames).
  if(command.name==='plugin'&&/discord/i.test(command.args)&&/^(enable|install|i)\b/.test(command.args))throw error('Discord 外掛在 Agent 裡刻意關閉，不能從聊天室開啟。',400);
  const g=active(c);
- if(!g.ready||g.phase!=='ready'||g.compacting||g.manualCompact||busyElsewhere(c,g))throw error('Claude 正在處理，請等這一輪結束再執行指令。',409);
+ const work=transcript.currentWork(stateRoot,c);
+ if(!g.ready||g.phase!=='ready'||g.compacting||g.manualCompact)throw error('Claude 正在處理，請等這一輪結束再執行指令。',409);
+ if(work.catching)throw error(CATCHING_TEXT,409);
+ if(busyElsewhere(c,g,work))throw error('Claude 正在處理，請等這一輪結束再執行指令。',409);
  if(command.name==='compact')compact(c,command.args);
  else{
   try{

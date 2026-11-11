@@ -406,11 +406,19 @@ function trackRelays(state, record) {
     if (state.sends.size > 50) state.sends.delete(state.sends.keys().next().value);
   }
 }
-function relays(stateRoot, conversation) {
+// The relay timer asks every running agent every four seconds (syncAllRelays), and its
+// first round after a restart read every far-behind transcript whole on the spot, with
+// the whole service waiting. It reads as readCurrent does: null while a transcript is
+// still being read in the background, and the round after it is done takes what
+// arrived (each message is kept from relaySince on, not from when it was read). `now`
+// reads it on the spot, for the checks that must see every message: a turn's end and a
+// final reply.
+function relays(stateRoot, conversation, now = false) {
   const run = (conversation?.runs || []).at(-1);
   if (conversation?.mode !== 'claude' || !run) return [];
   const file = locate(path.join(stateRoot, 'workspaces', conversation.id, 'g' + run.number), run.sessionId);
-  const state = file ? read(file) : null;
+  const state = !file ? null : now ? read(file) : readCurrent(file);
+  if (state === LATER) return null;
   return state ? [...state.relays.values()] : [];
 }
 
@@ -463,22 +471,28 @@ function read(file) {
 // opened chat only shows (its cost, the progress line) reads a file that far behind
 // in the background instead, in small slices between requests, and is not known
 // until it is done; a little behind is still read on the spot.
-const SOON_BYTES = Number(process.env.CC_AGENT_TRANSCRIPT_SOON) || 4 * 1024 * 1024;
+const SOON_BYTES = 4 * 1024 * 1024;
 const CATCH_UP_SLICE = Math.min(READ_SLICE, 4 * 1024 * 1024);
 const catching = new Map();
+// A transcript that can be looked at but not opened or read (EACCES) would fail its
+// background read at once every time, and the agent would count as in a turn for good.
+// After CATCH_UP_TRIES failures in a row it is read on the spot as before, which takes
+// what can be read and says nothing more about the rest.
+const CATCH_UP_TRIES = 3;
+const catchUpFailures = new Map();
 function readSoon(file) {
   let size;
   try { size = fs.statSync(file).size; } catch { return read(file); }
   const state = readers.get(file);
   const from = state && size >= state.offset ? state.offset : 0;
-  if (size - from <= SOON_BYTES) return read(file);
+  if (size - from <= SOON_BYTES || (catchUpFailures.get(file) || 0) >= CATCH_UP_TRIES && !catching.has(file)) return read(file);
   catchUp(file);
   return null;
 }
 function catchUp(file) {
   if (catching.has(file)) return catching.get(file);
   const job = (async () => {
-    let handle;
+    let handle, failed = false;
     try {
       handle = await fs.promises.open(file, 'r');
       for (;;) {
@@ -495,9 +509,11 @@ function catchUp(file) {
         if (readers.get(file) !== state || state.offset !== at) continue;
         absorbSlice(state, buffer.subarray(0, bytesRead));
       }
-    } catch {} finally {
+    } catch { failed = true; } finally {
       if (handle) await handle.close().catch(() => {});
       catching.delete(file);
+      if (failed) catchUpFailures.set(file, (catchUpFailures.get(file) || 0) + 1);
+      else catchUpFailures.delete(file);
     }
   })();
   catching.set(file, job);
@@ -514,8 +530,6 @@ function readCurrent(file) {
   const state = readSoon(file);
   return state === null && catching.has(file) ? LATER : state;
 }
-// Settles once no transcript is being read in the background (for the tests).
-function caughtUp() { return Promise.all([...catching.values()]).then(() => {}); }
 
 // A session imported from another directory keeps living in the project folder it
 // was created in, so fall back to a scan, but remember the answer, including the
@@ -1103,4 +1117,4 @@ function subagents(stateRoot, conversation) {
   return out.sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt))).slice(0, SUBAGENT_MAX);
 }
 
-module.exports = {caughtUp, terminalEvents, typedSettings, turnEndedSince, workedSince, subagents, lastCompaction, usage, progress, currentWork, quotaReset, waiting, skills, connectors, relays, segment, history, messageCost, priceOf, PRICES, WEB_SEARCH_USD};
+module.exports = {terminalEvents, typedSettings, turnEndedSince, workedSince, subagents, lastCompaction, usage, progress, currentWork, quotaReset, waiting, skills, connectors, relays, segment, history, messageCost, priceOf, PRICES, WEB_SEARCH_USD};

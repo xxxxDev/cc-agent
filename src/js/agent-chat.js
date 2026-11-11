@@ -953,7 +953,8 @@ async function action(name,body={}){
 // Esc for the web page: stops the reply being written, keeps the agent and the
 // conversation, and lets the next message go straight in.
 const interrupting=ref(false);
-const canInterrupt=computed(()=>detail.value?.mode==='claude'&&detail.value?.phase==='busy'&&!detail.value?.compacting&&!settlingAfterReply.value);
+// Not while its transcript is still being read after a restart (catching): busy then only means not known yet.
+const canInterrupt=computed(()=>detail.value?.mode==='claude'&&detail.value?.phase==='busy'&&!detail.value?.catching&&!detail.value?.compacting&&!settlingAfterReply.value);
 async function interruptTurn(){
  if(interrupting.value||!canInterrupt.value)return;
  interrupting.value=true;
