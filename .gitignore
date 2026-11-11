@@ -18,3 +18,6 @@ logs/
 /tests/
 /server/tests/
 /scripts/run-tests.mjs
+# A store's original, kept when its raw line breaks are escaped (services/privateFiles.js).
+server/db/*.db.before-line-break-repair-*
+server/db/.*.db.line-break-repair-*
