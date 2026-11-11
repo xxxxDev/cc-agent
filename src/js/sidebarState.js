@@ -6,11 +6,13 @@ import {ref, computed} from 'vue';
 import {PRODUCT} from './productConfig.js';
 
 const KEYS = {folded: PRODUCT.storageKeys.sidebarFolded, auto: PRODUCT.storageKeys.sidebarAuto};
-const read = key => { try { return localStorage.getItem(key) === '1'; } catch { return false; } };
+// A setting with no saved value takes its default: the automatic fold is on unless switched
+// off on this device, the hand fold off.
+const read = (key, fallback = false) => { try { const v = localStorage.getItem(key); return v == null ? fallback : v === '1'; } catch { return fallback; } };
 const write = (key, on) => { try { localStorage.setItem(key, on ? '1' : '0'); } catch {} };
 
 export const sidebarFolded = ref(read(KEYS.folded));
-export const sidebarAuto = ref(read(KEYS.auto));
+export const sidebarAuto = ref(read(KEYS.auto, true));
 // The mouse is on the sidebar while it folds by itself.
 export const sidebarPeek = ref(false);
 // The page keeps the rail's room; the sidebar itself is narrow unless it is peeking.

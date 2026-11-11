@@ -13,7 +13,9 @@ import {embedded, splitView} from './embed.js';
 // 1280 less the open sidebar (260) and the column leaves the conversation about 700px.
 export const LIST_DETAIL_WIDE = '(min-width: 1280px)';
 const KEY = PRODUCT.storageKeys.listDetail;
-const read = () => { try { return localStorage.getItem(KEY) === '1'; } catch { return false; } };
+// On unless switched off on this device: no key yet, or no
+// storage at all, means on; only a saved '0' keeps it off.
+const read = () => { try { return localStorage.getItem(KEY) !== '0'; } catch { return true; } };
 
 export const listDetailOn = ref(read());
 const query = typeof window !== 'undefined' ? window.matchMedia?.(LIST_DETAIL_WIDE) : null;
