@@ -30,13 +30,13 @@ const lock=path.join(data,'server.lock');
 // written.
 if(fs.existsSync(path.join(data,'auth','users.db'))&&!fs.existsSync(path.join(data,'local-access.json')))throw new Error('Auth exists without its secret; refusing bootstrap.');
 // One left by a process that is gone is taken over (server/services/dataFolderLock.js).
-try{createRequire(import.meta.url)('../server/services/dataFolderLock.js').takeDataFolderLock(lock);}catch(e){
+// Removed at exit only while it is still the file this process made (the fstat of the
+// descriptor that made it): not a link, the same file, and still naming this process. One
+// replaced meanwhile, by another start that found this one gone, say, stays.
+let ownedRuntimeLock;
+try{ownedRuntimeLock=createRequire(import.meta.url)('../server/services/dataFolderLock.js').takeDataFolderLock(lock).stat;}catch(e){
  if(String(e.code).startsWith('DATA_FOLDER_LOCK_'))throw new Error('Another CC Agent process (a running server, or rotate-push-keys.js) is using this data folder.');throw e;
 }
-// Removed at exit only while it is still the file this process made: not a link, the same
-// file, and still naming this process. One replaced meanwhile, by another start that
-// found this one gone, say, stays.
-const ownedRuntimeLock=fs.lstatSync(lock);
 process.on('exit',()=>{try{const current=fs.lstatSync(lock);if(!current.isSymbolicLink()&&current.ino===ownedRuntimeLock.ino&&current.dev===ownedRuntimeLock.dev&&fs.readFileSync(lock,'utf8')===String(process.pid))fs.unlinkSync(lock);}catch{}});
 const credentials=path.join(data,'local-access.json');
 if(!fs.existsSync(credentials))fs.writeFileSync(credentials,JSON.stringify({jwt:randomBytes(32).toString('hex'),password:randomBytes(12).toString('base64url')},null,2),{mode:0o600});

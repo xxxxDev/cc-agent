@@ -135,7 +135,8 @@ function refuseWhileServiceRuns(dbDir) {
 // signal too, and only while it is still this process's file.
 function holdServiceLock(dbDir) {
   const lock = path.join(path.dirname(path.resolve(dbDir)), SERVICE_LOCK);
-  try { takeDataFolderLock(lock); } catch (error) {
+  let owned;
+  try { ({ stat: owned } = takeDataFolderLock(lock)); } catch (error) {
     if (error.code === 'DATA_FOLDER_LOCK_HELD') {
       throw rotationError('The service is running on this data folder; stop it first', 'PUSH_KEY_ROTATION_SERVICE_RUNNING', { lock: SERVICE_LOCK, pid: error.pid ?? undefined });
     }
@@ -147,7 +148,6 @@ function holdServiceLock(dbDir) {
     }
     throw rotationError('The service lock cannot be made', 'PUSH_KEY_ROTATION_LOCK_FAILED', { lock: SERVICE_LOCK, reason: error.code || 'write failed' });
   }
-  const owned = fs.lstatSync(lock);
   const signals = ['SIGINT', 'SIGTERM', 'SIGHUP'];
   let released = false;
   const release = () => {
