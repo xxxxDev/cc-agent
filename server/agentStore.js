@@ -1919,7 +1919,7 @@ function purgeAt(c,days=archiveRetentionDays()){
  const since=Date.parse(c.archivedAt||c.updatedAt||c.createdAt||'');
  return days===null||c.keepArchived||!Number.isFinite(since)?null:since+days*DAY;
 }
-const UNSENT_ATTACHMENT_HOURS=24;
+const UNSENT_ATTACHMENT_HOURS=24,TERMINAL_KEEP_DAYS=7;
 const DAY=86400000;
 // How long a checklist whose every item is done is kept, counted from its last change,
 // or null to keep it (the default, as before). An admin's setting for every agent; one with
@@ -2069,8 +2069,10 @@ function sweepRetention({now=Date.now()}={}){
     if(!entry.endsWith('.json'))continue;
     const meta=path.join(dir,id,entry);
     let data;try{data=JSON.parse(fs.readFileSync(meta,'utf8'));}catch{continue;}
-    if(sent.has(data.id)||data.terminal===true)continue;
-    if(!(data.createdAt<now-UNSENT_ATTACHMENT_HOURS*3600000))continue;
+    if(sent.has(data.id))continue;
+    // One handed to the terminal that no typed prompt took (its paste failed, the tab closed):
+    // kept TERMINAL_KEEP_DAYS from then, not forever (review, 2026-11-11).
+    if(data.terminal===true?!((data.sentAt??data.createdAt)<now-TERMINAL_KEEP_DAYS*86400000):!(data.createdAt<now-UNSENT_ATTACHMENT_HOURS*3600000))continue;
     try{fs.rmSync(path.join(dir,id,data.file),{force:true});fs.rmSync(meta,{force:true});files+=1;}catch{}
    }
   }
@@ -2374,8 +2376,9 @@ function attachTerminalFile(c,fileId){
  const ok=terminalFileAccess(c);
  if(!ok.ok)throw error(ok.reason==='unreadable'?'這個 Agent 讀不到附件資料夾，檔案請放到聊天室。':'這個 Agent 沒有終端機可以放檔案。',409);
  const at=attachments.location(stateRoot,c,fileId).path;
- // Handed to the terminal: kept as a sent file is, outside the unsent cap and sweep
- // (attachments.markTerminal). The mirror still takes it as the typed prompt's own.
+ // Handed to the terminal: outside the unsent cap and the day's sweep, kept a week while no
+ // message holds it, and removable until then (attachments.markTerminal, sweepRetention). The
+ // mirror still takes it as the typed prompt's own.
  attachments.markTerminal(stateRoot,c,fileId);
  return {path:at};
 }
@@ -3281,7 +3284,7 @@ const heldUntil=(x,kind)=>kind==='result'?x.resultPending?.after:kind==='failure
 const pendingScheduleNotifications=(now=Date.now())=>scheduleStore.list().flatMap(x=>Object.entries(NOTIFY_FIELD).filter(([kind,f])=>x[f]&&!(Date.parse(heldUntil(x,kind)||0)>now)).map(([kind])=>({schedule:x,kind})));
 const markScheduleNotified=(id,kind='proposal')=>{scheduleStore.patch(id,{[NOTIFY_FIELD[kind]]:false});};
 const scheduleCheckList=()=>scheduleChecks.list().map(scheduleChecks.view);
-module.exports={attachTerminalFile,terminalFileAccess,mirrorTerminal,followSessionModel,diagnosticReports:diagnostics,pendingDiagnosticNotifications:()=>diagnostics.pending(),markDiagnosticsNotified:ids=>{diagnostics.markNotified(ids);},CHECKLIST_RETENTION_CHOICES,checklistRetentionDays,loginShutdown:signal=>claudeLogin.shutdown(signal),loginView:()=>claudeLogin.view(),loginStart:()=>claudeLogin.start(),loginCode:text=>claudeLogin.code(text),loginCancel,loginResend,loginFailed,loginProven,reviveSilentChannels,peerLinkDigest,peerExchange,peerKey,peerLink,peerConfig,peerWidens,setPeerConfig,peerDraft,peerView,relaunchMarked,tmuxSocket,subagentList,runLimitResumes,runWrapUps,setWrapUp,mentionsFor,commandInGroup,groupList,reorderGroups,groupFor,groupView,createGroup,updateGroup,removeGroup,updateGroupChecklist,sendToGroup,searchGroup,deliverGroups,chooseTerminalOption,updateChecklist:(c,data,by)=>{const r=checklists.apply(c,data,by);save(c);return r;},syncAllRelays,syncRelays,scheduleCheckList,schedulesFor,addSchedule,approveSchedule,updateSchedule,removeSchedule,rejectSchedule,runSchedules,runScheduleNow,testSchedule,SCHEDULE_WAIT_MS,pendingScheduleNotifications,markScheduleNotified,searchMessages,runCommand,commandsFor,setThreshold,setSubagents,applyAgentSubagents,applySubagentDefault,subagentEnv,setAutoCompact,applyAgentAutoCompact,profileRestartNeeds,applyAgentRestart,applyAutoCompactDefault,autoCompactEnv,AUTO_COMPACT_PRESETS,listPreferences,setListPreferences,setAvatar,clearAvatar,avatarLocation,AVATAR_MAX_BYTES,clearFullAccessFor,pendingReportNotifications,markReportsNotified,archiveFor,setAccessFor,accessReports:()=>reports.list().map(reportView),accessReport:id=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(r);},resolveAccessReport:(id,patch)=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(reports.update(id,patch));},grantAccess,reconcile,reconnect,purgeOwner,sweepRetention,stopAgentsOf,bridgeActions:()=>[...BRIDGE_ACTIONS],archivedList,restoreArchived,keepArchived,purgeArchived,archiveRetentionDays,RETENTION_MAX_DAYS,UNSENT_ATTACHMENT_HOURS,STALE_MS,STARTUP_SLOW_MS,STARTUP_LIMIT_MS,messageTranscript,importHistory,interrupt,markViewing,markAllRead,isViewing,attachableFolders,MESSAGE_PAGE,updateProfile,reorder,pendingNotifications,getPreferences,setPreferences,decidePermission,confirmWorkspace,confirmChannel,compact,stateRoot,create,get,list,publicView,launch,stop,send,rotate,bridge,byToken,active,save,error};
+module.exports={TERMINAL_KEEP_DAYS,attachTerminalFile,terminalFileAccess,mirrorTerminal,followSessionModel,diagnosticReports:diagnostics,pendingDiagnosticNotifications:()=>diagnostics.pending(),markDiagnosticsNotified:ids=>{diagnostics.markNotified(ids);},CHECKLIST_RETENTION_CHOICES,checklistRetentionDays,loginShutdown:signal=>claudeLogin.shutdown(signal),loginView:()=>claudeLogin.view(),loginStart:()=>claudeLogin.start(),loginCode:text=>claudeLogin.code(text),loginCancel,loginResend,loginFailed,loginProven,reviveSilentChannels,peerLinkDigest,peerExchange,peerKey,peerLink,peerConfig,peerWidens,setPeerConfig,peerDraft,peerView,relaunchMarked,tmuxSocket,subagentList,runLimitResumes,runWrapUps,setWrapUp,mentionsFor,commandInGroup,groupList,reorderGroups,groupFor,groupView,createGroup,updateGroup,removeGroup,updateGroupChecklist,sendToGroup,searchGroup,deliverGroups,chooseTerminalOption,updateChecklist:(c,data,by)=>{const r=checklists.apply(c,data,by);save(c);return r;},syncAllRelays,syncRelays,scheduleCheckList,schedulesFor,addSchedule,approveSchedule,updateSchedule,removeSchedule,rejectSchedule,runSchedules,runScheduleNow,testSchedule,SCHEDULE_WAIT_MS,pendingScheduleNotifications,markScheduleNotified,searchMessages,runCommand,commandsFor,setThreshold,setSubagents,applyAgentSubagents,applySubagentDefault,subagentEnv,setAutoCompact,applyAgentAutoCompact,profileRestartNeeds,applyAgentRestart,applyAutoCompactDefault,autoCompactEnv,AUTO_COMPACT_PRESETS,listPreferences,setListPreferences,setAvatar,clearAvatar,avatarLocation,AVATAR_MAX_BYTES,clearFullAccessFor,pendingReportNotifications,markReportsNotified,archiveFor,setAccessFor,accessReports:()=>reports.list().map(reportView),accessReport:id=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(r);},resolveAccessReport:(id,patch)=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(reports.update(id,patch));},grantAccess,reconcile,reconnect,purgeOwner,sweepRetention,stopAgentsOf,bridgeActions:()=>[...BRIDGE_ACTIONS],archivedList,restoreArchived,keepArchived,purgeArchived,archiveRetentionDays,RETENTION_MAX_DAYS,UNSENT_ATTACHMENT_HOURS,STALE_MS,STARTUP_SLOW_MS,STARTUP_LIMIT_MS,messageTranscript,importHistory,interrupt,markViewing,markAllRead,isViewing,attachableFolders,MESSAGE_PAGE,updateProfile,reorder,pendingNotifications,getPreferences,setPreferences,decidePermission,confirmWorkspace,confirmChannel,compact,stateRoot,create,get,list,publicView,launch,stop,send,rotate,bridge,byToken,active,save,error};
 
 // Account deletion checks the agents an account actually has running.
 module.exports.lifecycleInventory=async()=>({sources:[{provider:"claude",providerLabel:"Claude Code",ok:true}],schedules:state.conversations.filter(c=>!['stopped','error'].includes(active(c).phase)).map(c=>({id:c.id,ownerUserId:c.owner,provider:"claude",status:active(c).phase,running:active(c).phase==="busy"}))});

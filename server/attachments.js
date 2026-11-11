@@ -20,10 +20,13 @@ function put(root,c,name,data){if(c.archived)throw fail('Conversation archived',
 function publicMeta({id,name,size}){return {id,name,size};}
 function resolve(root,c,ids=[]){if(!Array.isArray(ids)||ids.length>MAX_FILES||new Set(ids).size!==ids.length)throw fail('Maximum 10 unique attachments');return ids.map(id=>{const m=read(root,c,id);if(c.messages.some(x=>x.attachments?.some(a=>a.id===id)))throw fail('Attachment already sent',409);return publicMeta(m);});}
 function location(root,c,id){const m=read(root,c,id);return {meta:m,path:path.resolve(directory(root,c),m.file)};}
-function remove(root,c,id){if(c.messages.some(x=>x.attachments?.some(a=>a.id===id)))throw fail('Sent attachments cannot be removed',409);const m=read(root,c,id);if(m.terminal===true)throw fail('Sent attachments cannot be removed',409);fs.rmSync(path.join(directory(root,c),m.file),{force:true});fs.rmSync(path.join(directory(root,c),id+'.json'));}
+// A file handed to the terminal (markTerminal) that no message holds may go too: its paste
+// may never have reached the terminal (review, 2026-11-11).
+function remove(root,c,id){if(c.messages.some(x=>x.attachments?.some(a=>a.id===id)))throw fail('Sent attachments cannot be removed',409);const m=read(root,c,id);fs.rmSync(path.join(directory(root,c),m.file),{force:true});fs.rmSync(path.join(directory(root,c),id+'.json'));}
 // A file whose path was typed at the agent's terminal (agentStore.attachTerminalFile;
 // 2026-11-11): handed over as a sent one is, so it no longer counts as
-// unsent (the cap above, the 24-hour sweep) and is kept. Written whole and renamed, once.
+// unsent (the cap above, the 24-hour sweep) and is kept, for TERMINAL_KEEP_DAYS while no
+// message holds it (agentStore sweepRetention). Written whole and renamed, once.
 function markTerminal(root,c,id){const m=read(root,c,id);if(m.terminal===true)return publicMeta(m);const dir=directory(root,c),tmp=path.join(dir,'.'+id+'.'+randomUUID()+'.tmp');fs.writeFileSync(tmp,JSON.stringify({...m,terminal:true,sentAt:Date.now()}),{mode:0o600,flag:'wx'});try{fs.renameSync(tmp,path.join(dir,id+'.json'));}catch(e){try{fs.rmSync(tmp,{force:true});}catch{}throw e;}return publicMeta(m);}
 // A file an agent attaches to its answer. The agent names a path; the service
 // reads it, so the agent's own scope has to be enforced here or a scoped agent

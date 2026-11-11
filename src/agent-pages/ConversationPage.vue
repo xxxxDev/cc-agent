@@ -153,16 +153,18 @@ const MAX_TERMINAL_FILES=10,MAX_BYTES=95*1024*1024;
 async function filesToTerminal(list){
  const id=workspace.detail.value?.id;if(!id)return;
  if(list.length>MAX_TERMINAL_FILES){f7.dialog.alert(workspace.ct('最多 10 個附件'));list=list.slice(0,MAX_TERMINAL_FILES);}
- const paths=[],stamp=new Date();
+ const paths=[],ids=[],stamp=new Date();
  for(const [i,file] of list.entries()){
   if(!file.size||file.size>MAX_BYTES){f7.dialog.alert(workspace.ct('附件大小須為 1 byte 至 95 MB')+': '+file.name);continue;}
   try{
    const saved=await apiUpload('/conversations/'+id+'/attachments?name='+encodeURIComponent(pastedName(file,i,stamp)),file,{headers:{'Content-Type':'application/octet-stream'}});
-   paths.push((await api('/conversations/'+id+'/attachments/'+saved.id+'/terminal-path')).path);
+   paths.push((await api('/conversations/'+id+'/attachments/'+saved.id+'/terminal-path',{method:'POST',body:'{}'})).path);
+   ids.push(saved.id);
   }catch(err){f7.dialog.alert(workspace.ct('無法放到終端機')+': '+(err?.message||file.name));}
  }
  const text=typedPaths(paths);
- if(text&&!terminalPane.value?.paste(text))f7.dialog.alert(workspace.ct('終端機尚未連線，路徑沒有打進去'));
+ // Not typed in after all: the files go again rather than stay for the week's sweep.
+ if(text&&!terminalPane.value?.paste(text)){f7.dialog.alert(workspace.ct('終端機尚未連線，路徑沒有打進去'));for(const fileId of ids)api('/conversations/'+id+'/attachments/'+fileId,{method:'DELETE'}).catch(()=>{});}
 }
 return {...workspace,listDetailActive,startListColumnResize,resetListColumn:()=>setListColumnWidth(null),terminalPane,terminalSplit,terminalTakes,dragOver,dropAt,filesToTerminal,fileDragTarget:fileDrag.target,isDraftPicture,fileDragging:fileDrag.dragging,fileDragCount:fileDrag.count,fileOver:fileDrag.over,fileDragEnd:fileDrag.end,previewFile:ref(null),newChecklist:()=>askNewChecklist(workspace),moreOpen,morePoint,openMore,moreItems,pickMore};}};
 </script>
