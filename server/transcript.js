@@ -74,6 +74,37 @@ function messageCost(usage, model, serviceTier) {
     + searches * WEB_SEARCH_USD;
 }
 
+// One API response is one billed unit, however many records it left. Claude Code
+// writes a record per content block of a response (thinking, text, each tool_use),
+// all with the same message id and requestId: since 2.1.3xx each repeats the whole
+// response's usage, and before that the earlier ones carry what was known as the
+// block was written (output 0, the prompt not yet split into cache reads) and only
+// the last one the final count. Each response counts once, by the record with the most output tokens,
+// the last of them on a tie; what an earlier record of it added is taken back, so a
+// response split across two reads or background slices still counts once.
+function countUsage(totals, record) {
+  const message = record.message, usage = message?.usage;
+  if (!usage || zeroUsageError(record)) return;
+  const key = message.id || record.requestId || record.uuid;
+  const before = totals.counted.get(key);
+  const output = usage.output_tokens || 0;
+  if (before && output < before.output) return;
+  const now = {input: usage.input_tokens || 0, output, cacheRead: usage.cache_read_input_tokens || 0,
+    cacheWrite: usage.cache_creation_input_tokens || 0, thinking: usage.output_tokens_details?.thinking_tokens || 0,
+    cost: messageCost(usage, message.model, message.service_tier)};
+  if (before && Object.keys(now).every(k => now[k] === before[k])) return;
+  if (before) {
+    for (const k of Object.keys(totals.tokens)) totals.tokens[k] -= before[k];
+    if (before.cost === null) totals.unpriced -= 1; else totals.costUSD -= before.cost;
+  } else {
+    totals.turns += 1;
+    if (message.model) totals.models?.add(message.model);
+  }
+  for (const k of Object.keys(totals.tokens)) totals.tokens[k] += now[k];
+  if (now.cost === null) totals.unpriced += 1; else totals.costUSD += now.cost;
+  totals.counted.set(key, now);
+}
+
 // One reader per transcript file, advanced by the bytes appended since last time,
 // so polling a conversation every 1.2s costs a stat() and nothing else once the
 // file has been read.
@@ -81,7 +112,7 @@ const readers = new Map();
 const blank = () => ({
   offset: 0,
   partial: Buffer.alloc(0),
-  counted: new Set(),
+  counted: new Map(),
   tokens: {input: 0, output: 0, cacheRead: 0, cacheWrite: 0, thinking: 0},
   costUSD: 0,
   unpriced: 0,
@@ -307,24 +338,7 @@ function absorb(state, record) {
     state.tools = 0;
     state.running.clear();
   }
-  const usage = message.usage;
-  // A streamed reply appears several times; the same message id and API block is
-  // one billed unit. Counting the raw records would roughly double the total.
-  if (usage && !zeroUsageError(record)) {
-    const key = (message.id || record.uuid) + ':' + (record.apiBlockIndex ?? 0);
-    if (!state.counted.has(key)) {
-      state.counted.add(key);
-      state.turns += 1;
-      state.tokens.input += usage.input_tokens || 0;
-      state.tokens.output += usage.output_tokens || 0;
-      state.tokens.cacheRead += usage.cache_read_input_tokens || 0;
-      state.tokens.cacheWrite += usage.cache_creation_input_tokens || 0;
-      state.tokens.thinking += usage.output_tokens_details?.thinking_tokens || 0;
-      if (message.model) state.models.add(message.model);
-      const cost = messageCost(usage, message.model, message.service_tier);
-      if (cost === null) state.unpriced += 1; else state.costUSD += cost;
-    }
-  }
+  countUsage(state, record);
   if (!Array.isArray(message.content)) return;
   for (const block of message.content) {
     if (block.type === 'tool_use') {
@@ -798,9 +812,8 @@ function segment(stateRoot, conversation, messageId) {
   let source;
   try { source = readAll(file); } catch { return null; }
   const records = [];
-  const tokens = {input: 0, output: 0, cacheRead: 0, cacheWrite: 0, thinking: 0};
-  const counted = new Set();
-  let costUSD = 0, unpriced = 0, tools = 0, inside = false, answered = false, truncated = false, from = null, to = null;
+  const totals = {counted: new Map(), tokens: {input: 0, output: 0, cacheRead: 0, cacheWrite: 0, thinking: 0}, costUSD: 0, unpriced: 0, turns: 0};
+  let tools = 0, inside = false, answered = false, truncated = false, from = null, to = null;
   for (const line of source.text.split('\n')) {
     if (!line) continue;
     let record;
@@ -821,20 +834,7 @@ function segment(stateRoot, conversation, messageId) {
     // Answered, what comes with a reply to another message is that message's.
     if (answered && replies.some(id => id !== turnId)) break;
     if (replies.includes(turnId)) answered = true;
-    const usage = record.message?.usage;
-    if (usage && !zeroUsageError(record)) {
-      const key = (record.message.id || record.uuid) + ':' + (record.apiBlockIndex ?? 0);
-      if (!counted.has(key)) {
-        counted.add(key);
-        tokens.input += usage.input_tokens || 0;
-        tokens.output += usage.output_tokens || 0;
-        tokens.cacheRead += usage.cache_read_input_tokens || 0;
-        tokens.cacheWrite += usage.cache_creation_input_tokens || 0;
-        tokens.thinking += usage.output_tokens_details?.thinking_tokens || 0;
-        const cost = messageCost(usage, record.message.model, record.message.service_tier);
-        if (cost === null) unpriced += 1; else costUSD += cost;
-      }
-    }
+    countUsage(totals, record);
     const view = project(record);
     if (!view) continue;
     for (const block of view.blocks) if (block.type === 'tool_use' && block.name !== 'mcp__executive__reply') tools += 1;
@@ -843,7 +843,7 @@ function segment(stateRoot, conversation, messageId) {
     records.push(view);
   }
   if (!records.length) return null;
-  return {messageId, turnId, generation: run.number, from, to, tokens, costUSD, turns: counted.size, unpriced, tools, records, truncated, partialFile: source.partial};
+  return {messageId, turnId, generation: run.number, from, to, tokens: totals.tokens, costUSD: totals.costUSD, turns: totals.turns, unpriced: totals.unpriced, tools, records, truncated, partialFile: source.partial};
 }
 
 // Turns this conversation never saw. An agent resumed from a session the owner
@@ -1082,7 +1082,7 @@ function readSubagent(file, metaFile) {
   const value = {type: typeof meta.agentType === 'string' ? meta.agentType.slice(0, 80) : '', task: typeof meta.description === 'string' ? meta.description.slice(0, 200) : '',
     toolUseId: typeof meta.toolUseId === 'string' ? meta.toolUseId : null, startedAt: null, endedAt: null, messages: 0, tools: 0,
     tokens: {input: 0, output: 0, cacheRead: 0, cacheWrite: 0}, costUSD: 0, unpriced: 0, models: [], prompt: '', result: ''};
-  const counted = new Set(), models = new Set();
+  const models = new Set(), totals = {counted: new Map(), tokens: value.tokens, costUSD: 0, unpriced: 0, turns: 0, models};
   let text;
   try { text = fs.readFileSync(file, 'utf8'); } catch { return null; }
   for (const line of text.split('\n')) {
@@ -1098,17 +1098,9 @@ function readSubagent(file, metaFile) {
     const said = assistantText(record);
     if (said) value.result = said.slice(0, 12000);
     if (Array.isArray(message.content)) value.tools += message.content.filter(b => b?.type === 'tool_use').length;
-    const usage = message.usage;
-    if (!usage || zeroUsageError(record)) continue;
-    const id = (message.id || record.uuid) + ':' + (record.apiBlockIndex ?? 0);
-    if (counted.has(id)) continue;
-    counted.add(id);
-    value.tokens.input += usage.input_tokens || 0; value.tokens.output += usage.output_tokens || 0;
-    value.tokens.cacheRead += usage.cache_read_input_tokens || 0; value.tokens.cacheWrite += usage.cache_creation_input_tokens || 0;
-    if (message.model) models.add(message.model);
-    const cost = messageCost(usage, message.model, message.service_tier);
-    if (cost === null) value.unpriced += 1; else value.costUSD += cost;
+    countUsage(totals, record);
   }
+  value.costUSD = totals.costUSD; value.unpriced = totals.unpriced;
   value.models = [...models];
   subagentCache.set(file, {key, value});
   if (subagentCache.size > 2000) subagentCache.delete(subagentCache.keys().next().value);
