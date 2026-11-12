@@ -43,7 +43,9 @@
    <f7-navbar><f7-nav-left><f7-link popup-close icon-only icon-f7="xmark" :aria-label="ct('關閉用量')"/></f7-nav-left><f7-nav-title>{{ct('用量統計')}}</f7-nav-title><f7-nav-right><f7-link icon-only icon-f7="arrow_clockwise" class="usage-refresh" :class="{spinning:usageRefreshing}" :aria-label="ct('重新整理用量')" @click="refreshUsage"/></f7-nav-right></f7-navbar>
    <ContextUsagePanel v-if="usagePopupOpen" :usage="detail?.contextUsage" :agent="detail"/>
   </f7-page></f7-view></f7-popup>
-<GlassDropdown :open="!!menuConversation" :point="menuPoint" :items="user?.role==='admin'?[{value:'rename',label:ct('重新命名'),f7:'pencil'},{value:'remove',label:ct('刪除'),f7:'trash',danger:true}]:[]" @close="menuConversation=null" @select="menuAction"/></template>
+<!-- A row's right-click menu in the Agents list: pin or unpin first, for every account's own
+       agents, then an admin's rename and delete. -->
+<GlassDropdown :open="!!menuConversation" :point="menuPoint" :items="rowMenuItems" @close="menuConversation=null" @select="menuAction"/></template>
 <script>
 import AgentProfileFields from "./AgentProfileFields.vue";
 import {scopedAgents} from "../js/agentPreferences.js";
@@ -53,6 +55,10 @@ import ChecklistPanel,{askNewChecklist} from "./ChecklistPanel.vue";
 import ContextUsagePanel from "./ContextUsagePanel.vue";
 import {inject,computed,ref,watch,onBeforeUnmount} from "vue";import {f7} from "framework7-vue";import GlassDropdown from "./GlassDropdown.vue";import {parseAgentJson} from "../js/agentImport.js";import {ct} from "../js/agent-i18n.js";import {sheetSwipe,guardSheet} from "../js/sheetSwipe.js";
 export default {components:{GlassDropdown,AgentProfileFields,AgentProfilePanel,MessageSearchResults,ChecklistPanel,ContextUsagePanel},setup(){const w=inject("workspace");
+ // Its items are fixed as it opens, so they stay as they were while it fades out after a choice.
+ const rowMenuItems=ref([]);
+ watch(()=>w.menuConversation.value,c=>{if(!c)return;const pinned=w.isPinned(c.id);
+  rowMenuItems.value=[{value:'pin',label:ct(pinned?'取消釘選':'釘選'),f7:pinned?'pin_slash':'pin'},...(w.user.value?.role==='admin'?[{value:'rename',label:ct('重新命名'),f7:'pencil'},{value:'remove',label:ct('刪除'),f7:'trash',danger:true}]:[])];},{immediate:true,flush:'sync'});
  const personal=computed(()=>w.user.value?.role==="admin");
  // A server that cannot fence an agent (Windows: Claude Code has no sandbox there, see
  // channel/platform.cjs) would refuse a scoped one at its first start. An admin's new agent
@@ -95,7 +101,8 @@ export default {components:{GlassDropdown,AgentProfileFields,AgentProfilePanel,M
  function focusSearch(){document.querySelector('.message-search-popup .message-search-input input')?.focus();}
  async function pickFound(hit){w.searchOpen.value=false;await w.showMessage(hit.conversationId,hit.messageId);}
  return {...w,newChecklist:()=>askNewChecklist(w),sheetSwipe,infoPopup,personal,importText,importNote,importDone,importRow,newBody,applyImport,onImportFile,focusSearch,pickFound,
- menuAction(value){const c=w.menuConversation.value;if(!c)return;if(value==="rename")w.renameConversation(c);if(value==="remove")w.deleteConversation(c);w.menuConversation.value=null;}}}};
+ rowMenuItems,
+ menuAction(value){const c=w.menuConversation.value;if(!c)return;if(value==="pin")w.togglePin(c);if(value==="rename")w.renameConversation(c);if(value==="remove")w.deleteConversation(c);w.menuConversation.value=null;}}}};
 </script>
 <style scoped>
 .import-actions{display:flex;flex-wrap:wrap;gap:8px;padding:0 16px;margin:4px 0 12px;}

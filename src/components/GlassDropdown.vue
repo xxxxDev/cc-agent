@@ -4,13 +4,14 @@
     12px below it, clamped to a 10px viewport guard; modalInAnimation from skin.css.
   -->
   <Teleport to="body">
-    <div v-if="visible" class="dropdown-backdrop" @click="close">
+    <div v-if="visible" class="dropdown-backdrop" @click="close" @contextmenu.prevent="passContextMenu">
       <div
         ref="contentRef"
         class="dropdown-content"
         :class="{ 'modal-out': closing }"
         :style="contentStyle"
         @click.stop
+        @contextmenu.prevent.stop
       >
         <div class="list no-hairlines no-hairlines-between search-apps-ui__sources-list no-margin">
           <ul>
@@ -105,6 +106,8 @@ watch(
   () => props.open,
   async (isOpen) => {
     if (isOpen) {
+      clearTimeout(closeTimer);
+      closeTimer = null;
       closing.value = false;
       visible.value = true;
       await nextTick();
@@ -119,14 +122,37 @@ watch(
 // Items that arrive after it opened (a list still loading) keep it inside the window.
 watch(() => props.items.length, () => { if (visible.value && !closing.value) nextTick(positionContent); });
 
+let closeTimer = null;
 function close() {
   if (!visible.value || closing.value) return;
   closing.value = true;
   emit('close');
-  setTimeout(() => {
+  closeTimer = setTimeout(() => {
+    closeTimer = null;
     visible.value = false;
     closing.value = false;
   }, 230);
+}
+
+// A right-click while the menu is open lands on its backdrop, not on the page, so the
+// browser's own menu came up. The click is handed to what
+// lies under the backdrop: a row with a menu of its own opens it there in the same
+// right-click (the same menu moves to the new point); anywhere else the menu just closes.
+// The browser's menu never comes up while ours is open.
+async function passContextMenu(event) {
+  const backdrop = event.currentTarget;
+  const before = props.point;
+  backdrop.style.pointerEvents = 'none';
+  const under = document.elementFromPoint(event.clientX, event.clientY);
+  backdrop.style.pointerEvents = '';
+  let taken = false;
+  if (under) {
+    const again = new MouseEvent('contextmenu', {bubbles: true, cancelable: true, composed: true, clientX: event.clientX, clientY: event.clientY, screenX: event.screenX, screenY: event.screenY, button: 2, buttons: event.buttons});
+    taken = !under.dispatchEvent(again);
+  }
+  await nextTick();
+  if (taken && props.open && props.point !== before && !closing.value) positionContent();
+  else close();
 }
 
 function select(item) {
