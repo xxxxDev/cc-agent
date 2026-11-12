@@ -86,7 +86,9 @@ function startNotifications(agents,service=getDefaultPushService(),admins=active
    const failed=failures.get(r.id);if(failed&&now()<failed.retryAt)continue;
    try{
     // A report already handled before it went out needs no notification.
-    const quiet=now()-(lastPush.get(r.conversationId)??-Infinity)<quietMs;
+    // CC Agent's one push for a digest or a full report queue comes right after the agent's
+    // other reports, so the quiet period does not hold it back.
+    const quiet=r.kind!=='cap'&&r.kind!=='digest'&&now()-(lastPush.get(r.conversationId)??-Infinity)<quietMs;
     if(r.status==='open'&&!quiet){await service.notifyAccessReport(reportNotification(r),await admins());lastPush.set(r.conversationId,now());pushed.push(r.id);}
     failures.delete(r.id);done.push(r.id);
    }catch{

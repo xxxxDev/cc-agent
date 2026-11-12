@@ -551,7 +551,7 @@ function referenceInfo(c){
 function launch(c) {
  // Deleted is an admin's decision and only an admin's restore undoes it.
  if(c.archived)throw error('Agent archived',409);
- const g=active(c);
+ const g=active(c);turnAbandon(g);
  if(c.mode==='demo'){g.ready=true;g.phase='ready';g.heartbeat=Date.now();save(c);return;}
  if(['starting','ready','busy','handing-off'].includes(g.phase)&&g.heartbeat>Date.now()-15000)return;
  // A session seen before this start says nothing about the one started now.
@@ -959,7 +959,7 @@ function starterOps(c,action,data){
  })};
 }
 function stop(c) {
- const g=active(c);
+ const g=active(c);turnAbandon(g);
  // Stopped by hand or paused: a waiting session is now an ordinary stopped one, which a
  // message does not start.
  delete g.dormant;delete g.wokenBySend;
@@ -1134,13 +1134,16 @@ function explainPatch(r,entry){
 // report from before turns were kept), and it is not allowed.
 function selfResolveAllowed(c,g,r){
  if(outsideTaken(c))return false;
+ // The relays that came in, read on the spot as ownerTurn does; a transcript still being
+ // read in the background, or one that cannot be read, leaves the origin unknown.
+ try{if(syncRelays(c,undefined,true)==='later')return false;}catch{return false;}
  const now=turnOf(g);
  return turnClean(c,(g.turns||[]).find(t=>t.id===r.turnId))&&turnClean(c,now&&!now.ended?now:null);
 }
 function turnClean(c,t){
  if(!t||t.unknown)return false;
  const from=Date.parse(t.at),to=t.endedAt?Date.parse(t.endedAt):Infinity;
- return !c.messages.some(m=>(t.ids.includes(m.id)&&peerForeign(m))||(m.role==='relay'&&m.relay?.direction==='in'&&Date.parse(m.at)>=from&&Date.parse(m.at)<=to));
+ return !c.messages.some(m=>(t.ids.includes(m.id)&&peerForeign(m))||(m.role==='relay'&&m.relay?.direction==='in'&&(at=>at>=from&&at<=to)(Date.parse(m.relay.at||m.at))));
 }
 // The turns CC Agent handed messages to (the last few, by run): a turn begins with the first
 // message or question it hands over after the last one ended, and ends at its Stop or failure.
@@ -1149,9 +1152,13 @@ const turnOf=g=>(g.turns||[]).find(t=>t.id===g.turnId)||null;
 function turnHand(g,m){
  let t=turnOf(g);
  if(!t||t.ended){t={id:randomUUID().slice(0,12),at:new Date().toISOString(),ids:[]};g.turns=[...(g.turns||[]),t].slice(-12);g.turnId=t.id;}
- if(m)t.ids.push(m.id);
+ if(m&&!t.ids.includes(m.id))t.ids.push(m.id);
  return t;
 }
+// A turn still open when the session is stopped, started again or found at its start-up
+// prompt never had its Stop: it ends there, of unknown origin, so a later session's report
+// is not taken as made in it.
+function turnAbandon(g){const t=turnOf(g);if(t&&!t.ended){t.ended=true;t.unknown=true;t.endedAt=new Date().toISOString();}}
 function turnEnd(g){
  let t=turnOf(g);
  if(!t||t.ended){t={id:randomUUID().slice(0,12),at:new Date().toISOString(),ids:[],unknown:true};g.turns=[...(g.turns||[]),t].slice(-12);g.turnId=t.id;}
@@ -1261,7 +1268,7 @@ function syncRelays(c,now=Date.now(),onSpot=false){
  if(c.mode!=='claude'||c.archived||!c.runs?.length||!ownerIsActiveAdmin(c.owner))return;
  if(!c.relaySince){c.relaySince=new Date(now).toISOString();save(c);return;}
  const found=transcript.relays(stateRoot,c,onSpot);
- if(!found)return;
+ if(!found)return 'later';
  let changed=false;
  for(const r of found){
   if(!r.at||r.at<c.relaySince)continue;
@@ -1273,7 +1280,8 @@ function syncRelays(c,now=Date.now(),onSpot=false){
   if(r.direction==='out'&&peer.peerId)groupRelay(c,peer.peerId,r.text,r.at);
   // A message from outside the group it works for is other work.
   if(r.handed)leaveGroupFor(c,r,peer.peerId);
-  add(c,'relay',r.text,{relayKey:r.key,relay:{direction:r.direction,...peer,handed:!!r.handed}});
+  // relay.at: when it arrived, from the transcript, not when it was read.
+  add(c,'relay',r.text,{relayKey:r.key,relay:{direction:r.direction,...peer,handed:!!r.handed,at:r.at}});
   changed=true;
  }
  if(changed)save(c);
@@ -1620,7 +1628,7 @@ function bridge(c,action,data={}) {
   // its channel is polling and its session has finished a turn, so it is ready, and
   // the first message it is handed asks it to load what bootstrap gives (an agent told to translate everything sat on the waking screen with nothing running).
   // Not after an error or a usage limit at start-up, which stays shown.
-  if(g.phase==='starting'&&!g.compacting&&!g.manualCompact&&!g.bootstrapped&&!g.lastError&&!g.limitResume&&g.launchedAt&&Date.now()-g.launchedAt>STARTUP_TURN_GRACE_MS&&transcript.turnEndedSince(stateRoot,c,g.launchedAt)){try{markReady(c,g);g.startupSkipped=true;save(c);}catch(e){console.error(`ready without handshake for ${c.id}: ${e.message}`);}}
+  if(g.phase==='starting'&&!g.compacting&&!g.manualCompact&&!g.bootstrapped&&!g.lastError&&!g.limitResume&&g.launchedAt&&Date.now()-g.launchedAt>STARTUP_TURN_GRACE_MS&&transcript.turnEndedSince(stateRoot,c,g.launchedAt)){try{turnAbandon(g);markReady(c,g);g.startupSkipped=true;save(c);}catch(e){console.error(`ready without handshake for ${c.id}: ${e.message}`);}}
   const verdicts=permissions.deliveries(g);if(verdicts.length)return {permissions:verdicts};
   // A report's question, into the turn still running (askExplain): no bubble, no delivery mark.
   const ask=g.phase==='busy'&&(g.reportAsks||[]).find(a=>a.when==='now');
@@ -1631,7 +1639,7 @@ function bridge(c,action,data={}) {
   // message_id report-<id>), never inside a message another sender's tag is on; the
   // message itself follows on the next poll, into the same turn.
   const later=pending&&g.ready?(g.reportAsks||[]).filter(a=>a.when==='next'):[];
-  if(later.length){g.reportAsks=g.reportAsks.filter(a=>a.when!=='next');turnHand(g);g.phase='busy';save(c);return {message:{id:'report-'+later[0].id,text:askText(later,true),sender:'automatic'}};}
+  if(later.length){g.reportAsks=g.reportAsks.filter(a=>a.when!=='next');turnHand(g,pending);g.phase='busy';save(c);return {message:{id:'report-'+later[0].id,text:askText(later,true),sender:'automatic'}};}
   if(pending&&g.ready){// Working for a group from the moment its message is handed over, and for nothing
   // else once any other message is.
   // A group chat named with @ in its own chat counts the same: what the
