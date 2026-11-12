@@ -49,7 +49,8 @@
             <span class="report-status" :class="reportMeta(r).cls">{{ reportMeta(r).label }}</span>
           </div>
           <div class="report-card-lines">
-            <div>🛠 {{ r.tool || ct('未知工具') }}：{{ excerpt(r.detail) }}</div>
+            <div v-if="r.kind === 'digest'">🔁 {{ digestLine(r) }}</div>
+            <div v-else>🛠 {{ r.tool || ct('未知工具') }}：{{ excerpt(r.detail) }}</div>
             <div v-if="r.error">⛔ {{ excerpt(r.error) }}</div>
             <div v-if="r.messageExcerpt">💬 {{ excerpt(r.messageExcerpt, 80) }}</div>
             <div v-if="r.explanation" class="report-reason">🗣 {{ excerpt(r.explanation.why, 100) }}</div>
@@ -70,7 +71,7 @@ import { computed, ref } from 'vue';
 import { f7 } from 'framework7-vue';
 import { api } from '../js/api.js';
 import { ct, labelled, listJoin } from '../js/agent-i18n.js';
-import { reportMeta, reportKind, reportTime, excerpt, agentSummaries } from '../js/access-reports.js';
+import { reportMeta, reportKind, reportTime, excerpt, agentSummaries, digestLine } from '../js/access-reports.js';
 
 const props = defineProps({ f7route: { type: Object, default: () => ({}) } });
 const reports = ref([]);

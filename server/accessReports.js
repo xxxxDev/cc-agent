@@ -6,9 +6,22 @@ const { randomUUID } = require('node:crypto');
 // of scope is granted from a prompt (not to a member, not to an admin), so a refused request ends up here instead, and whether to
 // widen that agent's scope is decided from this list. SECURITY.md.
 const MAX_REPORTS = 5000;
-// Open reports per conversation, so one agent, whose own output feeds the 'blocked' reports,
-// can neither bury the queue nor push other agents' reports out of it.
+// Per conversation, open and self-resolved together: one agent, whose
+// own output feeds the 'blocked' reports and whose explain_report makes them self-resolved,
+// can neither bury the queue nor push other agents' records out of it. Past it, that
+// agent's own oldest self-resolved record makes room; with all of them open it files no more.
 const MAX_PER_CONVERSATION = 200;
+// Past MAX_REPORTS, what goes first: the filing agent's own self-resolved records, then
+// other agents' self-resolved ones, then those an admin decided (granted or dismissed),
+// then the filing agent's own open ones, and other agents' open ones only last. Oldest
+// first within each.
+function evictionRank(r, conversationId) {
+  const own = !!conversationId && r.conversationId === conversationId;
+  if (r.status === 'self-resolved') return own ? 0 : 1;
+  if (r.status !== 'open') return 2;
+  return own ? 3 : 4;
+}
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 function create(stateRoot) {
   const file = path.join(stateRoot, 'access-reports.json');
@@ -28,25 +41,32 @@ function create(stateRoot) {
   function add(entry) {
     load();
     if (entry.key && reports.some((r) => r.key === entry.key)) return null;
-    if (entry.conversationId && reports.filter((r) => r.conversationId === entry.conversationId && r.status === 'open').length >= MAX_PER_CONVERSATION) return null;
+    if (entry.conversationId) {
+      const own = reports.filter((r) => r.conversationId === entry.conversationId && (r.status === 'open' || r.status === 'self-resolved'));
+      if (own.length >= MAX_PER_CONVERSATION) {
+        const oldest = own.find((r) => r.status === 'self-resolved');
+        if (!oldest) return null;
+        reports = reports.filter((r) => r !== oldest);
+      }
+    }
     // notifyPending: the admins' push goes out from server/notifications.js.
     const report = { id: randomUUID(), at: new Date().toISOString(), status: 'open', ...entry, notifyPending: true };
     reports.push(report);
-    // Past the cap the oldest handled ones go first (records, including what an agent
-    // solved itself), so a busy agent's records never push out a report still to review.
     if (reports.length > MAX_REPORTS) {
-      let extra = reports.length - MAX_REPORTS;
-      reports = reports.filter((r) => !(extra > 0 && r.status !== 'open' && extra-- > 0));
-      if (extra > 0) reports.splice(0, extra);
+      const drop = new Set(reports.map((r, i) => ({ r, i, rank: r === report ? 9 : evictionRank(r, entry.conversationId) }))
+        .sort((a, b) => a.rank - b.rank || a.i - b.i).slice(0, reports.length - MAX_REPORTS).map((x) => x.r));
+      reports = reports.filter((r) => !drop.has(r));
     }
     save();
     return report;
   }
   const list = () => load().slice().reverse();
   const get = (id) => load().find((r) => r.id === id) || null;
+  // A patch that changes nothing is not written: the file can hold MAX_REPORTS reports.
   function update(id, patch) {
     const report = get(id);
     if (!report) return null;
+    if (Object.keys(patch).every((k) => same(report[k], patch[k]))) return report;
     Object.assign(report, patch);
     save();
     return report;
@@ -56,7 +76,7 @@ function create(stateRoot) {
     load();
     const wanted = new Set(ids);
     let changed = 0;
-    for (const report of reports) if (wanted.has(report.id)) { Object.assign(report, patch); changed += 1; }
+    for (const report of reports) if (wanted.has(report.id) && !Object.keys(patch).every((k) => same(report[k], patch[k]))) { Object.assign(report, patch); changed += 1; }
     if (changed) save();
     return changed;
   }

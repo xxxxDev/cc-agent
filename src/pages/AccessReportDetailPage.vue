@@ -17,19 +17,26 @@
 
         <section class="detail-explanation" :class="meta.cls">
           <span>{{ reportKind(r) }}</span>
-          <h3>{{ r.tool || ct('未知工具') }}</h3>
-          <p class="mono">{{ r.detail }}</p>
+          <h3 v-if="r.kind === 'digest'">{{ digestLine(r) }}</h3>
+          <template v-else>
+            <h3>{{ r.tool || ct('未知工具') }}</h3>
+            <p class="mono">{{ r.detail }}</p>
+          </template>
           <p v-if="r.error" class="mono detail-refusal">{{ r.error }}</p>
         </section>
 
         <!-- The agent's own word (explain_report), or what it wrote just before the call. -->
         <section v-if="r.explanation" class="detail-card agent-reason">
-          <h3>{{ ct('Agent 說明') }}</h3>
+          <h3>{{ ct('Agent 說明') }}<small v-if="r.explanationCount > 1"> · {{ ct('共') }} {{ r.explanationCount }} {{ ct('次') }}</small></h3>
           <dl>
             <div><dt>{{ ct('為什麼') }}</dt><dd>{{ r.explanation.why }}</dd></div>
             <div v-if="r.explanation.instead"><dt>{{ ct('改用') }}</dt><dd>{{ r.explanation.instead }}</dd></div>
             <div><dt>{{ ct('仍需要') }}</dt><dd>{{ r.explanation.stillNeeded ? ct('是') : ct('否，已自行解決') }}</dd></div>
           </dl>
+          <!-- What it said before, shortened, newest last (explain_report keeps a few). -->
+          <ol v-if="r.explanationHistory?.length" class="earlier-reasons">
+            <li v-for="(e, i) in r.explanationHistory" :key="i">{{ reportTime(e.at) }} · {{ e.stillNeeded ? ct('仍需要') : ct('自行解決') }} · {{ e.why }}</li>
+          </ol>
         </section>
         <section v-else-if="r.agentWords" class="detail-card agent-reason">
           <h3>{{ ct('Agent 當時寫的') }}</h3>
@@ -59,13 +66,15 @@
 
         <section v-if="r.status === 'open'" class="detail-card action-card">
           <h3>{{ ct('處理') }}</h3>
-          <p v-if="r.suggestion" class="suggestion">
+          <p v-if="r.suggestion && r.kind !== 'digest'" class="suggestion">
             {{ r.suggestion.type === 'website' ? ct('建議開通的網站') : ct('建議開通的資料夾') }}：<code>{{ r.suggestion.value }}</code>
           </p>
           <p class="action-note">{{ ct('開通後這個 Agent 會重新連線，之後就能使用這個範圍。') }}</p>
           <!-- The suggested kind is the filled button; the other stays available. -->
-          <f7-button :fill="r.suggestion?.type !== 'website'" round large :disabled="busy || r.agentArchived" @click="grant('folder')">{{ ct('開通資料夾…') }}</f7-button>
-          <f7-button :fill="r.suggestion?.type === 'website'" round large :disabled="busy || r.agentArchived" @click="grant('website')">{{ ct('開通網站…') }}</f7-button>
+          <template v-if="r.kind !== 'digest'">
+            <f7-button :fill="r.suggestion?.type !== 'website'" round large :disabled="busy || r.agentArchived" @click="grant('folder')">{{ ct('開通資料夾…') }}</f7-button>
+            <f7-button :fill="r.suggestion?.type === 'website'" round large :disabled="busy || r.agentArchived" @click="grant('website')">{{ ct('開通網站…') }}</f7-button>
+          </template>
           <f7-button round large :disabled="busy" @click="resolve('dismissed')">{{ ct('略過') }}</f7-button>
         </section>
 
@@ -98,7 +107,7 @@ import { computed, ref } from 'vue';
 import { f7 } from 'framework7-vue';
 import { api } from '../js/api.js';
 import { ct } from '../js/agent-i18n.js';
-import { reportMeta, reportKind, reportTime, listOrNone } from '../js/access-reports.js';
+import { reportMeta, reportKind, reportTime, listOrNone, digestLine } from '../js/access-reports.js';
 
 const props = defineProps({ f7route: { type: Object, default: () => ({}) } });
 const id = props.f7route?.query?.id || '';
@@ -196,4 +205,6 @@ function resolve(resolution) {
 .report-dismissed { color: #8e8e93; }
 .report-self { color: #64d2ff; }
 .agent-reason p { margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
+.agent-reason h3 small { font-weight: 400; opacity: 0.6; }
+.earlier-reasons { margin: 10px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.45; opacity: 0.7; overflow-wrap: anywhere; }
 </style>

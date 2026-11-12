@@ -176,7 +176,7 @@ function messageWindow(c,{limit,before}={}) {
 // agent's explanation or, without one, what it wrote just before.
 function withReports(m){
  if(m.notice!=='blocked'||!Array.isArray(m.reports))return m;
- return {...m,reports:m.reports.map(x=>{const r=reports.get(x.id);if(!r)return {...x,status:'gone'};const e=r.explanation;return {...x,status:r.status,resolution:r.resolution||null,...(e?{explanation:{why:e.why,instead:e.instead,stillNeeded:e.stillNeeded}}:{}),...(r.agentWords?{agentWords:r.agentWords}:{})};})};
+ return {...m,reports:m.reports.map(x=>{const r=reports.get(x.id);if(!r)return {...x,status:'gone'};const e=r.explanation;return {...x,status:r.status,resolution:r.resolution||null,notified:!!r.pushedAt,...(e?{explanation:{why:e.why,instead:e.instead,stillNeeded:e.stillNeeded},explanationCount:r.explanationCount||1}:{}),...(r.agentWords?{agentWords:r.agentWords}:{})};})};
 }
 // Full-text search over one person's own conversations. Every word must appear, in
 // any case and with or without spaces inside it (so a query without spaces still
@@ -1085,13 +1085,52 @@ function askExplain(g,filed,when){
  const have=new Set((g.reportAsks||[]).map(a=>a.id));
  g.reportAsks=[...(g.reportAsks||[]),...filed.filter(r=>!have.has(r.id)).map(r=>({id:r.id,tool:toolName(r.tool)||'tool',when}))].slice(-20);
 }
-const askText=list=>'[CC Agent: '+(list.length===1?'your '+list[0].tool+' call was':list.length+' of your tool calls ('+list.map(a=>a.tool).join(', ')+') were')+' refused as outside this agent\'s scope and filed as scope report '+list.map(a=>a.id).join(', ')+'. The owner sees '+(list.length===1?'it':'them')+' in this chat; an admin is told only if the access is still needed. Before going on, call explain_report for '+(list.length===1?'it':'each')+': why (what you were trying to do and why you needed that action), instead (what you did instead, or "waiting for access") and still_needed (false if you found a way within your scope). A sentence or two each. This note is from CC Agent, not the owner, and needs no reply.]';
+// late: asked only with the next message (askExplain 'next'), by when the admins' wait
+// (REPORT_GRACE_MS) has usually run out and they were told already, so it does not promise
+// that they are told only when it is still needed.
+const askText=(list,late)=>'[CC Agent: '+(list.length===1?'your '+list[0].tool+' call was':list.length+' of your tool calls ('+list.map(a=>a.tool).join(', ')+') were')+' refused as outside this agent\'s scope and filed as scope report '+list.map(a=>a.id).join(', ')+'. The owner sees '+(list.length===1?'it':'them')+' in this chat; '+(late?'it came up when your last turn ended, so an admin may have been told already. Now,':'an admin is told only if the access is still needed. Before going on,')+' call explain_report for '+(list.length===1?'it':'each')+': why (what you were trying to do and why you needed that action), instead (what you did instead, or "waiting for access") and still_needed (false if you found a way within your scope). A sentence or two each. This note is from CC Agent, not the owner, and needs no reply.]';
 // At a turn's end an ask not yet handed over waits for the next message.
 const asksWait=g=>{for(const a of g.reportAsks||[])a.when='next';};
 // What the scope refused without asking: the OS sandbox fails a Bash command,
 // restricted mode refuses a path "outside" the agent's folders, a deny rule refuses
 // an excluded one, the sandbox proxy drops a connection. None of these reach the
 // permission relay, so they are read back from the turn's transcript when it ends.
+// explain_report's limits: calls a minute per agent (in memory); the
+// explanations a report keeps, the latest whole and the ones before it to EXPLAIN_EARLIER_CHARS;
+// and how many reports an agent may say it solved itself within SELF_DIGEST_MS before the
+// admins get one digest of them.
+const EXPLAIN_PER_MINUTE=10,EXPLAIN_KEEP=5,EXPLAIN_EARLIER_CHARS=200,SELF_DIGEST_COUNT=5,SELF_DIGEST_MS=24*3600_000;
+const explainCalls=new Map();
+// A different word than the last is added to the report's history; the same one changes nothing.
+function explainPatch(r,entry){
+ const last=r.explanation;
+ if(last&&last.why===entry.why&&last.instead===entry.instead&&last.stillNeeded===entry.stillNeeded)return {};
+ const short=v=>String(v||'').slice(0,EXPLAIN_EARLIER_CHARS);
+ const earlier=[...(r.explanationHistory||[]),...(last?[{why:short(last.why),instead:short(last.instead),stillNeeded:last.stillNeeded,at:last.at}]:[])].slice(-(EXPLAIN_KEEP-1));
+ return {explanation:entry,explanationCount:(r.explanationCount||(last?1:0))+1,...(earlier.length?{explanationHistory:earlier}:{})};
+}
+// The agent's own say-so ends a report only where the turn was the owner's or its own: an
+// agent that talks to people outside, or a turn started by an outside, peer or other
+// agent's message, could be talked into hiding what it tried.
+function selfResolveAllowed(c,r){
+ if(outsideTaken(c))return false;
+ const m=r.messageId?c.messages.find(x=>x.id===r.messageId):null;
+ return !(m&&(m.external||m.peer||m.agentMessage));
+}
+// Many reports an agent said it solved itself (SELF_DIGEST_COUNT within SELF_DIGEST_MS) are
+// told to the admins once, as a digest report of CC Agent's (kind 'digest'): on the reports
+// page as one to review, pushed like a report. One a window per agent; while that one is
+// open its count goes on up, with no push of its own.
+function selfResolvedDigest(c,g){
+ const since=Date.now()-SELF_DIGEST_MS,all=reports.list().filter(r=>r.conversationId===c.id);
+ const solved=all.filter(r=>r.status==='self-resolved'&&Date.parse(r.explanation?.at||r.at)>=since);
+ if(solved.length<SELF_DIGEST_COUNT)return;
+ const tools=new Map();for(const r of solved)tools.set(r.tool||'tool',(tools.get(r.tool||'tool')||0)+1);
+ const detail=[...tools].sort((a,b)=>b[1]-a[1]).slice(0,5).map(([t,n])=>t+' ×'+n).join(', ');
+ const last=all.find(r=>r.kind==='digest'&&Date.parse(r.at)>=since);
+ if(last){if(last.status==='open'&&!last.adminActedAt)reports.update(last.id,{count:solved.length,detail});return;}
+ reports.add({owner:c.owner,conversationId:c.id,title:c.title,generation:g.number,sessionId:g.sessionId,messageId:null,kind:'digest',key:'digest:'+c.id+':'+Date.now(),tool:'',count:solved.length,detail,notifyAfter:new Date().toISOString()});
+}
 const BLOCKED=/Operation not permitted|operation not permitted| is outside |denied by your permission settings|deny network-outbound|sandbox_violations/;
 const MAX_BLOCKED_PER_TURN=5;
 function fileBlocked(c,g){
@@ -1544,14 +1583,19 @@ function bridge(c,action,data={}) {
   const ask=g.phase==='busy'&&(g.reportAsks||[]).find(a=>a.when==='now');
   if(ask){g.reportAsks=g.reportAsks.filter(a=>a!==ask);save(c);return {message:{id:'report-'+ask.id,text:askText([ask]),sender:'automatic'}};}
   const pending=c.messages.find(m=>m.delivery==='queued');
+  // The questions waiting for the next message (what the sandbox refused, found at a turn's
+  // end) go just before it, as an event of their own from CC Agent (sender automatic,
+  // message_id report-<id>), never inside a message another sender's tag is on; the
+  // message itself follows on the next poll, into the same turn.
+  const later=pending&&g.ready?(g.reportAsks||[]).filter(a=>a.when==='next'):[];
+  if(later.length){g.reportAsks=g.reportAsks.filter(a=>a.when!=='next');g.phase='busy';save(c);return {message:{id:'report-'+later[0].id,text:askText(later,true),sender:'automatic'}};}
   if(pending&&g.ready){// Working for a group from the moment its message is handed over, and for nothing
   // else once any other message is.
   // A group chat named with @ in its own chat counts the same: what the
   // agent then sends that group's members shows there.
   const named=pending.mentions?.find(m=>m.group&&groupStore.get(m.id)?.owner===c.owner);
   if(!pending.wrapUp)c.groupContext=pending.group?{id:pending.group.id,at:Date.now()}:named?{id:named.id,at:Date.now()}:null;const skipped=g.startupSkipped&&!g.bootstrapped;if(skipped)g.bootstrapped=true;
-  const later=(g.reportAsks||[]).filter(a=>a.when==='next');if(later.length)g.reportAsks=g.reportAsks.filter(a=>a.when!=='next');
-  const text=(skipped?STARTUP_REMINDER:'')+(later.length?askText(later)+'\n\n':'')+profileMessage(c,g,pending.peer?peerWrap(c,pending,neutralSender(attachments.channelText(stateRoot,c,pending))):scheduleNote(pending)+limitResumeNote(pending)+wrapUpNote(pending)+groupNote(c,pending)+mentionNote(pending)+neutralSender(attachments.channelText(stateRoot,c,pending)));pending.delivery='delivered';pending.deliveredAt=new Date().toISOString();g.deliveryEpoch=(g.deliveryEpoch||0)+1;g.phase='busy';save(c);return {message:{id:pending.id,text,...senderOf(c,pending),...replyMeta(pending)},rotate:c.pendingRotation};}
+  const text=(skipped?STARTUP_REMINDER:'')+profileMessage(c,g,pending.peer?peerWrap(c,pending,neutralSender(attachments.channelText(stateRoot,c,pending))):scheduleNote(pending)+limitResumeNote(pending)+wrapUpNote(pending)+groupNote(c,pending)+mentionNote(pending)+neutralSender(attachments.channelText(stateRoot,c,pending)));pending.delivery='delivered';pending.deliveredAt=new Date().toISOString();g.deliveryEpoch=(g.deliveryEpoch||0)+1;g.phase='busy';save(c);return {message:{id:pending.id,text,...senderOf(c,pending),...replyMeta(pending)},rotate:c.pendingRotation};}
   return {rotate:c.pendingRotation};
  }
  // An agent sets up a long-running schedule the owner agreed to in its conversation;
@@ -1596,23 +1640,38 @@ function bridge(c,action,data={}) {
  }
  // The agent's own word on a report it caused (explain_report): why it wanted that, what it
  // did instead, and whether it still needs it. Only a report of this agent's current
- // session; a later call replaces the earlier one. Not needed any more, an open report
- // becomes a record (self-resolved): no push, not in the admins' queue. An admin's own decision stays.
+ // session, at most EXPLAIN_PER_MINUTE calls a minute. Each different word is kept, the
+ // latest whole and a few before it shortened (explainPatch); the same word again writes
+ // nothing. Not needed any more, an open report becomes a record (自行解決): no push, not in
+ // the admins' queue, except for an agent that talks to people outside or a turn another
+ // sender's message started, where it stays open. Once an admin has
+ // acted on a report (reopened, dismissed or granted it), its status is the admin's.
  if(action==='report-explain'){
+  const now=Date.now(),recent=(explainCalls.get(c.id)||[]).filter(t=>now-t<60_000);
+  if(recent.length>=EXPLAIN_PER_MINUTE)throw error('Too many explain_report calls; wait a minute',429);
+  recent.push(now);explainCalls.set(c.id,recent);
   const r=typeof data.reportId==='string'?reports.get(data.reportId):null;
-  if(!r||r.conversationId!==c.id||r.generation!==g.number)throw error('No such scope report in this session',404);
+  if(!r||r.conversationId!==c.id||r.generation!==g.number||r.kind==='digest')throw error('No such scope report in this session',404);
   if(typeof data.stillNeeded!=='boolean')throw error('still_needed must be true or false',400);
   const clip=v=>typeof v==='string'?v.replace(/\r\n?/g,'\n').replace(/[\x00-\x08\x0b-\x1f\x7f]/g,'').trim().slice(0,1000):'';
   const why=clip(data.why),instead=clip(data.instead);
   if(!why)throw error('why is required',400);
-  const patch={explanation:{why,instead,stillNeeded:data.stillNeeded,at:new Date().toISOString()}};
-  if(!data.stillNeeded&&r.status==='open')Object.assign(patch,{status:'self-resolved',notifyPending:false});
-  else if(data.stillNeeded&&r.status==='self-resolved')Object.assign(patch,{status:'open',notifyPending:true,notifyAfter:new Date().toISOString()});
-  else if(data.stillNeeded&&r.status==='open')patch.notifyAfter=new Date().toISOString();
-  reports.update(r.id,patch);
-  g.reportAsks=(g.reportAsks||[]).filter(a=>a.id!==r.id);
-  save(c);
-  return {ok:true,reportId:r.id,status:patch.status||r.status};
+  const patch=explainPatch(r,{why,instead,stillNeeded:data.stillNeeded,at:new Date(now).toISOString()});
+  const locked=!!r.adminActedAt,kept=!locked&&!data.stillNeeded&&r.status==='open'&&!selfResolveAllowed(c,r);
+  if(!locked){
+   if(!data.stillNeeded&&r.status==='open'&&!kept)Object.assign(patch,{status:'self-resolved',notifyPending:false});
+   // Reopened by the agent, pushed only if no push went out for it before and it has not
+   // been reopened with one already, so flipping false and true rings no one twice.
+   else if(data.stillNeeded&&r.status==='self-resolved'){const ring=!r.pushedAt&&!r.reopenPushed;Object.assign(patch,{status:'open',notifyPending:ring,...(ring?{reopenPushed:true,notifyAfter:new Date(now).toISOString()}:{})});}
+   // Still needed: the admins' wait ends now, if it has not already.
+   else if(data.stillNeeded&&r.status==='open'&&r.notifyPending&&!(Date.parse(r.notifyAfter)<=now))patch.notifyAfter=new Date(now).toISOString();
+  }
+  const asked=(g.reportAsks||[]).some(a=>a.id===r.id);
+  if(Object.keys(patch).length)reports.update(r.id,patch);
+  if(patch.status==='self-resolved')selfResolvedDigest(c,g);
+  if(asked){g.reportAsks=g.reportAsks.filter(a=>a.id!==r.id);save(c);}
+  const status=patch.status||r.status;
+  return {ok:true,reportId:r.id,status,...(locked?{note:'An admin has already acted on this report, so its status stays as the admin set it; your explanation is kept.'}:kept?{note:'This report stays open for an admin: this agent talks to people outside, or the turn came from someone other than the owner. Your explanation is kept.'}:{})};
  }
  if(action==='permission-ack'){permissions.ack(g,data.request_id);save(c);return {ok:true};}
  // The agent speaks in its chat on its own: an update on work it took up from
@@ -2833,6 +2892,18 @@ function clearFullAccessFor(owner){
  for(const c of relaunch){try{launch(c);}catch(e){console.error(`relaunch after a demotion failed for ${c.id}: ${e.message}`);}}
  return {cleared,failed};
 }
+// An admin's decision on a report (the reports page: reopen, dismiss, grant): written to the
+// report and to the audit log, so it is on record beyond the report file, whose oldest
+// records go past its cap. Marked as the admin's, so the agent's
+// explain_report no longer changes the report's status.
+function resolveAccessReport(id,patch,who={}){
+ const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);
+ const action=patch.resolution==='granted'?'grant':patch.status==='open'?'reopen':'dismiss';
+ const at=new Date().toISOString();
+ const done=reports.update(id,{...patch,adminActedAt:at,adminAction:action});
+ try{require('./services/audit').audit({source:'access-report',action,reportId:id,conversationId:r.conversationId,agentName:r.title||'',owner:r.owner,kind:r.kind,tool:String(r.tool||'').slice(0,80),by:who.id,byName:who.name,...(patch.granted?{granted:patch.granted}:{})});}catch(e){console.error('access report audit:',e.message);}
+ return reportView(done);
+}
 function reportView(r){const c=state.conversations.find(x=>x.id===r.conversationId);return {...r,agentTitle:c?.title||r.title,agentArchived:!c||!!c.archived,agentPhase:c?active(c).phase:null,access:c?agentAccess.of(c):null,suggestion:require('./accessReports').suggest(r)};}
 // Pull the turns that happened outside this conversation (the owner's own
 // terminal, a session driven by a channel plugin) into the page, without touching the ones it
@@ -2997,7 +3068,9 @@ function messageTranscript(c,messageId){
 function pendingNotifications(){return [...groupStore.list().flatMap(x=>x.messages.filter(m=>m.notifyPending).map(m=>({conversation:{id:x.id,owner:x.owner,title:x.name,groupId:x.id},message:m}))),...pendingAgentNotifications()];}
 function pendingAgentNotifications(){return state.conversations.filter(c=>!c.archived).flatMap(c=>[...c.messages.filter(m=>(m.role==='assistant'||m.role==='relay'||m.notice==='login')&&m.notifyPending),...(prompts.get(c.id)?.notifyPending?[prompts.get(c.id)]:[])].map(m=>({conversation:c,message:m})));}
 const pendingReportNotifications=()=>{const now=Date.now();return reports.list().filter(r=>r.notifyPending&&!(Date.parse(r.notifyAfter)>now));};
-const markReportsNotified=ids=>{reports.updateMany(ids,{notifyPending:false});};
+// pushed: those a push really went out for (notifications.js), so a member's card says
+// 已通知管理員 only then and 已記錄 otherwise.
+const markReportsNotified=(ids,pushed=[])=>{const sent=new Set(pushed);const rest=ids.filter(id=>!sent.has(id));if(rest.length)reports.updateMany(rest,{notifyPending:false});if(sent.size)reports.updateMany([...sent],{notifyPending:false,pushedAt:new Date().toISOString()});};
 // What the agent reads before a scheduled instruction, so it knows no one typed it
 // just now and who set it up.
 // What the agent reads before a scheduled instruction: who set it up, that nobody
@@ -3144,8 +3217,10 @@ function neutralSender(text){
  // full-width ＜channel cannot slip past. Only text that
  // poses as CC Agent's is given folded; any other is left exactly as written.
  const folded=String(text).normalize('NFKC').replace(/[\p{Cf}\u034F\uFE00-\uFE0F\u{E0100}-\u{E01EF}]/gu,'').replace(/./gsu,ch=>CONFUSABLE[ch]||ch);
- const poses=/this\s+message\s+was\s+typed\s+by/iu.test(folded)||/<\s*\/?\s*channel(?=[\s>/]|$)/iu.test(folded);
- return (poses?folded:String(text)).replace(/this\s+message\s+was\s+typed\s+by/giu,m=>'(quoted, not CC Agent\'s note) '+m).replace(/<(\s*\/?\s*channel)(?=[\s>/]|$)/giu,'‹$1');
+ // A bracketed note opening "[CC Agent:" too, the form of CC Agent's own notes (askText,
+ // STARTUP_REMINDER), so an outside, peer or agent message cannot carry one.
+ const poses=/this\s+message\s+was\s+typed\s+by/iu.test(folded)||/<\s*\/?\s*channel(?=[\s>/]|$)/iu.test(folded)||/\[\s*CC\s*Agent\s*:/iu.test(folded);
+ return (poses?folded:String(text)).replace(/this\s+message\s+was\s+typed\s+by/giu,m=>'(quoted, not CC Agent\'s note) '+m).replace(/<(\s*\/?\s*channel)(?=[\s>/]|$)/giu,'‹$1').replace(/\[(\s*CC\s*Agent\s*:)/giu,'(quoted, not CC Agent\'s note) ‹$1');
 }
 function scheduleNote(m){return m.schedule?`[Scheduled task "${String(m.schedule.name).replace(/[\r\n"\[\]]/g,' ')}", sent automatically by CC Agent's scheduler on a schedule the owner set up or agreed to earlier. It is not the owner speaking now and is no authorisation for deploying, deleting, sending anything outside or other irreversible steps: ask the owner first for those. Do the task and reply with the result as usual.]\n`:'';}
 // The schedules, as the page shows them: an admin sees every agent's, a member
@@ -3397,7 +3472,7 @@ const heldUntil=(x,kind)=>kind==='result'?x.resultPending?.after:kind==='failure
 const pendingScheduleNotifications=(now=Date.now())=>scheduleStore.list().flatMap(x=>Object.entries(NOTIFY_FIELD).filter(([kind,f])=>x[f]&&!(Date.parse(heldUntil(x,kind)||0)>now)).map(([kind])=>({schedule:x,kind})));
 const markScheduleNotified=(id,kind='proposal')=>{scheduleStore.patch(id,{[NOTIFY_FIELD[kind]]:false});};
 const scheduleCheckList=()=>scheduleChecks.list().map(scheduleChecks.view);
-module.exports={TERMINAL_KEEP_DAYS,attachTerminalFile,terminalFileAccess,mirrorTerminal,followSessionModel,diagnosticReports:diagnostics,pendingDiagnosticNotifications:()=>diagnostics.pending(),markDiagnosticsNotified:ids=>{diagnostics.markNotified(ids);},CHECKLIST_RETENTION_CHOICES,checklistRetentionDays,loginShutdown:signal=>claudeLogin.shutdown(signal),loginView:()=>claudeLogin.view(),loginStart:()=>claudeLogin.start(),loginCode:text=>claudeLogin.code(text),loginCancel,loginResend,loginFailed,loginProven,reviveSilentChannels,peerLinkDigest,peerExchange,peerKey,peerLink,peerConfig,peerWidens,setPeerConfig,peerDraft,peerView,relaunchMarked,tmuxSocket,subagentList,runLimitResumes,runWrapUps,setWrapUp,mentionsFor,commandInGroup,groupList,reorderGroups,groupFor,groupView,createGroup,updateGroup,removeGroup,updateGroupChecklist,sendToGroup,searchGroup,deliverGroups,chooseTerminalOption,updateChecklist:(c,data,by)=>{const r=checklists.apply(c,data,by);save(c);return r;},syncAllRelays,syncRelays,scheduleCheckList,schedulesFor,addSchedule,approveSchedule,updateSchedule,removeSchedule,rejectSchedule,runSchedules,runScheduleNow,testSchedule,SCHEDULE_WAIT_MS,pendingScheduleNotifications,markScheduleNotified,searchMessages,runCommand,commandsFor,setThreshold,setSubagents,applyAgentSubagents,applySubagentDefault,subagentEnv,setAutoCompact,applyAgentAutoCompact,profileRestartNeeds,applyAgentRestart,applyAutoCompactDefault,autoCompactEnv,AUTO_COMPACT_PRESETS,listPreferences,setListPreferences,setAvatar,clearAvatar,avatarLocation,AVATAR_MAX_BYTES,clearFullAccessFor,pendingReportNotifications,markReportsNotified,archiveFor,setAccessFor,accessReports:()=>reports.list().map(reportView),accessReport:id=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(r);},resolveAccessReport:(id,patch)=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(reports.update(id,patch));},grantAccess,reconcile,reconnect,purgeOwner,sweepRetention,stopAgentsOf,bridgeActions:()=>[...BRIDGE_ACTIONS],archivedList,restoreArchived,keepArchived,purgeArchived,archiveRetentionDays,RETENTION_MAX_DAYS,UNSENT_ATTACHMENT_HOURS,STALE_MS,STARTUP_SLOW_MS,STARTUP_LIMIT_MS,messageTranscript,importHistory,interrupt,markViewing,markAllRead,isViewing,attachableFolders,MESSAGE_PAGE,updateProfile,reorder,pendingNotifications,getPreferences,setPreferences,decidePermission,confirmWorkspace,confirmChannel,compact,stateRoot,create,get,list,publicView,launch,stop,send,rotate,bridge,byToken,active,save,error};
+module.exports={TERMINAL_KEEP_DAYS,attachTerminalFile,terminalFileAccess,mirrorTerminal,followSessionModel,diagnosticReports:diagnostics,pendingDiagnosticNotifications:()=>diagnostics.pending(),markDiagnosticsNotified:ids=>{diagnostics.markNotified(ids);},CHECKLIST_RETENTION_CHOICES,checklistRetentionDays,loginShutdown:signal=>claudeLogin.shutdown(signal),loginView:()=>claudeLogin.view(),loginStart:()=>claudeLogin.start(),loginCode:text=>claudeLogin.code(text),loginCancel,loginResend,loginFailed,loginProven,reviveSilentChannels,peerLinkDigest,peerExchange,peerKey,peerLink,peerConfig,peerWidens,setPeerConfig,peerDraft,peerView,relaunchMarked,tmuxSocket,subagentList,runLimitResumes,runWrapUps,setWrapUp,mentionsFor,commandInGroup,groupList,reorderGroups,groupFor,groupView,createGroup,updateGroup,removeGroup,updateGroupChecklist,sendToGroup,searchGroup,deliverGroups,chooseTerminalOption,updateChecklist:(c,data,by)=>{const r=checklists.apply(c,data,by);save(c);return r;},syncAllRelays,syncRelays,scheduleCheckList,schedulesFor,addSchedule,approveSchedule,updateSchedule,removeSchedule,rejectSchedule,runSchedules,runScheduleNow,testSchedule,SCHEDULE_WAIT_MS,pendingScheduleNotifications,markScheduleNotified,searchMessages,runCommand,commandsFor,setThreshold,setSubagents,applyAgentSubagents,applySubagentDefault,subagentEnv,setAutoCompact,applyAgentAutoCompact,profileRestartNeeds,applyAgentRestart,applyAutoCompactDefault,autoCompactEnv,AUTO_COMPACT_PRESETS,listPreferences,setListPreferences,setAvatar,clearAvatar,avatarLocation,AVATAR_MAX_BYTES,clearFullAccessFor,pendingReportNotifications,markReportsNotified,archiveFor,setAccessFor,accessReports:()=>reports.list().map(reportView),accessReport:id=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(r);},resolveAccessReport,grantAccess,reconcile,reconnect,purgeOwner,sweepRetention,stopAgentsOf,bridgeActions:()=>[...BRIDGE_ACTIONS],archivedList,restoreArchived,keepArchived,purgeArchived,archiveRetentionDays,RETENTION_MAX_DAYS,UNSENT_ATTACHMENT_HOURS,STALE_MS,STARTUP_SLOW_MS,STARTUP_LIMIT_MS,messageTranscript,importHistory,interrupt,markViewing,markAllRead,isViewing,attachableFolders,MESSAGE_PAGE,updateProfile,reorder,pendingNotifications,getPreferences,setPreferences,decidePermission,confirmWorkspace,confirmChannel,compact,stateRoot,create,get,list,publicView,launch,stop,send,rotate,bridge,byToken,active,save,error};
 
 // Account deletion checks the agents an account actually has running.
 module.exports.lifecycleInventory=async()=>({sources:[{provider:"claude",providerLabel:"Claude Code",ok:true}],schedules:state.conversations.filter(c=>!['stopped','error'].includes(active(c).phase)).map(c=>({id:c.id,ownerUserId:c.owner,provider:"claude",status:active(c).phase,running:active(c).phase==="busy"}))});

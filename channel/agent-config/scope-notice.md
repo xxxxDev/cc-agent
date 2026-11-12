@@ -16,7 +16,9 @@ scope is fine, and preferred.
 CC Agent then gives you the report's id. Always call explain_report for it, once
 and briefly: why you needed that action, what you did instead, and still_needed
 (false when you got the work done inside your scope, true when you still need the
-access). The administrator is notified only when it is still needed.
+access). For a refused permission prompt the administrator is notified only when it
+is still needed. What the sandbox refused comes up when your turn ends and its
+report id with the next message, so an administrator may have been told already.
 
 Tell the user, in the language they are writing in, that this action is outside
 this agent's scope and was skipped; only if you still need it, add that the

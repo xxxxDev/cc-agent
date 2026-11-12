@@ -893,8 +893,19 @@ const WEB_REPLY = /^mcp__executive__reply$/;
 // (message_id report-<id>, sender automatic): an executive channel prompt without a
 // web message's id, never someone's words. The same question put before the next web
 // message is not part of what was asked either.
-const EXECUTIVE_NOTICE = /^\s*<channel\s+source="executive"\s/;
+// Only the notice's own block goes: a record Claude Code merged with what came in after
+// it keeps the rest.
+const EXECUTIVE_NOTICE = /^\s*<channel\s+source="executive"(?![^>]*\smessage_id="[0-9a-f-]{36}")(?:\s[^>]*)?>[\s\S]*?<\/channel>\s*/;
 const REPORT_ASK = /^\[CC Agent: [\s\S]*? refused as outside this agent's scope [\s\S]*?This note is from CC Agent, not the owner, and needs no reply\.\]\s*/;
+// CC Agent's note when a start-up did not finish (agentStore STARTUP_REMINDER), which a
+// report's question could follow.
+const STARTUP_NOTE = /^\[CC Agent: your start-up did not finish\.[\s\S]*?this note is from CC Agent, not the owner\.\]\s*/;
+// CC Agent's notes at the start of what was asked, however many and in whichever order.
+function withoutNotes(text) {
+  let rest = text, before;
+  do { before = rest; rest = rest.replace(STARTUP_NOTE, '').replace(REPORT_ASK, ''); } while (rest !== before);
+  return rest;
+}
 const MAX_IMPORT = 1000;
 
 function readableText(value) {
@@ -952,11 +963,15 @@ function history(stateRoot, conversation, skipped = new Set()) {
       try { record = JSON.parse(line); } catch { continue; }
       if (!record || record.isSidechain || typeof record.uuid !== 'string') continue;
       if (record.type === 'user') {
-        const content = record.message?.content;
-        if (typeof content !== 'string') continue;   // tool results and other structured turns
+        if (typeof record.message?.content !== 'string') continue;   // tool results and other structured turns
         // First: a compaction summary retells earlier turns, web markers included,
         // and must not end the exchange it happened in.
         if (record.isCompactSummary) continue;
+        // CC Agent's own notice into the turn: left out within the exchange it came into,
+        // which goes on as before; only its own text when more follows in the record.
+        let content = record.message.content, notice = false;
+        while (EXECUTIVE_NOTICE.test(content)) { content = content.replace(EXECUTIVE_NOTICE, ''); notice = true; }
+        if (notice && !content.trim()) { skipped.add(record.uuid); continue; }
         if (WEB_TURN.test(content)) {
           const id = WEB_MESSAGE_ID.exec(content)[1];
           close(); startup = false;
@@ -964,15 +979,13 @@ function history(stateRoot, conversation, skipped = new Set()) {
           const at = content.lastIndexOf(PROFILE_PREFIX);
           // The profile header sits inside the channel wrapper or before it.
           const rest = at >= 0 ? content.slice(at + PROFILE_PREFIX.length) : content;
-          const text = readableText(CHANNEL_PROMPT.test(rest) ? rest : rest.replace(/\s*<\/channel>\s*$/, '')).replace(REPORT_ASK, '');
+          const text = withoutNotes(readableText(CHANNEL_PROMPT.test(rest) ? rest : rest.replace(/\s*<\/channel>\s*$/, '')));
           if (!text) { active = false; continue; }
           active = true;
           turns.push({sourceUuid: record.uuid, role: 'user', text, at: record.timestamp || null, generation: run.number});
           continue;
         }
         if (content.trimStart().startsWith(RUNNER_START)) { close(); active = false; startup = true; skipped.add(record.uuid); continue; }
-        // Within the exchange it came into, which goes on as before.
-        if (EXECUTIVE_NOTICE.test(content)) { skipped.add(record.uuid); continue; }
         if ((record.isMeta && !CHANNEL_PROMPT.test(content)) || NOT_CONVERSATION.some(marker => content.includes(marker))
           || NOTE_OPENINGS.some(opening => content.trimStart().startsWith(opening))) { skipped.add(record.uuid); continue; }
         const text = readableText(content);

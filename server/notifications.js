@@ -4,7 +4,8 @@ const {getPushConfig}=require('./services/pushCrypto');
 function replyNotification(c,m){return {conversationId:c.id,replyId:m.id,ownerUserId:c.owner,agentName:c.title,replyText:m.notifyText||m.text,...(c.groupId?{groupId:c.groupId}:{})};}
 // One new scope report, from what was stored when it was filed, so a retry builds
 // the same notification even if the agent has been renamed since.
-function reportNotification(r){return {kind:'access_report',conversationId:r.conversationId,replyId:'access-report:'+r.id,reportId:r.id,ownerUserId:r.owner,agentName:r.title,reportKind:r.kind,tool:r.tool};}
+// A digest (kind 'digest') carries how many reports the agent said it solved itself.
+function reportNotification(r){return {kind:'access_report',conversationId:r.conversationId,replyId:'access-report:'+r.id,reportId:r.id,ownerUserId:r.owner,agentName:r.title,reportKind:r.kind,tool:r.tool,...(r.kind==='digest'?{count:r.count}:{})};}
 // A schedule an agent proposed, to the admins, who approve it on the Schedules page, where it
 // waits; the agent tells them in its chat. This push stays the admins': its gate
 // sends to admins only. Built from what was stored when it was proposed, so a
@@ -79,13 +80,14 @@ function startNotifications(agents,service=getDefaultPushService(),admins=active
   if(done.length)agents.markDiagnosticsNotified(done);
  }
  async function flushReports(){
-  const done=[];
+  // pushed: the ones a push really went out for, so a member's card says 已通知管理員 only then.
+  const done=[],pushed=[];
   for(const r of agents.pendingReportNotifications()){
    const failed=failures.get(r.id);if(failed&&now()<failed.retryAt)continue;
    try{
     // A report already handled before it went out needs no notification.
     const quiet=now()-(lastPush.get(r.conversationId)??-Infinity)<quietMs;
-    if(r.status==='open'&&!quiet){await service.notifyAccessReport(reportNotification(r),await admins());lastPush.set(r.conversationId,now());}
+    if(r.status==='open'&&!quiet){await service.notifyAccessReport(reportNotification(r),await admins());lastPush.set(r.conversationId,now());pushed.push(r.id);}
     failures.delete(r.id);done.push(r.id);
    }catch{
     const attempts=(failed?.attempts||0)+1;
@@ -93,7 +95,7 @@ function startNotifications(agents,service=getDefaultPushService(),admins=active
     else{failures.set(r.id,{attempts,retryAt:now()+Math.min(60_000*attempts,10*60_000)});console.error(`Report notification ${r.id} failed, attempt ${attempts}`);}
    }
   }
-  if(done.length)agents.markReportsNotified(done);
+  if(done.length)agents.markReportsNotified(done,pushed);
  }
  // Separately, so a reply that cannot be sent does not hold back the reports. A
  // flush already running is joined, not started twice.

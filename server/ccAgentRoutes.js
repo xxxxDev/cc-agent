@@ -108,14 +108,14 @@ app.post('/api/access-reports/:id/resolve',...reviewer,async(req,res,next)=>{try
  const resolution=req.body?.resolution;if(!['dismissed','reopen'].includes(resolution))throw agents.error('Unknown resolution');
  agents.accessReport(req.params.id);
  const patch=resolution==='reopen'?{status:'open',resolution:null,resolvedAt:null,resolvedBy:null}:{status:'resolved',resolution:'dismissed',resolvedAt:new Date().toISOString(),resolvedBy:req.username};
- res.json((await named([agents.resolveAccessReport(req.params.id,patch)]))[0]);
+ res.json((await named([agents.resolveAccessReport(req.params.id,patch,{id:req.userId,name:req.username})]))[0]);
 }catch(e){next(e);}});
 app.post('/api/access-reports/:id/grant',...reviewer,async(req,res,next)=>{try{
  const {folder,website}=req.body||{};
  if((typeof folder==='string')===(typeof website==='string'))throw agents.error('Grant exactly one folder or one website');
  const report=agents.accessReport(req.params.id);
  const {access,granted}=agents.grantAccess(report.conversationId,typeof folder==='string'?{folder}:{website},req.role);
- res.json((await named([agents.resolveAccessReport(req.params.id,{status:'resolved',resolution:'granted',granted,accessAfter:access,resolvedAt:new Date().toISOString(),resolvedBy:req.username})]))[0]);
+ res.json((await named([agents.resolveAccessReport(req.params.id,{status:'resolved',resolution:'granted',granted,accessAfter:access,resolvedAt:new Date().toISOString(),resolvedBy:req.username},{id:req.userId,name:req.username})]))[0]);
 }catch(e){next(e);}});
 // Diagnostics sent from Agent Profile's 「回報診斷」. Anyone
 // signed in sends one, only for an agent of their own (agents.get, as every conversation
