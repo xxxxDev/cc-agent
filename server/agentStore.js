@@ -170,7 +170,13 @@ function messageWindow(c,{limit,before}={}) {
   if(at>=0)end=at;
  }
  const start=Math.max(0,end-size);
- return {messages:all.slice(start,end),hasOlder:start>0,messageTotal:all.length};
+ return {messages:all.slice(start,end).map(withReports),hasOlder:start>0,messageTotal:all.length};
+}
+// A scope-report card (reportCard) as it stands now: what became of each report, and the
+// agent's explanation or, without one, what it wrote just before.
+function withReports(m){
+ if(m.notice!=='blocked'||!Array.isArray(m.reports))return m;
+ return {...m,reports:m.reports.map(x=>{const r=reports.get(x.id);if(!r)return {...x,status:'gone'};const e=r.explanation;return {...x,status:r.status,resolution:r.resolution||null,...(e?{explanation:{why:e.why,instead:e.instead,stillNeeded:e.stillNeeded}}:{}),...(r.agentWords?{agentWords:r.agentWords}:{})};})};
 }
 // Full-text search over one person's own conversations. Every word must appear, in
 // any case and with or without spaces inside it (so a query without spaces still
@@ -1054,7 +1060,34 @@ function rotate(c,recent=handoffSetting().recent) {
 }
 // The user message this generation is working on, for a report's context.
 function turnMessage(c){return c.messages.findLast(m=>m.role==='user'&&m.generation===c.generation&&['delivered','completed','unanswered'].includes(m.delivery));}
-function fileReport(c,g,entry){const m=turnMessage(c);return reports.add({owner:c.owner,conversationId:c.id,title:c.title,generation:g.number,sessionId:g.sessionId,messageId:m?.id||null,messageExcerpt:String(m?.text||'').slice(0,300),...entry});}
+// The admins' push waits a little (REPORT_GRACE_MS) so the agent can first say, with
+// explain_report, that it found a way within its scope; one it never answers goes out as before.
+const REPORT_GRACE_MS=75_000;
+function fileReport(c,g,entry){const m=turnMessage(c);return reports.add({owner:c.owner,conversationId:c.id,title:c.title,generation:g.number,sessionId:g.sessionId,messageId:m?.id||null,messageExcerpt:String(m?.text||'').slice(0,300),notifyAfter:new Date(Date.now()+REPORT_GRACE_MS).toISOString(),...entry});}
+// A scope report shows in the agent's own chat too: a CC Agent card where it was filed,
+// under the turn it came from. It is a system message, so it is never unread, never handed
+// to the agent and never pushed beyond the report's own push. The card keeps only the
+// reports' ids and first lines; what became of them and the agent's explanation are read
+// from the reports each time the chat is viewed (withReports).
+// A refused prompt is shown by Claude Code's own description; a refused call by what says
+// the most of its input: the command, the file or the address.
+const reportLine=r=>{const text=String(r.detail||''),field=r.kind!=='permission'&&/"(command|file_path|url|path|pattern)"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(text);let line='';if(field){try{line=JSON.parse('"'+field[2]+'"');}catch{line=field[2];}}return (line||text).split('\n').map(s=>s.trim()).find(Boolean)?.slice(0,160)||'';};
+function reportCard(c,filed,turn){
+ if(!filed.length)return null;
+ return add(c,'system','已擋下：'+filed.map(r=>[r.tool,reportLine(r)].filter(Boolean).join(' ')).join('；').slice(0,600),{notice:'blocked',turn:turn||null,reports:filed.map(r=>({id:r.id,kind:r.kind,tool:String(r.tool||'').slice(0,80),line:reportLine(r)}))});
+}
+// The agent is asked to explain each report it caused (explain_report): a refused prompt's
+// at once, as a CC Agent notice into the turn it is in (Claude Code's permission verdict
+// carries only allow or deny); what the sandbox refused, found only once the turn has
+// ended, with the next message it is handed. Never a turn of its own.
+const toolName=v=>typeof v==='string'?v.replace(/[\r\n\[\]"<>]/g,' ').trim().slice(0,80):'';
+function askExplain(g,filed,when){
+ const have=new Set((g.reportAsks||[]).map(a=>a.id));
+ g.reportAsks=[...(g.reportAsks||[]),...filed.filter(r=>!have.has(r.id)).map(r=>({id:r.id,tool:toolName(r.tool)||'tool',when}))].slice(-20);
+}
+const askText=list=>'[CC Agent: '+(list.length===1?'your '+list[0].tool+' call was':list.length+' of your tool calls ('+list.map(a=>a.tool).join(', ')+') were')+' refused as outside this agent\'s scope and filed as scope report '+list.map(a=>a.id).join(', ')+'. The owner sees '+(list.length===1?'it':'them')+' in this chat and an admin reviews '+(list.length===1?'it':'them')+'. Before going on, call explain_report for '+(list.length===1?'it':'each')+': why (what you were trying to do and why you needed that action), instead (what you did instead, or "waiting for access") and still_needed (false if you found a way within your scope). A sentence or two each. This note is from CC Agent, not the owner, and needs no reply.]';
+// At a turn's end an ask not yet handed over waits for the next message.
+const asksWait=g=>{for(const a of g.reportAsks||[])a.when='next';};
 // What the scope refused without asking: the OS sandbox fails a Bash command,
 // restricted mode refuses a path "outside" the agent's folders, a deny rule refuses
 // an excluded one, the sandbox proxy drops a connection. None of these reach the
@@ -1062,22 +1095,34 @@ function fileReport(c,g,entry){const m=turnMessage(c);return reports.add({owner:
 const BLOCKED=/Operation not permitted|operation not permitted| is outside |denied by your permission settings|deny network-outbound|sandbox_violations/;
 const MAX_BLOCKED_PER_TURN=5;
 function fileBlocked(c,g){
- // A full-access agent has no scope to have been refused by.
- const m=turnMessage(c);if(c.mode!=='claude'||!m||agentAccess.of(c).full)return;
+ const m=turnMessage(c);if(c.mode!=='claude'||!m)return;
+ // A full-access agent has no scope to have been refused by; its refused prompts still get
+ // the agent's own words read back below.
+ const scan=!agentAccess.of(c).full;
+ const unsaid=reports.list().filter(r=>r.conversationId===c.id&&r.messageId===m.id&&r.generation===g.number&&r.kind==='permission'&&r.agentWords===undefined).reverse();
+ if(!scan&&!unsaid.length)return;
  let seg;try{seg=transcript.segment(stateRoot,c,m.id);}catch{return;}
  if(!seg)return;
- const uses=[];let index=0,filed=0;
+ // What the agent wrote just before each call, shown on a report it has not explained.
+ const words=v=>String(v||'').replace(/\s+/g,' ').trim().slice(0,300);
+ const uses=[],refused=[],filed=[];let index=0,tried=0,said='';
  for(const record of seg.records)for(const block of record.blocks){
-  if(block.type==='tool_use')uses.push(block);
+  if(block.type==='text'&&record.role==='assistant')said=block.text;
+  else if(block.type==='tool_use')uses.push({block,said});
   else if(block.type==='tool_result'){
    const use=uses.shift();index+=1;const text=String(block.text||'');
+   if(block.isError&&use)refused.push(use);
    // Only a failed call, and only a few per turn: the text is the agent's own
    // output, so a successful command that merely prints these words must not
    // count, and a turn cannot flood the review queue.
-   if(!block.isError||!BLOCKED.test(text)||filed>=MAX_BLOCKED_PER_TURN)continue;filed+=1;
-   fileReport(c,g,{kind:'blocked',key:'blocked:'+g.sessionId+':'+m.id+':'+index,tool:use?.name||'',detail:String(use?.text||'').slice(0,1000),error:text.slice(0,500)});
+   if(!scan||!block.isError||!BLOCKED.test(text)||tried>=MAX_BLOCKED_PER_TURN)continue;tried+=1;
+   const r=fileReport(c,g,{kind:'blocked',key:'blocked:'+g.sessionId+':'+m.id+':'+index,tool:use?.block.name||'',detail:String(use?.block.text||'').slice(0,1000),error:text.slice(0,500),agentWords:words(use?.said)});
+   if(r)filed.push(r);
   }
  }
+ for(const r of unsaid){const at=refused.findIndex(u=>u.block.name===r.tool);const use=at>=0?refused.splice(at,1)[0]:null;reports.update(r.id,{agentWords:words(use?.said)});}
+ // Several in one turn are one card, as they came from one piece of work.
+ if(filed.length){reportCard(c,filed,m.id);askExplain(g,filed,'next');}
 }
 // Messages this generation actually took; ones still queued or just delivered to the next turn do not count as missed.
 // Messages between agents' sessions, shown in both chats: one that arrived, with who sent it, pushed to the owner; one this
@@ -1465,7 +1510,7 @@ const POSTCOMPACT_WAIT_MS=4000;
 // starting, heartbeat) and channel/hook.mjs (precompact, postcompact, result, failure).
 // Anything else is refused before it touches the agent, its heartbeat included
 // Keep it equal to the actions the channel's sources send.
-const BRIDGE_ACTIONS=new Set(['bootstrap','poll','schedule-propose','schedule-update','schedule-remove','schedule-list','permission-request','permission-ack','post','checklists','checklist','group-post','ready','reply','memory','describe','history','precompact','postcompact','result','failure','error','starting','heartbeat','peer-agents','peer-send','peer-status','starter-agents','starter-start']);
+const BRIDGE_ACTIONS=new Set(['bootstrap','poll','schedule-propose','schedule-update','schedule-remove','schedule-list','permission-request','permission-ack','post','checklists','checklist','group-post','ready','reply','memory','describe','history','precompact','postcompact','result','failure','error','starting','heartbeat','peer-agents','peer-send','peer-status','starter-agents','starter-start','report-explain']);
 function bridge(c,action,data={}) {
  if(typeof action!=='string'||!BRIDGE_ACTIONS.has(action))throw error('Unknown bridge action',404);
  const g=active(c);g.heartbeat=Date.now();
@@ -1495,6 +1540,9 @@ function bridge(c,action,data={}) {
   // Not after an error or a usage limit at start-up, which stays shown.
   if(g.phase==='starting'&&!g.compacting&&!g.manualCompact&&!g.bootstrapped&&!g.lastError&&!g.limitResume&&g.launchedAt&&Date.now()-g.launchedAt>STARTUP_TURN_GRACE_MS&&transcript.turnEndedSince(stateRoot,c,g.launchedAt)){try{markReady(c,g);g.startupSkipped=true;save(c);}catch(e){console.error(`ready without handshake for ${c.id}: ${e.message}`);}}
   const verdicts=permissions.deliveries(g);if(verdicts.length)return {permissions:verdicts};
+  // A report's question, into the turn still running (askExplain): no bubble, no delivery mark.
+  const ask=g.phase==='busy'&&(g.reportAsks||[]).find(a=>a.when==='now');
+  if(ask){g.reportAsks=g.reportAsks.filter(a=>a!==ask);save(c);return {message:{id:'report-'+ask.id,text:askText([ask]),sender:'automatic'}};}
   const pending=c.messages.find(m=>m.delivery==='queued');
   if(pending&&g.ready){// Working for a group from the moment its message is handed over, and for nothing
   // else once any other message is.
@@ -1502,7 +1550,8 @@ function bridge(c,action,data={}) {
   // agent then sends that group's members shows there.
   const named=pending.mentions?.find(m=>m.group&&groupStore.get(m.id)?.owner===c.owner);
   if(!pending.wrapUp)c.groupContext=pending.group?{id:pending.group.id,at:Date.now()}:named?{id:named.id,at:Date.now()}:null;const skipped=g.startupSkipped&&!g.bootstrapped;if(skipped)g.bootstrapped=true;
-  const text=(skipped?STARTUP_REMINDER:'')+profileMessage(c,g,pending.peer?peerWrap(c,pending,neutralSender(attachments.channelText(stateRoot,c,pending))):scheduleNote(pending)+limitResumeNote(pending)+wrapUpNote(pending)+groupNote(c,pending)+mentionNote(pending)+neutralSender(attachments.channelText(stateRoot,c,pending)));pending.delivery='delivered';pending.deliveredAt=new Date().toISOString();g.deliveryEpoch=(g.deliveryEpoch||0)+1;g.phase='busy';save(c);return {message:{id:pending.id,text,...senderOf(c,pending),...replyMeta(pending)},rotate:c.pendingRotation};}
+  const later=(g.reportAsks||[]).filter(a=>a.when==='next');if(later.length)g.reportAsks=g.reportAsks.filter(a=>a.when!=='next');
+  const text=(skipped?STARTUP_REMINDER:'')+(later.length?askText(later)+'\n\n':'')+profileMessage(c,g,pending.peer?peerWrap(c,pending,neutralSender(attachments.channelText(stateRoot,c,pending))):scheduleNote(pending)+limitResumeNote(pending)+wrapUpNote(pending)+groupNote(c,pending)+mentionNote(pending)+neutralSender(attachments.channelText(stateRoot,c,pending)));pending.delivery='delivered';pending.deliveredAt=new Date().toISOString();g.deliveryEpoch=(g.deliveryEpoch||0)+1;g.phase='busy';save(c);return {message:{id:pending.id,text,...senderOf(c,pending),...replyMeta(pending)},rotate:c.pendingRotation};}
   return {rotate:c.pendingRotation};
  }
  // An agent sets up a long-running schedule the owner agreed to in its conversation;
@@ -1539,10 +1588,31 @@ function bridge(c,action,data={}) {
   // Nothing outside an agent's scope is granted from a prompt, to anyone: an
   // admin included. Refuse it now and file it; the
   // scope is widened, if at all, from the review of these reports.
-  fileReport(c,g,{kind:'permission',key:'permission:'+g.sessionId+':'+data.request_id,tool:data.tool_name,detail:(String(data.description||'').slice(0,500)+'\n'+String(data.input_preview||'').slice(0,1000)).trim()});
+  const filed=fileReport(c,g,{kind:'permission',key:'permission:'+g.sessionId+':'+data.request_id,tool:data.tool_name,detail:(String(data.description||'').slice(0,500)+'\n'+String(data.input_preview||'').slice(0,1000)).trim()});
+  if(filed){reportCard(c,[filed],turnMessage(c)?.id);askExplain(g,[filed],'now');}
   // A repeated request is answered already; only a pending one gets a verdict.
   if(permissions.pending(g).some(p=>p.request_id===data.request_id))permissions.decide(g,{request_id:data.request_id,behavior:'deny',generation:g.number});
   save(c);return {ok:true};
+ }
+ // The agent's own word on a report it caused (explain_report): why it wanted that, what it
+ // did instead, and whether it still needs it. Only a report of this agent's current
+ // session; a later call replaces the earlier one. Not needed any more, an open report
+ // becomes a record (self-resolved): no push, not in the admins' queue. An admin's own decision stays.
+ if(action==='report-explain'){
+  const r=typeof data.reportId==='string'?reports.get(data.reportId):null;
+  if(!r||r.conversationId!==c.id||r.generation!==g.number)throw error('No such scope report in this session',404);
+  if(typeof data.stillNeeded!=='boolean')throw error('still_needed must be true or false',400);
+  const clip=v=>typeof v==='string'?v.replace(/\r\n?/g,'\n').replace(/[\x00-\x08\x0b-\x1f\x7f]/g,'').trim().slice(0,1000):'';
+  const why=clip(data.why),instead=clip(data.instead);
+  if(!why)throw error('why is required',400);
+  const patch={explanation:{why,instead,stillNeeded:data.stillNeeded,at:new Date().toISOString()}};
+  if(!data.stillNeeded&&r.status==='open')Object.assign(patch,{status:'self-resolved',notifyPending:false});
+  else if(data.stillNeeded&&r.status==='self-resolved')Object.assign(patch,{status:'open',notifyPending:true,notifyAfter:new Date().toISOString()});
+  else if(data.stillNeeded&&r.status==='open')patch.notifyAfter=new Date().toISOString();
+  reports.update(r.id,patch);
+  g.reportAsks=(g.reportAsks||[]).filter(a=>a.id!==r.id);
+  save(c);
+  return {ok:true,reportId:r.id,status:patch.status||r.status};
  }
  if(action==='permission-ack'){permissions.ack(g,data.request_id);save(c);return {ok:true};}
  // The agent speaks in its chat on its own: an update on work it took up from
@@ -1770,6 +1840,7 @@ function bridge(c,action,data={}) {
    g.phase=c.messages.some(m=>m.role==='user'&&m.delivery==='queued')?'busy':'ready';
   }
   permissions.cancel(g);
+  asksWait(g);
   try{fileBlocked(c,g);}catch(e){console.error('access report scan failed:',e.message);}
   if(data.failed){g.phase='error';g.lastError=String(data.error||'Claude 執行失敗').slice(0,1000);}
   handOverDue(c,g);
@@ -1785,7 +1856,7 @@ function bridge(c,action,data={}) {
   const failureKey=typeof data.eventKey==='string'?data.eventKey.slice(0,200):'';
   if(failureKey&&(g.failureKeys||[]).includes(failureKey))return {ok:true};
   if(failureKey)g.failureKeys=[...(g.failureKeys||[]),failureKey].slice(-32);
-  permissions.cancel(g);
+  permissions.cancel(g);asksWait(g);
   delete g.stopReceipt;
   // A failure ends the batch already taken, without dropping questions still queued for the next turn.
   const unanswered=pendingReplies(c);
@@ -2925,7 +2996,7 @@ function messageTranscript(c,messageId){
 }
 function pendingNotifications(){return [...groupStore.list().flatMap(x=>x.messages.filter(m=>m.notifyPending).map(m=>({conversation:{id:x.id,owner:x.owner,title:x.name,groupId:x.id},message:m}))),...pendingAgentNotifications()];}
 function pendingAgentNotifications(){return state.conversations.filter(c=>!c.archived).flatMap(c=>[...c.messages.filter(m=>(m.role==='assistant'||m.role==='relay'||m.notice==='login')&&m.notifyPending),...(prompts.get(c.id)?.notifyPending?[prompts.get(c.id)]:[])].map(m=>({conversation:c,message:m})));}
-const pendingReportNotifications=()=>reports.list().filter(r=>r.notifyPending);
+const pendingReportNotifications=()=>{const now=Date.now();return reports.list().filter(r=>r.notifyPending&&!(Date.parse(r.notifyAfter)>now));};
 const markReportsNotified=ids=>{reports.updateMany(ids,{notifyPending:false});};
 // What the agent reads before a scheduled instruction, so it knows no one typed it
 // just now and who set it up.

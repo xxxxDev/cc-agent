@@ -32,7 +32,13 @@ function create(stateRoot) {
     // notifyPending: the admins' push goes out from server/notifications.js.
     const report = { id: randomUUID(), at: new Date().toISOString(), status: 'open', ...entry, notifyPending: true };
     reports.push(report);
-    if (reports.length > MAX_REPORTS) reports.splice(0, reports.length - MAX_REPORTS);
+    // Past the cap the oldest handled ones go first (records, including what an agent
+    // solved itself), so a busy agent's records never push out a report still to review.
+    if (reports.length > MAX_REPORTS) {
+      let extra = reports.length - MAX_REPORTS;
+      reports = reports.filter((r) => !(extra > 0 && r.status !== 'open' && extra-- > 0));
+      if (extra > 0) reports.splice(0, extra);
+    }
     save();
     return report;
   }

@@ -53,6 +53,8 @@
    </template>
    <f7-list-item v-if="peerDirty" link no-chevron class="agent-peer-save" :title="ct('保存跨機傳訊設定')" @click.prevent="savePeer"><template #media><f7-icon f7="checkmark_circle"/></template></f7-list-item>
   </f7-list>
+  <!-- This agent's scope reports, for an admin to see what it keeps running into. -->
+  <f7-list v-if="user?.role==='admin'&&detail.mode!=='command'" inset class="fs-settings-list agent-reports-link"><f7-list-item link :title="ct('這個 Agent 的報告單')" @click.prevent="openAgentReports(detail.id)"><template #media><f7-icon f7="lock_shield"/></template></f7-list-item></f7-list>
   <AgentDiagnostics @trace-start="$emit('trace-start')" :detail="detail" :status="statusLabel"/>
 
   <!-- Fields changed elsewhere while being edited here: the values typed here are kept in
@@ -74,6 +76,7 @@ import {compactThreshold,wrapUp,autoCompactPresets} from "../js/agentPreferences
 import {editSubagents,subagentLabel} from "../js/subagentDialog.js";
 import {conflictText} from "../js/profileSave.js";
 import {defaultAvatar,avatarShape} from "../js/avatarShape.js";
+import {openAgentReports} from "../js/access-reports.js";
 // Why an agent cannot be opened to the peer link (server peerWhyNot).
 const PEER_WHY={scoped:'受限的 agent 不能開通',"watch-open":'開放給外部聊天的 agent 不能開通',"owner-not-admin":'擁有者不是在職的管理員，不能開通',archived:'已刪除的 agent 不能開通',"not-claude":'只有 Claude agent 能開通'};
 const peerOf=d=>d?.peerLink?{on:!!d.peerLink.on,allow:(d.peerLink.allow||[]).map(x=>({pairId:x.pairId,agentId:x.agentId})),autoReply:!!d.peerLink.autoReply}:null;
@@ -126,7 +129,7 @@ export default {components:{AgentProfileFields,AgentDiagnostics,GlassDropdown},d
  }
  const canStart=computed(()=>["stopped","error"].includes(w.detail.value?.phase)||!w.detail.value?.connected&&!["starting","busy","handing-off"].includes(w.detail.value?.phase));
  const canRestart=computed(()=>!!w.detail.value&&!["stopped","error","starting","handing-off"].includes(w.detail.value.phase));
- return {...w,defaultAvatar,avatarShape,conflictText,
+ return {...w,defaultAvatar,avatarShape,conflictText,openAgentReports,
   peerDraft,peerDirty,peerChoices,peerTicked,peerTick,savePeer,
   peerEligible:computed(()=>w.detail.value?.peerLink?.eligible!==false),
   peerWhy:computed(()=>{const why=w.detail.value?.peerLink?.why;return why?w.ct(PEER_WHY[why]||why):'';}),

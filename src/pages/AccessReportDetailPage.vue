@@ -22,6 +22,20 @@
           <p v-if="r.error" class="mono detail-refusal">{{ r.error }}</p>
         </section>
 
+        <!-- The agent's own word (explain_report), or what it wrote just before the call. -->
+        <section v-if="r.explanation" class="detail-card agent-reason">
+          <h3>{{ ct('Agent 說明') }}</h3>
+          <dl>
+            <div><dt>{{ ct('為什麼') }}</dt><dd>{{ r.explanation.why }}</dd></div>
+            <div v-if="r.explanation.instead"><dt>{{ ct('改用') }}</dt><dd>{{ r.explanation.instead }}</dd></div>
+            <div><dt>{{ ct('仍需要') }}</dt><dd>{{ r.explanation.stillNeeded ? ct('是') : ct('否，已自行解決') }}</dd></div>
+          </dl>
+        </section>
+        <section v-else-if="r.agentWords" class="detail-card agent-reason">
+          <h3>{{ ct('Agent 當時寫的') }}</h3>
+          <p>{{ r.agentWords }}</p>
+        </section>
+
         <section class="detail-card">
           <h3>{{ ct('情境') }}</h3>
           <dl>
@@ -58,10 +72,10 @@
         <section v-else class="detail-card">
           <h3>{{ ct('處理結果') }}</h3>
           <dl>
-            <div><dt>{{ ct('結果') }}</dt><dd>{{ r.resolution === 'granted' ? ct('已開通') : ct('已略過') }}</dd></div>
+            <div><dt>{{ ct('結果') }}</dt><dd>{{ meta.label }}</dd></div>
             <div v-if="r.granted"><dt>{{ ct('開通內容') }}</dt><dd class="mono">{{ r.granted.folder || r.granted.website }}</dd></div>
-            <div><dt>{{ ct('處理者') }}</dt><dd>{{ r.resolvedBy }}</dd></div>
-            <div><dt>{{ ct('處理時間') }}</dt><dd>{{ reportTime(r.resolvedAt) }}</dd></div>
+            <div v-if="r.resolvedBy"><dt>{{ ct('處理者') }}</dt><dd>{{ r.resolvedBy }}</dd></div>
+            <div v-if="r.resolvedAt"><dt>{{ ct('處理時間') }}</dt><dd>{{ reportTime(r.resolvedAt) }}</dd></div>
           </dl>
           <f7-button round :disabled="busy" @click="resolve('reopen')">{{ ct('重新開啟') }}</f7-button>
         </section>
@@ -180,4 +194,6 @@ function resolve(resolution) {
 .report-open { color: #ff9f0a; }
 .report-granted { color: #30d158; }
 .report-dismissed { color: #8e8e93; }
+.report-self { color: #64d2ff; }
+.agent-reason p { margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
 </style>
