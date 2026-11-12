@@ -6,7 +6,7 @@ import {setActiveTab} from './tab-session.js';
 // How a scope report reads on the review pages: its icon, style and label.
 export function reportMeta(r) {
   // CC Agent's digest of many reports an agent said it solved itself.
-  if (r.kind === 'digest' && r.status === 'open') return {icon: 'exclamationmark_triangle_fill', cls: 'report-open', label: ct('未處理')};
+  if ((r.kind === 'digest' || r.kind === 'cap') && r.status === 'open') return {icon: 'exclamationmark_triangle_fill', cls: 'report-open', label: ct('未處理')};
   if (r.status === 'open') return {icon: r.kind === 'permission' ? 'hand_raised_fill' : 'lock_shield_fill', cls: 'report-open', label: ct('未處理')};
   // What the agent said it solved within its scope (explain_report): a record, not a to-do.
   if (r.status === 'self-resolved') return {icon: 'checkmark_circle', cls: 'report-self', label: ct('Agent 已自行解決')};
@@ -14,9 +14,9 @@ export function reportMeta(r) {
   return {icon: 'xmark_seal_fill', cls: 'report-dismissed', label: ct('已略過')};
 }
 
-export const reportKind = (r) => (r.kind === 'permission' ? ct('要求權限') : r.kind === 'digest' ? ct('多次自行解決') : ct('被沙盒擋下'));
+export const reportKind = (r) => (r.kind === 'permission' ? ct('要求權限') : r.kind === 'digest' ? ct('多次自行解決') : r.kind === 'cap' ? ct('報告單已滿') : ct('被沙盒擋下'));
 // A digest's one line: how many, within the day, and by which tools.
-export const digestLine = (r) => labelled(ct('24 小時內說已自行解決'), `${r.count || 0} ${ct('次')}${r.detail ? ' · ' + r.detail : ''}`);
+export const digestLine = (r) => r.kind === 'cap' ? labelled(ct('已達未處理上限，之後被擋下沒記錄'), `${r.count || 0} ${ct('次')}`) : labelled(ct('24 小時內說已自行解決'), `${r.count || 0} ${ct('次')}${r.detail ? ' · ' + r.detail : ''}`);
 
 export function reportTime(at) {
   if (!at) return '';
@@ -56,7 +56,7 @@ export function reportHabit(r) {
 export function agentSummaries(list) {
   const by = new Map();
   for (const r of list) {
-    if (r.kind === 'digest') continue;
+    if (r.kind === 'digest' || r.kind === 'cap') continue;
     const key = r.conversationId || r.title || '';
     if (!by.has(key)) by.set(key, {id: key, title: r.agentTitle || r.title || 'Agent', ownerName: r.ownerName || '', total: 0, self: 0, needed: 0, granted: 0, habits: new Map()});
     const a = by.get(key);

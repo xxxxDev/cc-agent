@@ -409,6 +409,8 @@ const english = {
 "Agent 已自行解決":"Solved by the agent",
 "已記錄":"Recorded",
 "多次自行解決":"Solved by itself, many times",
+"報告單已滿":"Reports full",
+"已達未處理上限，之後被擋下沒記錄":"At its cap of open reports, refused and not recorded since",
 "24 小時內說已自行解決":"Said it solved it itself within 24 hours",
 "待處理":"To review",
 "紀錄":"Record",

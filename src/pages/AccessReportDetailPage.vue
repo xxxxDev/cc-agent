@@ -17,7 +17,7 @@
 
         <section class="detail-explanation" :class="meta.cls">
           <span>{{ reportKind(r) }}</span>
-          <h3 v-if="r.kind === 'digest'">{{ digestLine(r) }}</h3>
+          <h3 v-if="r.kind === 'digest' || r.kind === 'cap'">{{ digestLine(r) }}</h3>
           <template v-else>
             <h3>{{ r.tool || ct('未知工具') }}</h3>
             <p class="mono">{{ r.detail }}</p>
@@ -66,12 +66,12 @@
 
         <section v-if="r.status === 'open'" class="detail-card action-card">
           <h3>{{ ct('處理') }}</h3>
-          <p v-if="r.suggestion && r.kind !== 'digest'" class="suggestion">
+          <p v-if="r.suggestion && r.kind !== 'digest' && r.kind !== 'cap'" class="suggestion">
             {{ r.suggestion.type === 'website' ? ct('建議開通的網站') : ct('建議開通的資料夾') }}：<code>{{ r.suggestion.value }}</code>
           </p>
           <p class="action-note">{{ ct('開通後這個 Agent 會重新連線，之後就能使用這個範圍。') }}</p>
           <!-- The suggested kind is the filled button; the other stays available. -->
-          <template v-if="r.kind !== 'digest'">
+          <template v-if="r.kind !== 'digest' && r.kind !== 'cap'">
             <f7-button :fill="r.suggestion?.type !== 'website'" round large :disabled="busy || r.agentArchived" @click="grant('folder')">{{ ct('開通資料夾…') }}</f7-button>
             <f7-button :fill="r.suggestion?.type === 'website'" round large :disabled="busy || r.agentArchived" @click="grant('website')">{{ ct('開通網站…') }}</f7-button>
           </template>

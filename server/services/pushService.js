@@ -20,12 +20,14 @@ const tagOf=(prefix,id)=>prefix+crypto.createHash('sha256').update(id).digest('h
 // A scope report tells an admin which agent was stopped and by what, never the
 // tool's arguments: those are the agent's raw material, like its transcript.
 const REPORT_KINDS={permission:'要求權限',blocked:'被沙盒擋下'};
+// An agent at its cap of open reports: what was refused since is no longer filed.
+const capBody=n=>'未處理報告單已滿，之後又有 '+(Number.isInteger(n)&&n>0?n:'多')+' 次被擋下沒有記錄，點開查看';
 // A digest: an agent said, again and again, that it solved a refusal itself.
 const digestBody=n=>'24 小時內 '+(Number.isInteger(n)&&n>0?n:'多')+' 次說已在範圍內自行解決，點開查看';
 function buildPayload(reply) {
   if(reply?.kind==='access_report'){
     if(!reply.reportId||!reply.replyId)throw new Error('Unsupported notification');
-    return {title:clipPreview('範圍報告單 · '+String(reply.agentName||'Agent'),80),body:clipPreview(reply.reportKind==='digest'?digestBody(reply.count):(REPORT_KINDS[reply.reportKind]||'被擋下')+'：'+(String(reply.tool||'')||'未知工具')+'，點開審查',180),url:'/?access-report='+encodeURIComponent(reply.reportId),tag:tagOf('report-',reply.reportId)};
+    return {title:clipPreview('範圍報告單 · '+String(reply.agentName||'Agent'),80),body:clipPreview(reply.reportKind==='cap'?capBody(reply.count):reply.reportKind==='digest'?digestBody(reply.count):(REPORT_KINDS[reply.reportKind]||'被擋下')+'：'+(String(reply.tool||'')||'未知工具')+'，點開審查',180),url:'/?access-report='+encodeURIComponent(reply.reportId),tag:tagOf('report-',reply.reportId)};
   }
   if(reply?.kind==='diagnostic_report'){
     if(!reply.reportId||!reply.replyId)throw new Error('Unsupported notification');

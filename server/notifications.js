@@ -5,7 +5,7 @@ function replyNotification(c,m){return {conversationId:c.id,replyId:m.id,ownerUs
 // One new scope report, from what was stored when it was filed, so a retry builds
 // the same notification even if the agent has been renamed since.
 // A digest (kind 'digest') carries how many reports the agent said it solved itself.
-function reportNotification(r){return {kind:'access_report',conversationId:r.conversationId,replyId:'access-report:'+r.id,reportId:r.id,ownerUserId:r.owner,agentName:r.title,reportKind:r.kind,tool:r.tool,...(r.kind==='digest'?{count:r.count}:{})};}
+function reportNotification(r){return {kind:'access_report',conversationId:r.conversationId,replyId:'access-report:'+r.id,reportId:r.id,ownerUserId:r.owner,agentName:r.title,reportKind:r.kind,tool:r.tool,...(r.kind==='digest'||r.kind==='cap'?{count:r.count}:{})};}
 // A schedule an agent proposed, to the admins, who approve it on the Schedules page, where it
 // waits; the agent tells them in its chat. This push stays the admins': its gate
 // sends to admins only. Built from what was stored when it was proposed, so a

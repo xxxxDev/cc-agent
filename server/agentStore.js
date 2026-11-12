@@ -1063,7 +1063,23 @@ function turnMessage(c){return c.messages.findLast(m=>m.role==='user'&&m.generat
 // The admins' push waits a little (REPORT_GRACE_MS) so the agent can first say, with
 // explain_report, that it found a way within its scope; one it never answers goes out as before.
 const REPORT_GRACE_MS=75_000;
-function fileReport(c,g,entry){const m=turnMessage(c);return reports.add({owner:c.owner,conversationId:c.id,title:c.title,generation:g.number,sessionId:g.sessionId,messageId:m?.id||null,messageExcerpt:String(m?.text||'').slice(0,300),notifyAfter:new Date(Date.now()+REPORT_GRACE_MS).toISOString(),...entry});}
+function fileReport(c,g,entry,ended=false){
+ const m=turnMessage(c),t=turnOf(g),turnId=t&&(ended?t.ended:!t.ended)?t.id:null;
+ const dup=!!entry.key&&reports.hasKey(entry.key);
+ const r=reports.add({owner:c.owner,conversationId:c.id,title:c.title,generation:g.number,sessionId:g.sessionId,messageId:m?.id||null,messageExcerpt:String(m?.text||'').slice(0,300),turnId,notifyAfter:new Date(Date.now()+REPORT_GRACE_MS).toISOString(),...entry});
+ if(!r&&!dup)capNotice(c,g);
+ return r;
+}
+// At its cap of open reports (accessReports MAX_PER_CONVERSATION) an agent's refusals are still
+// refused but no longer filed, so an agent outside people can talk into refusals could go
+// unseen: one notice of CC Agent's (kind 'cap') says the cap was reached and counts what was
+// refused since, pushed once; while it is open its count goes up, and once an admin has
+// handled it the next refusal opens another.
+function capNotice(c,g){
+ const open=reports.list().find(r=>r.conversationId===c.id&&r.kind==='cap'&&r.status==='open');
+ if(open){reports.update(open.id,{count:(open.count||0)+1});return;}
+ reports.add({owner:c.owner,conversationId:c.id,title:c.title,generation:g.number,sessionId:g.sessionId,messageId:null,kind:'cap',key:'cap:'+c.id+':'+Date.now(),tool:'',count:1,notifyAfter:new Date().toISOString()});
+}
 // A scope report shows in the agent's own chat too: a CC Agent card where it was filed,
 // under the turn it came from. It is a system message, so it is never unread, never handed
 // to the agent and never pushed beyond the report's own push. The card keeps only the
@@ -1112,10 +1128,34 @@ function explainPatch(r,entry){
 // The agent's own say-so ends a report only where the turn was the owner's or its own: an
 // agent that talks to people outside, or a turn started by an outside, peer or other
 // agent's message, could be talked into hiding what it tried.
-function selfResolveAllowed(c,r){
+// Decided from every message handed over in the report's turn and in the turn explaining
+// it (turnOf): any from someone other than the owner (peerForeign, a relay that came in
+// during it included), or a turn CC Agent did not start (a terminal or relay prompt, a
+// report from before turns were kept), and it is not allowed.
+function selfResolveAllowed(c,g,r){
  if(outsideTaken(c))return false;
- const m=r.messageId?c.messages.find(x=>x.id===r.messageId):null;
- return !(m&&(m.external||m.peer||m.agentMessage));
+ const now=turnOf(g);
+ return turnClean(c,(g.turns||[]).find(t=>t.id===r.turnId))&&turnClean(c,now&&!now.ended?now:null);
+}
+function turnClean(c,t){
+ if(!t||t.unknown)return false;
+ const from=Date.parse(t.at),to=t.endedAt?Date.parse(t.endedAt):Infinity;
+ return !c.messages.some(m=>(t.ids.includes(m.id)&&peerForeign(m))||(m.role==='relay'&&m.relay?.direction==='in'&&Date.parse(m.at)>=from&&Date.parse(m.at)<=to));
+}
+// The turns CC Agent handed messages to (the last few, by run): a turn begins with the first
+// message or question it hands over after the last one ended, and ends at its Stop or failure.
+// A Stop with no turn of ours open ends a turn CC Agent did not start (unknown).
+const turnOf=g=>(g.turns||[]).find(t=>t.id===g.turnId)||null;
+function turnHand(g,m){
+ let t=turnOf(g);
+ if(!t||t.ended){t={id:randomUUID().slice(0,12),at:new Date().toISOString(),ids:[]};g.turns=[...(g.turns||[]),t].slice(-12);g.turnId=t.id;}
+ if(m)t.ids.push(m.id);
+ return t;
+}
+function turnEnd(g){
+ let t=turnOf(g);
+ if(!t||t.ended){t={id:randomUUID().slice(0,12),at:new Date().toISOString(),ids:[],unknown:true};g.turns=[...(g.turns||[]),t].slice(-12);g.turnId=t.id;}
+ t.ended=true;t.endedAt=new Date().toISOString();
 }
 // Many reports an agent said it solved itself (SELF_DIGEST_COUNT within SELF_DIGEST_MS) are
 // told to the admins once, as a digest report of CC Agent's (kind 'digest'): on the reports
@@ -1127,8 +1167,11 @@ function selfResolvedDigest(c,g){
  if(solved.length<SELF_DIGEST_COUNT)return;
  const tools=new Map();for(const r of solved)tools.set(r.tool||'tool',(tools.get(r.tool||'tool')||0)+1);
  const detail=[...tools].sort((a,b)=>b[1]-a[1]).slice(0,5).map(([t,n])=>t+' ×'+n).join(', ');
+ // After an admin has handled the last one, another once the count reaches double that
+ // one's, or SELF_DIGEST_COUNT more since it was handled.
  const last=all.find(r=>r.kind==='digest'&&Date.parse(r.at)>=since);
- if(last){if(last.status==='open'&&!last.adminActedAt)reports.update(last.id,{count:solved.length,detail});return;}
+ if(last&&last.status==='open'){if(!last.adminActedAt)reports.update(last.id,{count:solved.length,detail});return;}
+ if(last){const handled=Date.parse(last.adminActedAt||last.resolvedAt||last.at),after=solved.filter(r=>Date.parse(r.explanation?.at||r.at)>handled).length;if(solved.length<2*(last.count||SELF_DIGEST_COUNT)&&after<SELF_DIGEST_COUNT)return;}
  reports.add({owner:c.owner,conversationId:c.id,title:c.title,generation:g.number,sessionId:g.sessionId,messageId:null,kind:'digest',key:'digest:'+c.id+':'+Date.now(),tool:'',count:solved.length,detail,notifyAfter:new Date().toISOString()});
 }
 const BLOCKED=/Operation not permitted|operation not permitted| is outside |denied by your permission settings|deny network-outbound|sandbox_violations/;
@@ -1155,7 +1198,7 @@ function fileBlocked(c,g){
    // output, so a successful command that merely prints these words must not
    // count, and a turn cannot flood the review queue.
    if(!scan||!block.isError||!BLOCKED.test(text)||tried>=MAX_BLOCKED_PER_TURN)continue;tried+=1;
-   const r=fileReport(c,g,{kind:'blocked',key:'blocked:'+g.sessionId+':'+m.id+':'+index,tool:use?.block.name||'',detail:String(use?.block.text||'').slice(0,1000),error:text.slice(0,500),agentWords:words(use?.said)});
+   const r=fileReport(c,g,{kind:'blocked',key:'blocked:'+g.sessionId+':'+m.id+':'+index,tool:use?.block.name||'',detail:String(use?.block.text||'').slice(0,1000),error:text.slice(0,500),agentWords:words(use?.said)},true);
    if(r)filed.push(r);
   }
  }
@@ -1588,14 +1631,14 @@ function bridge(c,action,data={}) {
   // message_id report-<id>), never inside a message another sender's tag is on; the
   // message itself follows on the next poll, into the same turn.
   const later=pending&&g.ready?(g.reportAsks||[]).filter(a=>a.when==='next'):[];
-  if(later.length){g.reportAsks=g.reportAsks.filter(a=>a.when!=='next');g.phase='busy';save(c);return {message:{id:'report-'+later[0].id,text:askText(later,true),sender:'automatic'}};}
+  if(later.length){g.reportAsks=g.reportAsks.filter(a=>a.when!=='next');turnHand(g);g.phase='busy';save(c);return {message:{id:'report-'+later[0].id,text:askText(later,true),sender:'automatic'}};}
   if(pending&&g.ready){// Working for a group from the moment its message is handed over, and for nothing
   // else once any other message is.
   // A group chat named with @ in its own chat counts the same: what the
   // agent then sends that group's members shows there.
   const named=pending.mentions?.find(m=>m.group&&groupStore.get(m.id)?.owner===c.owner);
   if(!pending.wrapUp)c.groupContext=pending.group?{id:pending.group.id,at:Date.now()}:named?{id:named.id,at:Date.now()}:null;const skipped=g.startupSkipped&&!g.bootstrapped;if(skipped)g.bootstrapped=true;
-  const text=(skipped?STARTUP_REMINDER:'')+profileMessage(c,g,pending.peer?peerWrap(c,pending,neutralSender(attachments.channelText(stateRoot,c,pending))):scheduleNote(pending)+limitResumeNote(pending)+wrapUpNote(pending)+groupNote(c,pending)+mentionNote(pending)+neutralSender(attachments.channelText(stateRoot,c,pending)));pending.delivery='delivered';pending.deliveredAt=new Date().toISOString();g.deliveryEpoch=(g.deliveryEpoch||0)+1;g.phase='busy';save(c);return {message:{id:pending.id,text,...senderOf(c,pending),...replyMeta(pending)},rotate:c.pendingRotation};}
+  const text=(skipped?STARTUP_REMINDER:'')+profileMessage(c,g,pending.peer?peerWrap(c,pending,neutralSender(attachments.channelText(stateRoot,c,pending))):scheduleNote(pending)+limitResumeNote(pending)+wrapUpNote(pending)+groupNote(c,pending)+mentionNote(pending)+neutralSender(attachments.channelText(stateRoot,c,pending)));pending.delivery='delivered';pending.deliveredAt=new Date().toISOString();turnHand(g,pending);g.deliveryEpoch=(g.deliveryEpoch||0)+1;g.phase='busy';save(c);return {message:{id:pending.id,text,...senderOf(c,pending),...replyMeta(pending)},rotate:c.pendingRotation};}
   return {rotate:c.pendingRotation};
  }
  // An agent sets up a long-running schedule the owner agreed to in its conversation;
@@ -1651,18 +1694,18 @@ function bridge(c,action,data={}) {
   if(recent.length>=EXPLAIN_PER_MINUTE)throw error('Too many explain_report calls; wait a minute',429);
   recent.push(now);explainCalls.set(c.id,recent);
   const r=typeof data.reportId==='string'?reports.get(data.reportId):null;
-  if(!r||r.conversationId!==c.id||r.generation!==g.number||r.kind==='digest')throw error('No such scope report in this session',404);
+  if(!r||r.conversationId!==c.id||r.generation!==g.number||r.kind==='digest'||r.kind==='cap')throw error('No such scope report in this session',404);
   if(typeof data.stillNeeded!=='boolean')throw error('still_needed must be true or false',400);
   const clip=v=>typeof v==='string'?v.replace(/\r\n?/g,'\n').replace(/[\x00-\x08\x0b-\x1f\x7f]/g,'').trim().slice(0,1000):'';
   const why=clip(data.why),instead=clip(data.instead);
   if(!why)throw error('why is required',400);
   const patch=explainPatch(r,{why,instead,stillNeeded:data.stillNeeded,at:new Date(now).toISOString()});
-  const locked=!!r.adminActedAt,kept=!locked&&!data.stillNeeded&&r.status==='open'&&!selfResolveAllowed(c,r);
+  const locked=!!r.adminActedAt,kept=!locked&&!data.stillNeeded&&r.status==='open'&&!selfResolveAllowed(c,g,r);
   if(!locked){
    if(!data.stillNeeded&&r.status==='open'&&!kept)Object.assign(patch,{status:'self-resolved',notifyPending:false});
-   // Reopened by the agent, pushed only if no push went out for it before and it has not
-   // been reopened with one already, so flipping false and true rings no one twice.
-   else if(data.stillNeeded&&r.status==='self-resolved'){const ring=!r.pushedAt&&!r.reopenPushed;Object.assign(patch,{status:'open',notifyPending:ring,...(ring?{reopenPushed:true,notifyAfter:new Date(now).toISOString()}:{})});}
+   // Reopened by the agent: one never pushed is always pushed again; once a push went out
+   // for it, flipping false and true rings no one again.
+   else if(data.stillNeeded&&r.status==='self-resolved'){const ring=!r.pushedAt;Object.assign(patch,{status:'open',notifyPending:ring,...(ring?{notifyAfter:new Date(now).toISOString()}:{})});}
    // Still needed: the admins' wait ends now, if it has not already.
    else if(data.stillNeeded&&r.status==='open'&&r.notifyPending&&!(Date.parse(r.notifyAfter)<=now))patch.notifyAfter=new Date(now).toISOString();
   }
@@ -1899,7 +1942,7 @@ function bridge(c,action,data={}) {
    g.phase=c.messages.some(m=>m.role==='user'&&m.delivery==='queued')?'busy':'ready';
   }
   permissions.cancel(g);
-  asksWait(g);
+  asksWait(g);turnEnd(g);
   try{fileBlocked(c,g);}catch(e){console.error('access report scan failed:',e.message);}
   if(data.failed){g.phase='error';g.lastError=String(data.error||'Claude 執行失敗').slice(0,1000);}
   handOverDue(c,g);
@@ -1915,7 +1958,7 @@ function bridge(c,action,data={}) {
   const failureKey=typeof data.eventKey==='string'?data.eventKey.slice(0,200):'';
   if(failureKey&&(g.failureKeys||[]).includes(failureKey))return {ok:true};
   if(failureKey)g.failureKeys=[...(g.failureKeys||[]),failureKey].slice(-32);
-  permissions.cancel(g);asksWait(g);
+  permissions.cancel(g);asksWait(g);turnEnd(g);
   delete g.stopReceipt;
   // A failure ends the batch already taken, without dropping questions still queued for the next turn.
   const unanswered=pendingReplies(c);

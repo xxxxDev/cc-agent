@@ -41,7 +41,8 @@ function create(stateRoot) {
   function add(entry) {
     load();
     if (entry.key && reports.some((r) => r.key === entry.key)) return null;
-    if (entry.conversationId) {
+    // CC Agent's one notice that an agent reached the cap (kind 'cap') is not held back by it.
+    if (entry.conversationId && entry.kind !== 'cap') {
       const own = reports.filter((r) => r.conversationId === entry.conversationId && (r.status === 'open' || r.status === 'self-resolved'));
       if (own.length >= MAX_PER_CONVERSATION) {
         const oldest = own.find((r) => r.status === 'self-resolved');
@@ -61,6 +62,7 @@ function create(stateRoot) {
     return report;
   }
   const list = () => load().slice().reverse();
+  const hasKey = (key) => load().some((r) => r.key === key);
   const get = (id) => load().find((r) => r.id === id) || null;
   // A patch that changes nothing is not written: the file can hold MAX_REPORTS reports.
   function update(id, patch) {
@@ -87,7 +89,7 @@ function create(stateRoot) {
     if (reports.length !== before) save();
     return before - reports.length;
   }
-  return { add, list, get, update, updateMany, purgeOwner, file };
+  return { add, list, hasKey, get, update, updateMany, purgeOwner, file };
 }
 
 // What an admin would most likely add to the agent's scope to allow what the

@@ -49,7 +49,7 @@
             <span class="report-status" :class="reportMeta(r).cls">{{ reportMeta(r).label }}</span>
           </div>
           <div class="report-card-lines">
-            <div v-if="r.kind === 'digest'">🔁 {{ digestLine(r) }}</div>
+            <div v-if="r.kind === 'digest' || r.kind === 'cap'">🔁 {{ digestLine(r) }}</div>
             <div v-else>🛠 {{ r.tool || ct('未知工具') }}：{{ excerpt(r.detail) }}</div>
             <div v-if="r.error">⛔ {{ excerpt(r.error) }}</div>
             <div v-if="r.messageExcerpt">💬 {{ excerpt(r.messageExcerpt, 80) }}</div>
