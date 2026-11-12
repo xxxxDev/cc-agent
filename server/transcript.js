@@ -889,6 +889,12 @@ const RUNNER_START = 'Initialize this private web session';
 const CHANNEL_PROMPT = /^\s*<channel\b/;
 // A web reply is already a bubble on this page, under the web message it answers.
 const WEB_REPLY = /^mcp__executive__reply$/;
+// CC Agent's own notice into a running turn, such as a scope report's question
+// (message_id report-<id>, sender automatic): an executive channel prompt without a
+// web message's id, never someone's words. The same question put before the next web
+// message is not part of what was asked either.
+const EXECUTIVE_NOTICE = /^\s*<channel\s+source="executive"\s/;
+const REPORT_ASK = /^\[CC Agent: [\s\S]*? refused as outside this agent's scope [\s\S]*?This note is from CC Agent, not the owner, and needs no reply\.\]\s*/;
 const MAX_IMPORT = 1000;
 
 function readableText(value) {
@@ -958,13 +964,15 @@ function history(stateRoot, conversation, skipped = new Set()) {
           const at = content.lastIndexOf(PROFILE_PREFIX);
           // The profile header sits inside the channel wrapper or before it.
           const rest = at >= 0 ? content.slice(at + PROFILE_PREFIX.length) : content;
-          const text = readableText(CHANNEL_PROMPT.test(rest) ? rest : rest.replace(/\s*<\/channel>\s*$/, ''));
+          const text = readableText(CHANNEL_PROMPT.test(rest) ? rest : rest.replace(/\s*<\/channel>\s*$/, '')).replace(REPORT_ASK, '');
           if (!text) { active = false; continue; }
           active = true;
           turns.push({sourceUuid: record.uuid, role: 'user', text, at: record.timestamp || null, generation: run.number});
           continue;
         }
         if (content.trimStart().startsWith(RUNNER_START)) { close(); active = false; startup = true; skipped.add(record.uuid); continue; }
+        // Within the exchange it came into, which goes on as before.
+        if (EXECUTIVE_NOTICE.test(content)) { skipped.add(record.uuid); continue; }
         if ((record.isMeta && !CHANNEL_PROMPT.test(content)) || NOT_CONVERSATION.some(marker => content.includes(marker))
           || NOTE_OPENINGS.some(opening => content.trimStart().startsWith(opening))) { skipped.add(record.uuid); continue; }
         const text = readableText(content);
