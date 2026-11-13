@@ -16,6 +16,7 @@ import UserEditPage from './pages/UserEditPage.vue';
 import AccessReportsPage from './pages/AccessReportsPage.vue';
 import AccessReportDetailPage from './pages/AccessReportDetailPage.vue';
 import DiagnosticReportsPage from './pages/DiagnosticReportsPage.vue';
+import NavButtonsPage from './pages/NavButtonsPage.vue';
 import DiagnosticReportDetailPage from './pages/DiagnosticReportDetailPage.vue';
 import SecurityPage from './pages/SecurityPage.vue';
 import PeerLinkPage from './pages/PeerLinkPage.vue';
@@ -57,6 +58,7 @@ export default [
   { path: '/access-report/', component: AccessReportDetailPage },
   // Diagnostics people sent from Agent Profile.
   { path: '/diagnostic-reports/', component: DiagnosticReportsPage },
+  { path: '/nav-buttons/', component: NavButtonsPage },
   { path: '/diagnostic-report/', component: DiagnosticReportDetailPage },
   // Sign-in defence: what was tried and which addresses are blocked.
   { path: '/security/', component: SecurityPage },

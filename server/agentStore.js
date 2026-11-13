@@ -328,7 +328,19 @@ function groupSource(owner,id){const c=state.conversations.find(c=>c.owner===own
 const MAX_PINS=50;
 const ownAgentIds=owner=>new Set(state.conversations.filter(c=>c.owner===owner&&!c.archived).map(c=>c.id));
 function listPins(owner){const own=ownAgentIds(owner);const kept=state.agentSettings?.listPins?.[owner];return Array.isArray(kept)?kept.filter(id=>own.has(id)):[];}
-function listPreferences(owner){return {autoSort:autoSort(owner),groups:listGroups(owner),pins:listPins(owner)};}
+// The order of the conversation page's buttons on a computer and of a split cell's header
+// set by an admin for everyone: a list of these keys. One
+// left out keeps its place after the named ones, in the default order; an unknown one is dropped.
+const NAV_KEYS=['usage','checklist','search','terminal','transcript','profile'];
+function navOrder(){const saved=Array.isArray(state.agentSettings?.navOrder)?state.agentSettings.navOrder.filter(k=>NAV_KEYS.includes(k)):[];return [...new Set([...saved,...NAV_KEYS])];}
+// How many buttons a phone shows at the top right of a conversation, 「⋯」 included: 1 to 3,
+// 2 by default; the rest, in navOrder, are in 「⋯」.
+// A phone's own order, apart from a computer's: no
+// Transcript there; the terminal first by default, as a phone showed it before.
+const PHONE_KEYS=['terminal','checklist','usage','search','profile'];
+function phoneNavOrder(){const saved=Array.isArray(state.agentSettings?.phoneNavOrder)?state.agentSettings.phoneNavOrder.filter(k=>PHONE_KEYS.includes(k)):[];return [...new Set([...saved,...PHONE_KEYS])];}
+const phoneNavCount=()=>[1,2,3].includes(state.agentSettings?.phoneNavCount)?state.agentSettings.phoneNavCount:2;
+function listPreferences(owner){return {autoSort:autoSort(owner),groups:listGroups(owner),pins:listPins(owner),navOrder:navOrder(),phoneNavOrder:phoneNavOrder(),phoneNavCount:phoneNavCount()};}
 function setListPreferences(owner,{autoSort:on,groups,pins}={}){
  if(on===undefined&&groups===undefined&&pins===undefined)throw error('沒有要更新的設定');
  if(on!==undefined&&typeof on!=='boolean')throw error('自動排序設定必須是開或關');
@@ -3219,11 +3231,11 @@ function reviveSilentChannels({now=Date.now(),relaunch=(c)=>{stop(c);launch(c);}
  }
 }
 setInterval(()=>{try{reviveSilentChannels();}catch(e){console.error('channel revive: '+e.message);}},60_000).unref();
-function getPreferences(owner){return {...(platform.isWin?{scopedAgents:false}:{}),wrapUp:wrapUpSettings(ownerLanguage(owner)),archiveRetentionDays:archiveRetentionDays(),checklistRetentionDays:checklistRetentionDays(),compactThreshold:state.agentSettings?.compactThreshold??5,handoff:handoffSetting(),subagents:subagentDefault(),autoCompact:autoCompactDefault(),autoCompactPresets:AUTO_COMPACT_PRESETS,terminalSwitch:state.agentSettings?.terminalSwitch===true,transcriptSwitch:state.agentSettings?.transcriptSwitch===true};}
-function setPreferences(owner,{compactThreshold,handoff,subagents,autoCompact,terminalSwitch,transcriptSwitch,archiveRetentionDays:retention,checklistRetentionDays:listRetention,wrapUp,...rest}={}){
+function getPreferences(owner){return {...(platform.isWin?{scopedAgents:false}:{}),wrapUp:wrapUpSettings(ownerLanguage(owner)),archiveRetentionDays:archiveRetentionDays(),checklistRetentionDays:checklistRetentionDays(),navOrder:navOrder(),phoneNavOrder:phoneNavOrder(),phoneNavCount:phoneNavCount(),compactThreshold:state.agentSettings?.compactThreshold??5,handoff:handoffSetting(),subagents:subagentDefault(),autoCompact:autoCompactDefault(),autoCompactPresets:AUTO_COMPACT_PRESETS,terminalSwitch:state.agentSettings?.terminalSwitch===true,transcriptSwitch:state.agentSettings?.transcriptSwitch===true};}
+function setPreferences(owner,{compactThreshold,handoff,subagents,autoCompact,terminalSwitch,transcriptSwitch,archiveRetentionDays:retention,checklistRetentionDays:listRetention,wrapUp,navOrder:nav,phoneNavOrder:phoneNav,phoneNavCount:phoneCount,...rest}={}){
  // Unsupported settings are refused, never ignored.
  if(Object.keys(rest).length)throw error('不支援的設定：'+Object.keys(rest).join(', '));
- if(listRetention===undefined&&compactThreshold===undefined&&handoff===undefined&&subagents===undefined&&autoCompact===undefined&&terminalSwitch===undefined&&transcriptSwitch===undefined&&retention===undefined&&wrapUp===undefined)throw error('沒有要更新的設定');
+ if(listRetention===undefined&&nav===undefined&&phoneNav===undefined&&phoneCount===undefined&&compactThreshold===undefined&&handoff===undefined&&subagents===undefined&&autoCompact===undefined&&terminalSwitch===undefined&&transcriptSwitch===undefined&&retention===undefined&&wrapUp===undefined)throw error('沒有要更新的設定');
  // Every field is checked before any is saved: a request refused over one field leaves
  // all the others as they were, in memory and on disk.
  // The wrap-up check: on or off, the minutes an agent sits idle first, and its words
@@ -3237,6 +3249,9 @@ function setPreferences(owner,{compactThreshold,handoff,subagents,autoCompact,te
  // Checked now, applied last: a request refused over another field must not leave
  // a retention in memory for the next sweep to act on.
  if(retention!==undefined&&retention!==null&&(!Number.isInteger(retention)||retention<1||retention>RETENTION_MAX_DAYS))throw error(`保留天數必須是 1–${RETENTION_MAX_DAYS} 天，或不刪除`);
+ if(phoneNav!==undefined&&phoneNav!==null&&(!Array.isArray(phoneNav)||phoneNav.length>PHONE_KEYS.length||phoneNav.some(k=>!PHONE_KEYS.includes(k))||new Set(phoneNav).size!==phoneNav.length))throw error('手機版按鈕順序必須是 '+PHONE_KEYS.join('、')+' 的排列');
+ if(phoneCount!==undefined&&![1,2,3].includes(phoneCount))throw error('手機右上按鈕數量必須是 1、2 或 3');
+ if(nav!==undefined&&nav!==null&&(!Array.isArray(nav)||nav.length>NAV_KEYS.length||nav.some(k=>!NAV_KEYS.includes(k))||new Set(nav).size!==nav.length))throw error('按鈕順序必須是 '+NAV_KEYS.join('、')+' 的排列');
  if(listRetention!==undefined&&listRetention!==null&&!CHECKLIST_RETENTION_CHOICES.includes(listRetention))throw error('已完成待辦事項的保留天數必須是 '+CHECKLIST_RETENTION_CHOICES.join('、')+' 天，或不刪除');
  // The chat/terminal switch is off unless an admin asks for it: the conversation page is the normal way in, and the
  // terminal is for looking at what an agent is doing.
@@ -3261,6 +3276,9 @@ function setPreferences(owner,{compactThreshold,handoff,subagents,autoCompact,te
  if(autoCompact!==undefined){const settings={...state.agentSettings};if(autoCompact===null)delete settings.autoCompact;else settings.autoCompact=autoCompact;state.agentSettings=settings;}
  if(handoff!==undefined){const now=handoffSetting();state.agentSettings={...state.agentSettings,handoff:{recent:handoff.recent??now.recent,ask:handoff.ask??now.ask,lazy:handoff.lazy??now.lazy}};}
  if(retention!==undefined){const settings={...state.agentSettings};if(retention===null)delete settings.archiveRetentionDays;else settings.archiveRetentionDays=retention;state.agentSettings=settings;}
+ if(phoneNav!==undefined){const settings={...state.agentSettings};if(phoneNav===null)delete settings.phoneNavOrder;else settings.phoneNavOrder=[...phoneNav];state.agentSettings=settings;}
+ if(phoneCount!==undefined){state.agentSettings={...state.agentSettings,phoneNavCount:phoneCount};}
+ if(nav!==undefined){const settings={...state.agentSettings};if(nav===null)delete settings.navOrder;else settings.navOrder=[...nav];state.agentSettings=settings;try{require('./services/audit').audit({action:'nav-order',by:owner,to:navOrder()});}catch{}}
  if(listRetention!==undefined){const was=checklistRetentionDays();if(was!==listRetention){try{require('./services/audit').audit({action:'checklist-retention',by:owner,from:was,to:listRetention});}catch{}}const settings={...state.agentSettings};if(listRetention===null)delete settings.checklistRetentionDays;else settings.checklistRetentionDays=listRetention;state.agentSettings=settings;}
  if(wrapUp!==undefined){
   const next={...state.agentSettings?.wrapUp};

@@ -1016,3 +1016,17 @@ html .ios .toast.toast-top .toast-content {
   padding-top: var(--f7-toast-padding-vertical);
 }
 
+
+/* A conversation's name centred between the back button and the buttons on the right, not on
+ * the whole bar: with several buttons on the right a name
+ * centred on the bar sat far to the right of the space it had. The title takes the room left
+ * between the two sides and centres in it; a long name ends in an ellipsis. */
+.chat-page .navbar .navbar-inner > .title {
+  position: relative; left: auto !important; transform: none !important;
+  flex: 1 1 auto; min-width: 0; margin: 0 8px; text-align: center; justify-content: center;
+}
+.chat-page .navbar .navbar-inner > .left, .chat-page .navbar .navbar-inner > .right { flex: 0 0 auto; }
+/* The buttons on the right keep even 16px gaps in any order an admin sets: the gap is the
+ * row's, not a margin each link takes from the one before it in the page's source. */
+.chat-page .navbar .navbar-inner > .right { gap: 16px; }
+.chat-page .navbar .navbar-inner > .right > .link { margin-left: 0 !important; }

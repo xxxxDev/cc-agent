@@ -51,6 +51,8 @@
       <f7-list-item link :title="ct('範圍報告單')" :badge="openReports||null" badge-color="orange" @click.prevent="goReports"><template #media><f7-icon f7="lock_shield"/></template></f7-list-item>
       <!-- What people sent from Agent Profile's 「回報診斷」. -->
       <f7-list-item link class="diagnostic-reports-row" :title="ct('診斷回報')" :badge="openDiagnostics||null" badge-color="orange" @click.prevent="goDiagnostics"><template #media><f7-icon f7="doc_text_search"/></template></f7-list-item>
+      <!-- The conversation's buttons, a phone's and a computer's order apart. -->
+      <f7-list-item link class="nav-buttons-row" :title="ct('對話頁按鈕')" :footer="ct('手機版和電腦版的按鈕順序，手機右上要顯示幾個')" @click.prevent="goNavButtons"><template #media><f7-icon f7="rectangle_3_offgrid"/></template></f7-list-item>
     </f7-list>
 
     <f7-block-title>{{ t('sectionAccount') }}</f7-block-title>
@@ -247,6 +249,7 @@ function goPeerLink() {
 function goReports() {
   f7.views.get('#view-admin').router.navigate('/access-reports/');
 }
+function goNavButtons(){f7.views.get('#view-admin').router.navigate('/nav-buttons/');}
 function goDiagnostics() {
   f7.views.get('#view-admin').router.navigate('/diagnostic-reports/');
 }

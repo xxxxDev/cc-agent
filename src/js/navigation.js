@@ -31,6 +31,7 @@ export const TAB_PAGES = {
     {route: '/access-reports/', path: '/admin/access-reports', parent: '/admin/', admin: true},
     {route: '/access-report/', path: '/admin/access-reports/:id', id: UUID, parent: '/access-reports/', admin: true},
     {route: '/diagnostic-reports/', path: '/admin/diagnostic-reports', parent: '/admin/', admin: true},
+    {route: '/nav-buttons/', path: '/admin/nav-buttons', parent: '/admin/', admin: true},
     {route: '/diagnostic-report/', path: '/admin/diagnostic-reports/:id', id: UUID, parent: '/diagnostic-reports/', admin: true},
     {route: '/security/', path: '/admin/security', parent: '/admin/', admin: true},
   ],
