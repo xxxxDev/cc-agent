@@ -407,6 +407,10 @@ function activeOwner(owner){
 function assertFullAccessGrant(owner,access,callerRole){
  if(access?.full&&(callerRole!=='admin'||!ownerIsActiveAdmin(owner)))throw error('完整權限只能由管理員開在啟用中的管理員 Agent。',403);
 }
+// Whether an agent runs with full access, as launchAccess decides it, without the rest of its
+// checks: the list and every poll ask this for each agent, and the program checks resolve
+// every agent's folders on disk.
+const fullAccess=c=>!!agentAccess.of(c).full&&ownerIsActiveAdmin(c.owner);
 function launchAccess(c){
  const access=agentAccess.of(c);
  if(access.full&&!ownerIsActiveAdmin(c.owner)){delete access.full;console.error(`full access ignored for ${c.id}: its owner is not an active admin`);}
@@ -675,7 +679,7 @@ const peerOne=(v,n)=>typeof v==='string'?v.replace(/[\r\n\[\]"<>]/g,' ').trim().
 const PEER_TEXT=8000,PEER_BYTES=12000,PEER_HOURLY=30,PEER_WAITING=10,PEER_LOOP=12,PEER_LEASE_MS=120_000,PEER_EXPIRE_MS=24*3600_000,PEER_DRAFT_MS=24*3600_000;
 // Full access, and only an agent an active admin owns. An agent marked watchOpen (one
 // that an outside chat integration can reach) stays out.
-function peerEligible(c){return c.mode==='claude'&&!c.archived&&ownerIsActiveAdmin(c.owner)&&!!launchAccess(c).full&&c.watchOpen!==true;}
+function peerEligible(c){return c.mode==='claude'&&!c.archived&&ownerIsActiveAdmin(c.owner)&&!!fullAccess(c)&&c.watchOpen!==true;}
 // Open to an outside chat now, or holding words one sent or was sent: such an agent is never
 // handed another person's diagnostic report (the agent list carries it as outsideChat).
 function outsideTaken(c){return c.watchOpen===true||c.outsideChat===true||c.messages.some(m=>m.external||m.outbound);}
@@ -683,7 +687,7 @@ function peerWhyNot(c){
  if(c.mode!=='claude')return 'not-claude';
  if(c.archived)return 'archived';
  if(!ownerIsActiveAdmin(c.owner))return 'owner-not-admin';
- if(!launchAccess(c).full)return 'scoped';
+ if(!fullAccess(c))return 'scoped';
  if(c.watchOpen===true)return 'watch-open';
  return null;
 }
@@ -948,7 +952,7 @@ const peerView=c=>({on:c.peerLink?.on===true,allow:c.peerLink?.allow||[],autoRep
 // started agent gets its own profile and scope, never the starter's environment.
 function agentStarter(c){
  let ids=[];try{ids=JSON.parse(fs.readFileSync(path.join(stateRoot,'agent-starters.json'),'utf8')).conversationIds;}catch{}
- return Array.isArray(ids)&&ids.includes(c.id)&&c.mode==='claude'&&!c.archived&&ownerIsActiveAdmin(c.owner)&&!!launchAccess(c).full;
+ return Array.isArray(ids)&&ids.includes(c.id)&&c.mode==='claude'&&!c.archived&&ownerIsActiveAdmin(c.owner)&&!!fullAccess(c);
 }
 // Any account's Claude agents, only of an account that is active now.
 function starterTargets(c){return state.conversations.filter(x=>x.id!==c.id&&!x.archived&&x.mode==='claude'&&activeOwner(x.owner));}
@@ -2003,13 +2007,13 @@ function bridge(c,action,data={}) {
  // Only an agent an admin trusts with full access starts its own at once: a scoped
  // one could otherwise reach sites or run checks its scope does not allow, and a
  // member's agent's owner cannot change schedules.
- if(action==='schedule-propose'){assertCheck(data);const {schedule:x,created}=scheduleStore.propose(c,data,{active:!!launchAccess(c).full,language:ownerLanguage(c.owner)});if(created){lockCheck(x);freezeScript(x);}return {id:x.id,status:x.status,nextAt:x.nextAt,note:x.status==='active'?'Active now. The owner can see, change or switch it off on the Schedules page.':x.status==='off'?'The same schedule already exists and is switched off; switch it on with update_schedule (enabled=true).':'Waiting for an admin to approve it on the Schedules page.'};}
+ if(action==='schedule-propose'){assertCheck(data);const {schedule:x,created}=scheduleStore.propose(c,data,{active:!!fullAccess(c),language:ownerLanguage(c.owner)});if(created){lockCheck(x);freezeScript(x);}return {id:x.id,status:x.status,nextAt:x.nextAt,note:x.status==='active'?'Active now. The owner can see, change or switch it off on the Schedules page.':x.status==='off'?'The same schedule already exists and is switched off; switch it on with update_schedule (enabled=true).':'Waiting for an admin to approve it on the Schedules page.'};}
  // An agent changes or removes its own schedules, as the owner can on the page: only an agent trusted to start its own, only
  // its own conversation's (agents add, change, delete and switch
  // their schedules).
  if(action==='schedule-update'||action==='schedule-remove'){
   const zh=ownerLanguage(c.owner)==='zh-TW';
-  if(!launchAccess(c).full)throw error(zh?'只有完整權限的 Agent 能自己修改排程；這個 Agent 的排程由管理員在排程頁修改':'Only a full-access agent changes its own schedules; an admin changes this agent\'s schedules on the Schedules page',403);
+  if(!fullAccess(c))throw error(zh?'只有完整權限的 Agent 能自己修改排程；這個 Agent 的排程由管理員在排程頁修改':'Only a full-access agent changes its own schedules; an admin changes this agent\'s schedules on the Schedules page',403);
   const x=scheduleStore.get(typeof data.id==='string'?data.id:'');
   if(!x||x.conversationId!==c.id)throw error(zh?'找不到這個排程':'Schedule not found',404);
   // A pending one waits for an admin; one that is
@@ -2467,7 +2471,7 @@ function mcpServerNames(c){
  const names=new Set(['executive']);
  // The owner's own MCP servers only for an agent its launch would run with full access
  // (launchAccess), not for a full-access mark left after a demotion or a disable.
- if(launchAccess(c).full){
+ if(fullAccess(c)){
   try{
    const conf=JSON.parse(fs.readFileSync(path.join(require('node:os').homedir(),'.claude.json'),'utf8'));
    const cwd=path.join(stateRoot,'workspaces',c.id,'g'+active(c).number);
@@ -2970,7 +2974,7 @@ function applyAgentAutoCompact(c){return autoCompactPending(c)?applySubagents(c)
 // route's owner check, attachments.put's limits); this only says whether the agent can read
 // it there and, if so, gives the path to type. Whether it has full access is what its next
 // launch would get (launchAccess), as attachableFolders asks.
-function terminalFileAccess(c){return terminalFiles.access({mode:c.mode,archived:c.archived,full:launchAccess(c).full===true,dir:attachments.directory(stateRoot,c)});}
+function terminalFileAccess(c){return terminalFiles.access({mode:c.mode,archived:c.archived,full:fullAccess(c)===true,dir:attachments.directory(stateRoot,c)});}
 function attachTerminalFile(c,fileId){
  const ok=terminalFileAccess(c);
  if(!ok.ok)throw error(ok.reason==='unreadable'?'這個 Agent 讀不到附件資料夾，檔案請放到聊天室。':'這個 Agent 沒有終端機可以放檔案。',409);
