@@ -37,6 +37,8 @@ export function useBubbleGestures({list, find, canReply, isSent, reply, copy}) {
     const t = e.touches[0];
     const press = !e.target.closest(SKIP_PRESS) && (!!hit.m.text || canReply());
     g = {...hit, x0: t.clientX, y0: t.clientY, mode: null, armed: false, swipe: canReply() && t.clientX > EDGE_PX, timer: null};
+    // Where the finger is in the text, taken at the touch, before the press styles the bubble.
+    if (press && hit.m.text) g.caret = caretAt(t.clientX, t.clientY, hit.el);
     if (press) { hit.el.classList.add('bubble-pressing'); g.timer = setTimeout(openMenu, LONG_PRESS_MS); }
     // A list that scrolls under the finger (a flick, the momentum of one) is no press.
     document.addEventListener('scroll', scrolled, {capture: true, passive: true});
@@ -119,7 +121,8 @@ export function useBubbleGestures({list, find, canReply, isSent, reply, copy}) {
     el.classList.add('bubble-menu-on');
     const cell = root?.closest?.('.split-cell') || root?.closest?.('.page');
     const bar = cell?.querySelector?.('.messagebar')?.getBoundingClientRect(), nav = cell?.querySelector?.('.navbar, .split-cell-bar')?.getBoundingClientRect();
-    menu.value = {message: m, el, sent, canCopy: !!m.text, canSelect: !!m.text, canReply: canReply(), shown: false, closing: false,
+    const at = g.caret || null;
+    menu.value = {message: m, el, sent, at, canCopy: !!m.text, canSelect: !!m.text, canReply: canReply(), shown: false, closing: false,
       bubble: lift(a), block: lift({left: c.left, top: c.top, width: c.width, height: a.bottom - c.top}),
       floor: bar && bar.height ? bar.top : innerHeight, ceiling: nav && nav.height ? nav.bottom : 0};
     // Drawn first as it is, then eased into place: the dim, the lift and the icons together.
@@ -218,8 +221,10 @@ export function useBubbleGestures({list, find, canReply, isSent, reply, copy}) {
     copy() { const open = menu.value; if (!open || open.closing) return; closeMenu(); copy(open.message); },
     reply() { const open = menu.value; if (!open || open.closing) return; closeMenu(); reply(open.message); },
     // Select text: the menu closes and the bubble's words are
-    // handed to iOS's own selection, all of them selected, so its handles pick part of them;
-    // a tap elsewhere ends it.
+    // handed to iOS's own selection, so its handles pick the part wanted; a tap elsewhere ends
+    // it. Only the word under the finger is selected to start with, not the whole bubble: from
+    // a whole long message the ends are hard to reach on a phone. Where no word can be found
+    // there, the whole text.
     select() {
       const open = menu.value; if (!open || open.closing) return; closeMenu();
       const el = open.el;
@@ -227,12 +232,35 @@ export function useBubbleGestures({list, find, canReply, isSent, reply, copy}) {
         const text = el.querySelector('.message-text, .message-markdown');
         if (!text) return;
         el.classList.add('bubble-selecting');
-        const range = document.createRange(); range.selectNodeContents(text);
         const sel = window.getSelection?.(); if (!sel) return;
-        sel.removeAllRanges(); sel.addRange(range);
+        const range = open.at && text.contains(open.at.node) ? wordAround(open.at.node, open.at.offset) : null;
+        const all = () => { const r = document.createRange(); r.selectNodeContents(text); return r; };
+        sel.removeAllRanges(); sel.addRange(range || all());
         const end = e => { if (e && el.contains(e.target)) return; el.classList.remove('bubble-selecting'); document.removeEventListener('touchstart', end, true); document.removeEventListener('mousedown', end, true); };
         document.addEventListener('touchstart', end, true); document.addEventListener('mousedown', end, true);
       }, still() ? 0 : CLOSE_MS + 20);
     },
   };
+}
+
+// The text position at a point of the page inside `within`, or null: the browser's caret there
+// (caretRangeFromPoint in Safari and Chrome, caretPositionFromPoint in Firefox).
+export function caretAt(x, y, within, doc = document) {
+  let node, offset;
+  if (doc.caretRangeFromPoint) { const r = doc.caretRangeFromPoint(x, y); if (r) { node = r.startContainer; offset = r.startOffset; } }
+  else if (doc.caretPositionFromPoint) { const p = doc.caretPositionFromPoint(x, y); if (p) { node = p.offsetNode; offset = p.offset; } }
+  return node && node.nodeType === 3 && within.contains(node) ? {node, offset} : null;
+}
+// The word around a text position, as a Range, or null. Intl.Segmenter cuts the text node into
+// words, Chinese and Japanese ones too. On a space or punctuation the nearest word after it,
+// else before it, so a press always starts somewhere.
+export function wordAround(node, offset, doc = document) {
+  const s = node.data; if (!s.trim()) return null;
+  const at = Math.min(Math.max(offset, 0), s.length - 1);
+  let words = [];
+  try { words = [...new Intl.Segmenter(undefined, {granularity: 'word'}).segment(s)].filter(w => w.isWordLike).map(w => [w.index, w.index + w.segment.length]); } catch { /* no Segmenter */ }
+  if (!words.length) words = [...s].map((ch, i) => [i, i + 1]).filter(([i]) => /\S/.test(s[i]));
+  const hit = words.find(([a, b]) => at >= a && at < b) || words.find(([a]) => a > at) || words.findLast(([, b]) => b <= at);
+  if (!hit) return null;
+  const r = doc.createRange(); r.setStart(node, hit[0]); r.setEnd(node, hit[1]); return r;
 }
