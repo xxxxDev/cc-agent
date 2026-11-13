@@ -1,6 +1,7 @@
 import tmuxSocketFor from './tmuxSocket.cjs';
-import {startupConsent} from './startupConsent.mjs';import platform from './platform.cjs';import agentEnv from './agentEnv.cjs';import runtimeTools from './runtimeTools.cjs';import unsandboxedCommands from './unsandboxedCommands.cjs';
+import {startupConsent} from './startupConsent.mjs';import platform from './platform.cjs';import agentEnv from './agentEnv.cjs';import runtimeTools from './runtimeTools.cjs';import {ownerPlugins} from './ownerPlugins.mjs';import {builtinPlugins,builtinSettings} from './builtinPlugins.mjs';import unsandboxedCommands from './unsandboxedCommands.cjs';
 import fs from 'node:fs';import path from 'node:path';import {spawn,execFileSync} from 'node:child_process';import readline from 'node:readline';import {bridge} from './client.mjs';import {versionedToolNames} from './versionedTools.mjs';
+import scopeHooks from '../server/scopeHooks.js';
 const configPath=process.argv[2],config=JSON.parse(fs.readFileSync(configPath,'utf8'));
 // Runtime configs are server-authored control files. Fail closed on retired launch
 // overrides even if one is supplied directly, before creating files or a process.
@@ -48,8 +49,8 @@ const hooks={...own.hooks};for(const event of ['PreCompact','PostCompact','Stop'
 // minus access.exclude, set per agent by an admin; the default is the workspace
 // alone. The OS sandbox holds Bash to that, Claude's restricted mode holds the file
 // tools to it, and the sandbox holds Bash's network to access.domains. The session
-// runs in auto mode (below): access.domains are pre-allowed for WebFetch, and auto
-// mode may approve other sites itself. Restricted mode refuses bypass; anything auto
+// runs in auto mode (below); WebFetch reaches only access.domains and MCP only the ticked
+// servers, held by the scope gate (below). Restricted mode refuses bypass; anything auto
 // mode does not approve becomes a permission request, which the server refuses and
 // files for review. SECURITY.md.
 const access={allow:[],exclude:[],domains:[],mcp:[],...(config.access&&typeof config.access==='object'?config.access:{})};
@@ -227,13 +228,13 @@ if(!full&&access.mcp?.length){
  const chosen=Object.fromEntries(access.mcp.filter(n=>n!=='executive'&&Object.hasOwn(mine,n)&&mine[n]&&typeof mine[n]==='object').map(n=>[n,mine[n]]));
  if(Object.keys(chosen).length)writeFresh(mcpFile,JSON.stringify({mcpServers:{...chosen,executive:{alwaysLoad:true,command:process.execPath,args:[path.join(config.root,'channel/server.mjs'),configPath]}}}));
 }
-// An agent whose owner is not an admin (server: mcpTickedOnly) uses a claude.ai
-// connector only when an admin ticked it. Auto mode
-// would otherwise approve one by itself, as it still does on an admin's scoped agents. None ticked: connectors are not loaded at all (disableClaudeAiConnectors,
-// honoured from any settings source, and ENABLE_CLAUDEAI_MCP_SERVERS). Some ticked:
-// every other connector this computer has used is denied by name, in both spellings
-// Claude may give it. One never used on this computer has no name here at launch.
-const tickedOnly=!full&&config.mcpTickedOnly===true,tickedMcp=new Set(access.mcp||[]);
+// Every scoped agent, an admin's own included, uses a claude.ai connector or other MCP server
+// only when an admin ticked it. None ticked: connectors are not loaded at all
+// (disableClaudeAiConnectors, honoured from any settings source, and
+// ENABLE_CLAUDEAI_MCP_SERVERS). Some ticked: every other connector this computer has used is
+// denied by name, in both spellings Claude may give it; and any MCP tool not of the executive
+// server or a ticked one is refused by the scope gate (below), one never used here too.
+const tickedOnly=!full,tickedMcp=new Set(access.mcp||[]);
 const connectorNames=label=>{const raw='claude_ai_'+String(label).replace(/[^A-Za-z0-9_-]/g,'_');return [...new Set([raw,raw.replace(/_+/g,'_').replace(/_$/,'')])];};
 // The list of known connectors unreadable (no file, not JSON, no list): nothing to deny
 // by name, so no connector at all rather than every one.
@@ -241,6 +242,11 @@ const connectorsKnown=Array.isArray(ownerClaude.claudeAiMcpEverConnected);
 const noConnectors=tickedOnly&&(![...tickedMcp].some(n=>n.startsWith('claude_ai_'))||!connectorsKnown);
 if(tickedOnly&&!connectorsKnown&&[...tickedMcp].some(n=>n.startsWith('claude_ai_')))console.error('claude.ai connectors off for this agent: the list of connectors used on this computer could not be read');
 const connectorDeny=tickedOnly?(connectorsKnown?ownerClaude.claudeAiMcpEverConnected:[]).filter(x=>typeof x==='string'&&x.startsWith('claude.ai ')).map(x=>connectorNames(x.slice(10))).filter(names=>!names.some(n=>tickedMcp.has(n))).flat().map(n=>`mcp__${n}`):[];
+// The owner's plugins and unticked MCP servers (channel/ownerPlugins.mjs): a plugin's tools never
+// reach the scope gate, so for a scoped agent each plugin is switched off and every such name is
+// denied by a permission rule, which holds where a hook is not run.
+const plugins=full?{ids:[],labels:[]}:ownerPlugins({home:process.env.HOME||'',mcpServers:ownerClaude.mcpServers,ticked:[...tickedMcp],envDirs:process.env.CLAUDE_CODE_PLUGIN_DIRS,projectDirs:[config.cwd,...allowDirs]});
+const pluginDeny=plugins.labels.map(n=>`mcp__${n}`);
 // Full access runs on the host's own Claude configuration: their settings, hooks, CLAUDE.md and rules, MCP servers and plugins, the
 // way they start sessions in tmux. Only an active admin's agent receives it
 // (launchAccess). Two things stay CC Agent's: its web channel and hooks, carried by a
@@ -250,6 +256,8 @@ const scope=full?{permissions:{...(own.permissions||{})}}:{
  sandbox:{enabled:true,failIfUnavailable:true,allowUnsandboxedCommands:false,autoAllowBashIfSandboxed:true,
   // ~/.nvm is readable: a node installed with nvm lives there, and without it node aborts at start.
   filesystem:{denyRead:['~',...OUTSIDE_HOME_DENY,...excludeDirs],allowRead:[config.cwd,...tmpDirs,'~/.nvm',...runtimeTools.toolReadRoots(),...allowDirs,...referenceDirs,...readOnlyDirs,...toolResultsDirs],allowWrite:[config.cwd,...writableTmp,...allowDirs],denyWrite:[...sharedTmp,...excludeDirs,...referenceDirs,...readOnlyDirs,...toolResultsDirs,...configDirs,...tmpConfigDirs,...toolDirs,...offLimits,...programDirs]},
+  // Bash's network only: Claude Code's own WebFetch does not go through the sandbox; it is held
+  // to the listed sites by the scope gate (scopeGate below), or removed when none are listed.
   network:{allowedDomains:access.domains||[]},
   ...(programs.length?{excludedCommands:programs.map(x=>x.command)}:{})},
  // "//path" is absolute in a permission rule; "/path" would be relative to this file.
@@ -259,8 +267,14 @@ const scope=full?{permissions:{...(own.permissions||{})}}:{
  // No cross-session messages in or out: another session could hand it what its scope
  // keeps from it. Refused, not held for a human.
  crossSessionInbound:'refuse',
+ // A project's .mcp.json (the workspace's, a granted folder's) starts nothing by itself; only
+ // the servers named in enabledMcpjsonServers (CC Agent's executive) are approved.
+ enableAllProjectMcpServers:false,
  ...(noConnectors?{disableClaudeAiConnectors:true}:{}),
- permissions:{allow:[...(own.permissions?.allow||[]).filter(r=>!/^mcp__/.test(r)),...(access.mcp||[]).map(n=>`mcp__${n}`),'Read','Edit','Write','Glob','Grep','Bash','WebSearch',...access.domains.map(d=>`WebFetch(domain:${d})`),...programs.map(x=>`Bash(${x.command})`)],deny:[...(own.permissions?.deny||[]),...connectorDeny,...excludeDirs.flatMap(p=>[`Read(/${p}/**)`,`Edit(/${p}/**)`]),...[...referenceDirs,...readOnlyDirs,...toolResultsDirs,...configDirs,...tmpConfigDirs,...toolDirs,...offLimits,...programDirs].map(p=>`Edit(/${p}/**)`)]},
+ // None of the owner's plugins (above); CC Agent's own comes with --plugin-dir.
+ enabledPlugins:Object.fromEntries(plugins.ids.map(id=>[id,false])),
+ env:{...(own.env||{}),CLAUDE_CODE_PLUGIN_DIRS:''},
+ permissions:{allow:[...(own.permissions?.allow||[]).filter(r=>!/^mcp__/.test(r)),...(access.mcp||[]).map(n=>`mcp__${n}`),'Read','Edit','Write','Glob','Grep','Bash','WebSearch',...access.domains.map(d=>`WebFetch(domain:${d})`),...programs.map(x=>`Bash(${x.command})`)],deny:[...(own.permissions?.deny||[]),...connectorDeny,...pluginDeny,...(access.domains.length?[]:['WebFetch']),...excludeDirs.flatMap(p=>[`Read(/${p}/**)`,`Edit(/${p}/**)`]),...[...referenceDirs,...readOnlyDirs,...toolResultsDirs,...configDirs,...tmpConfigDirs,...toolDirs,...offLimits,...programDirs].map(p=>`Edit(/${p}/**)`)]},
 };
 // The workspace's own CLAUDE.md says what the folder is and whose rules apply. Claude Code
 // loads a project's AGENTS.md only where it finds no CLAUDE.md on the way up, so it also
@@ -272,11 +286,11 @@ writeFresh(path.join(config.cwd,'CLAUDE.md'),[
  'This folder is your working directory, not a project of its own.',
  'Follow your own instructions, your Agent Profile and memory, and, before working in a repository, that repository\'s own CLAUDE.md or AGENTS.md.',
  '',
- // Its scope in a few lines, and to stay inside it first: a refusal is filed as a scope
- // report it is asked to explain. A full-access agent can still be refused by Claude Code's
- // own permission prompts, so it gets the same rule.
- ...(full?['## Scope','','Use an in-scope way first: work in this workspace and the folders your task names, and put temporary files in your scratch directory (`'+agentTmp+'`). Go outside only when there is no in-scope way. If you are refused, a report is filed: do not try the same thing by another route (another tool, a copy elsewhere, another command on the same path or site); a different in-scope approach is fine. Always explain the report with explain_report, still_needed true or false; for a refused prompt an admin is told only when it is still needed.','']
-  :['## Your scope','',`- Write only in this workspace${access.allow.length?', '+access.allow.map(d=>`\`${d}\``).join(', '):''} and your scratch directory (\`${sandboxTmp}\`).`,...(access.exclude.length?[`- Never use: ${access.exclude.map(d=>`\`${d}\``).join(', ')}.`]:[]),`- Websites: ${access.domains.length?access.domains.map(d=>`\`${d}\``).join(', '):'none'}.`,'','Use an in-scope way first: write only in the listed folders and the scratch directory, and use only the allowed sites. Go outside only when there is no in-scope way. If you are refused, a report is filed: do not try the same thing by another route (another tool, a copy elsewhere, another command on the same path or site); a different in-scope approach is fine. Always explain the report with explain_report, still_needed true or false; for a refused prompt an admin is told only when it is still needed.','']),
+ // Its scope in a few lines, and to stay inside it: a refusal is filed as a scope report it is
+ // asked to explain, with nothing on who hears of it. A full-access agent
+ // can still be refused by Claude Code's own permission prompts, so it gets the same rule.
+ ...(full?['## Scope','','Do not attempt actions outside your scope: use an in-scope way, working in this workspace and the folders your task names, with temporary files in your scratch directory (`'+agentTmp+'`). CC Agent refuses every permission prompt, a subagent\'s too: when one is refused, do not try the same thing by another route (another tool, a copy elsewhere, another command on the same path or site); do it another way, or tell the owner what it needed.','']
+  :['## Your scope','',`- Write only in this workspace${access.allow.length?', '+access.allow.map(d=>`\`${d}\``).join(', '):''} and your scratch directory (\`${sandboxTmp}\`).`,...(access.exclude.length?[`- Never use: ${access.exclude.map(d=>`\`${d}\``).join(', ')}.`]:[]),`- Websites: ${access.domains.length?access.domains.map(d=>`\`${d}\``).join(', '):'none'}.`,'','Do not attempt actions outside your scope: use an in-scope way, writing only in the listed folders and the scratch directory and using only the allowed sites. If you are refused, a report is filed: do not try the same thing by another route (another tool, a copy elsewhere, another command on the same path or site); a different in-scope approach is fine. Always explain the report with explain_report, still_needed true or false.','']),
  // The programs it may run outside the sandbox, by the wrapper commands it types.
  // The folders it may read and not write, so it knows where to look.
  ...(readOnlyDirs.length?['## Folders you may read but not change','',...readOnlyDirs.map(d=>`- \`${d}\``),'']:[]),
@@ -301,7 +315,16 @@ const statusSettings=config.contextStatus===true?{statusLine:{type:'command',com
 const ourStatus=v=>!!v&&typeof v==='object'&&typeof v.command==='string'&&v.command.includes(STATUS_SCRIPT);
 let ownStatusLine=false;
 const settings=path.join(controlDir,'settings.json');
-if(!ownerConfig)writeFresh(settings,JSON.stringify({...own,...scope,...statusSettings,enabledMcpjsonServers:[...new Set([...(own.enabledMcpjsonServers||[]),'executive'])],autoMemoryEnabled:false,claudeMdExcludes:[...(own.claudeMdExcludes||[]),...claudeMdExcludes],hooks}));
+// What the scope refuses reaches the server through Claude Code's own hooks
+// (server/scopeHooks.js): beside the hooks above, each event into this generation's spool
+// folder in the control folder, which the agent cannot read or write. Made here, a plain
+// folder of this account's; anything else at that name is removed first.
+const spool=scopeHooks.spoolDir(controlDir);
+if(!ownerConfig){
+ try{const st=fs.lstatSync(spool);if(!st.isDirectory()||st.isSymbolicLink()||st.uid!==uid)fs.rmSync(spool,{recursive:true,force:true});}catch{}
+ fs.mkdirSync(spool,{recursive:true,mode:0o700});fs.chmodSync(spool,0o700);
+}
+// Written further down, once the version that starts is known (the hooks only from HOOKS_MIN).
 // CC Agent's hooks as a plugin, without replacing the full-access host settings.
 const hooksPlugin=path.join(controlDir,'plugin');
 if(ownerConfig){
@@ -364,7 +387,7 @@ if(ownStatusLine)writeFresh(path.join(controlDir,'status-own'),'1');else fs.rmSy
 // A scoped agent reads no settings.local.json (--setting-sources project --settings), so
 // when it compacts is handed to it in its environment instead: the same checked value,
 // set only by CC Agent (issue #12).
-const env={...agentEnv(),TMPDIR:agentTmp+'/',CLAUDE_CODE_TMPDIR:agentTmp,...(platform.isWin?{TEMP:agentTmp,TMP:agentTmp}:{}),...(full?{}:{GIT_CONFIG_GLOBAL:gitConfig,TMPPREFIX:path.join(sandboxTmp,'zsh')}),...(ownerConfig?{DISCORD_STATE_DIR:noDiscord}:{}),...(noConnectors?{ENABLE_CLAUDEAI_MCP_SERVERS:'false'}:{}),...(!full&&subagentEnv[AUTO_COMPACT_KEY]?{[AUTO_COMPACT_KEY]:subagentEnv[AUTO_COMPACT_KEY]}:{})};
+const env={...agentEnv(),TMPDIR:agentTmp+'/',CLAUDE_CODE_TMPDIR:agentTmp,...(platform.isWin?{TEMP:agentTmp,TMP:agentTmp}:{}),...(full?{}:{GIT_CONFIG_GLOBAL:gitConfig,TMPPREFIX:path.join(sandboxTmp,'zsh'),CLAUDE_CODE_PLUGIN_DIRS:''}),...(ownerConfig?{DISCORD_STATE_DIR:noDiscord}:{}),...(noConnectors?{ENABLE_CLAUDEAI_MCP_SERVERS:'false'}:{}),...(!full&&subagentEnv[AUTO_COMPACT_KEY]?{[AUTO_COMPACT_KEY]:subagentEnv[AUTO_COMPACT_KEY]}:{})};
 
 const transcript=path.join(platform.isWin?homeDir:env.HOME,'.claude','projects',config.cwd.replace(/[^a-zA-Z0-9]/g,'-'),config.sessionId+'.jsonl');
 const resumed=config.resume||fs.existsSync(transcript)||fs.existsSync(path.join(controlDir,'started.marker'));
@@ -386,8 +409,11 @@ const ownerArgs=[...nameArgs,'--model',config.model||'claude-sonnet-5-5','--effo
  '--plugin-dir',hooksPlugin,'--',prompt];
 // Scoped agents run in auto mode: the scope that
 // matters is files outside it, held by the sandbox, --restricted and deny rules, which
-// auto mode does not lift (measured); sites and MCP servers it may approve itself.
-const args=ownerConfig?ownerArgs:[...nameArgs,'--model',config.model||'claude-sonnet-5-5','--effort',config.effort||'high',...(resumed?['--resume',config.sessionId]:['--session-id',config.sessionId]),'--setting-sources','project','--settings',settings,'--mcp-config',mcpFile,'--dangerously-load-development-channels','server:executive','--tools','Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,ToolSearch,TodoWrite,Skill',...(full?['--dangerously-skip-permissions']:['--restricted','--permission-mode','auto',...(allowDirs.length+referenceDirs.length+readOnlyDirs.length+toolResultsDirs.length+tmpFileDirs.length?['--add-dir',...allowDirs,...referenceDirs,...readOnlyDirs,...toolResultsDirs,...tmpFileDirs]:[]),'--append-system-prompt-file',path.join(agentConfig,'scope-notice.md')]),'--plugin-dir',path.join(agentConfig,'plugin'),'--allowedTools','ToolSearch','mcp__executive__bootstrap','mcp__executive__ready','mcp__executive__reply','mcp__executive__post','mcp__executive__group_post','mcp__executive__checklists','mcp__executive__checklist','mcp__executive__remember','mcp__executive__describe','mcp__executive__history',...versionedToolNames(config),'--',prompt];
+// auto mode does not lift (measured); sites and MCP servers are held by the scope gate,
+// which runs before auto mode decides.
+// With no claude.ai connector ticked, only the servers in its own --mcp-config (ticked local ones
+// and CC Agent's executive): --strict-mcp-config, which would also drop the connectors, so only then.
+const args=ownerConfig?ownerArgs:[...nameArgs,'--model',config.model||'claude-sonnet-5-5','--effort',config.effort||'high',...(resumed?['--resume',config.sessionId]:['--session-id',config.sessionId]),'--setting-sources','project','--settings',settings,'--mcp-config',mcpFile,...(noConnectors?['--strict-mcp-config']:[]),'--dangerously-load-development-channels','server:executive','--tools',full||access.domains.length?'Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,ToolSearch,TodoWrite,Skill':'Bash,Read,Write,Edit,Glob,Grep,WebSearch,ToolSearch,TodoWrite,Skill',...(full?['--dangerously-skip-permissions']:['--restricted','--permission-mode','auto',...(allowDirs.length+referenceDirs.length+readOnlyDirs.length+toolResultsDirs.length+tmpFileDirs.length?['--add-dir',...allowDirs,...referenceDirs,...readOnlyDirs,...toolResultsDirs,...tmpFileDirs]:[]),'--append-system-prompt-file',path.join(agentConfig,'scope-notice.md')]),'--plugin-dir',path.join(agentConfig,'plugin'),'--allowedTools','ToolSearch','mcp__executive__bootstrap','mcp__executive__ready','mcp__executive__reply','mcp__executive__post','mcp__executive__group_post','mcp__executive__checklists','mcp__executive__checklist','mcp__executive__remember','mcp__executive__describe','mcp__executive__history',...versionedToolNames(config),'--',prompt];
 // Claude also loads a .mcp.json from its working directory, and MCP servers run
 // outside the sandbox. --strict-mcp-config would stop that but also drops the
 // claude.ai connectors agents use (measured), and the server removes the
@@ -404,6 +430,51 @@ const claude=runtimeTools.resolveOnPath('claude',env.PATH);
  const problem=!claude?'找不到 claude 程式（PATH）。':[claude.path,claude.real].some(f=>writable.some(d=>runtimeTools.inside(f,d)))?'claude 程式位於此 Agent 可寫入的資料夾內，已拒絕啟動。':'';
  if(problem){await bridge(config,'error',{message:problem}).catch(()=>{});process.exit(1);}
 }
+// Whether the Claude Code about to start takes the scope hooks: by the version its file is
+// named after (an official install, versions/<x.y.z>), else what it says to --version (10 s).
+// Older or unknown, its settings are written without them, so the sandbox and deny rules are
+// never put at risk by keys it might not know; the server raises the notice either way.
+let scopeHooksOn=false;
+if(!full){
+ let version=null;
+ if(/^\d+\.\d+\.\d+$/.test(path.basename(claude.real||claude.path)))version=path.basename(claude.real||claude.path);
+ else try{version=/(\d+\.\d+\.\d+)/.exec(execFileSync(claude.path,['--version'],{cwd:config.cwd,env,encoding:'utf8',timeout:10000,stdio:['ignore','pipe','ignore']}))?.[1]||null;}catch{}
+ scopeHooksOn=scopeHooks.hooksAccepted(version);
+ await bridge(config,'hook-check',{version,supported:scopeHooks.supported(version),hooks:scopeHooksOn}).catch(()=>{});
+}
+// Claude Code's built-in plugins (channel/builtinPlugins.mjs), read from the program about to
+// start (kept per file in the data folder's plugin-ids.json): each off by id and its tools denied
+// by name. Not read from it, the known list is used and the server raises a notice.
+const builtin=full?null:builtinPlugins(claude?.real||claude?.path||null,{cacheFile:path.basename(path.dirname(path.dirname(controlDir)))==='workspaces'?path.join(controlDir,'..','..','..','plugin-ids.json'):null});
+if(builtin){
+ const off=builtinSettings(builtin.names);
+ scope.enabledPlugins={...off.enabledPlugins,...scope.enabledPlugins};
+ scope.permissions.deny=[...scope.permissions.deny,...off.deny];
+ await bridge(config,'plugin-check',{known:builtin.known,names:builtin.names}).catch(()=>{});
+}
+const scopeHookEntries=ownerConfig||!scopeHooksOn?{}:scopeHooks.hookSettings(path.join(config.root,'channel/scope-hook.sh'),spool);
+const scopedHooks={...hooks};for(const [event,list] of Object.entries(scopeHookEntries))scopedHooks[event]=[...(scopedHooks[event]||[]),...list];
+// The scope gate (channel/scope-gate.sh and .mjs): before any permission decision, so not
+// left to auto mode, a scoped agent's WebFetch reaches only the listed websites (and never a
+// local or private address), and an MCP tool only the executive server or a ticked one. With
+// no website listed WebFetch is not among its tools at all, and denied. Its rules for this
+// launch are a file in the control folder, which the agent can neither read nor change; a
+// refusal is filed through the spool. The command ends in "|| exit 2": a gate script that is
+// missing or unreadable (126, 127) refuses too, where any exit but 2 would be a non-blocking
+// error to Claude Code.
+if(!ownerConfig){
+ const rulesFile=path.join(path.dirname(settings),'scope-gate.json');
+ writeFresh(rulesFile,JSON.stringify({domains:access.domains||[],mcp:[...tickedMcp].flatMap(n=>n.startsWith('claude_ai_')?connectorNames(n.slice(10)):[n])}));
+ // Claude Code heads a refusal it shows the agent with the hook's command, so the command is
+ // short: a wrapper of this launch's in the control folder, which holds the other paths (Claude
+ // Code has no environment of a hook's own).
+ const q=x=>"'"+String(x).replace(/'/g,"'\\''")+"'";
+ const wrapper=path.join(path.dirname(settings),'scope-gate');
+ writeFresh(wrapper,'#!/bin/sh\nexec /bin/sh '+[path.join(config.root,'channel/scope-gate.sh'),process.execPath,path.join(config.root,'channel/scope-gate.mjs'),spool,path.join(config.root,'channel/scope-hook.sh'),rulesFile].map(q).join(' ')+'\n');
+ const gate={type:'command',command:'/bin/sh '+q(wrapper)+' || exit 2',timeout:15};
+ scopedHooks.PreToolUse=[...(scopedHooks.PreToolUse||[]),{matcher:access.domains.length?'WebFetch|mcp__.*':'mcp__.*',hooks:[gate]}];
+}
+if(!ownerConfig)writeFresh(settings,JSON.stringify({...own,...scope,...statusSettings,enabledMcpjsonServers:[...new Set([...(own.enabledMcpjsonServers||[]),'executive'])],autoMemoryEnabled:false,claudeMdExcludes:[...(own.claudeMdExcludes||[]),...claudeMdExcludes],hooks:scopedHooks}));
 const child=spawn(claude.path,args,{cwd:config.cwd,env,stdio:'inherit'});
 child.on('error',e=>{bridge(config,'error',{message:e.message}).finally(()=>process.exit(1));});
 child.on('exit',code=>{bridge(config,'error',{message:`Claude 程序已結束（${code}）。請確認訂閱登入與 Channels 設定。`}).finally(()=>process.exit(code||0));});

@@ -75,6 +75,8 @@ const {app}=require('../server/app.js');
 // this machine, audit-log rotation, the live socket, shutdown); what CC Agent runs
 // beside it is below.
 service.startService({app,port:site.servicePort(),
+ // SIGHUP too: a closed terminal stops it as a stop does, what is unwritten written first.
+ signals:['SIGINT','SIGTERM','SIGHUP'],
  onListening:()=>{console.log('CC Agent: http://127.0.0.1:'+site.servicePort());console.log('First sign-in: username admin, password in '+credentials);},
  product(server){
   const agents=require('../server/agentStore.js');
@@ -97,7 +99,7 @@ service.startService({app,port:site.servicePort(),
   try{agents.peerLink.start();}catch(e){console.error('peer link:',e.message);}
   const terminals=require('../server/terminal.js').installTerminal(server);
   return {
-   stop(){stopNotifications();try{agents.peerLink.stop();}catch{}try{agents.loginShutdown();}catch{}terminals.close();return 0;},
+   stop(){stopNotifications();const settled=agents.scopeSettled().catch(e=>console.error('scope reports at stop:',e.message));try{agents.peerLink.stop();}catch{}try{agents.loginShutdown();}catch{}terminals.close();return settled.then(()=>0);},
    finish(){try{agents.loginShutdown('SIGKILL');}catch{}},
   };
  }});

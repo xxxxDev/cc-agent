@@ -27,8 +27,14 @@ function startService({ app, port, live: liveOptions = {}, onListening = () => {
     if (stopping) return;
     stopping = true;
     stopLogRotation();
-    let wait = 0;
-    try { wait = Number(own.stop?.()) || 0; } catch (error) { console.error('stopping:', error.message); }
+    // stop() gives the time it asks for, or a promise of it: the process leaves only once that
+    // promise is settled (within the grace period below).
+    let wait = 0, ready = Promise.resolve();
+    try {
+      const asked = own.stop?.();
+      if (asked && typeof asked.then === 'function') ready = Promise.resolve(asked).then((w) => { wait = Number(w) || 0; }, (error) => console.error('stopping:', error.message));
+      else wait = Number(asked) || 0;
+    } catch (error) { console.error('stopping:', error.message); }
     live.close();
     let left = false;
     const leave = () => { if (left) return; left = true; try { own.finish?.(); } catch {} exit(0); };
@@ -36,8 +42,10 @@ function startService({ app, port, live: liveOptions = {}, onListening = () => {
     // does not close. Whatever it asked, a request or a socket that hangs on gets
     // STOP_GRACE_MS, then is cut, so the process ends here and not by launchd's
     // SIGKILL, which would lose what finish() still writes (a hung request kept an old stop() running past ten seconds).
-    setTimeout(() => { try { server.closeAllConnections?.(); } catch {} leave(); }, Math.max(wait * 2, STOP_GRACE_MS)).unref?.();
-    server.close(() => (wait ? setTimeout(leave, wait) : leave()));
+    // A promise from stop() that does not settle is waited for STOP_GRACE_MS at most.
+    const settled = Promise.race([ready, new Promise((r) => setTimeout(r, STOP_GRACE_MS).unref?.())]);
+    settled.then(() => setTimeout(() => { try { server.closeAllConnections?.(); } catch {} leave(); }, Math.max(wait * 2, STOP_GRACE_MS)).unref?.());
+    server.close(() => settled.then(() => (wait ? setTimeout(leave, wait) : leave())));
   }
   for (const signal of signals) process.on(signal, stop);
   return { server, stop };

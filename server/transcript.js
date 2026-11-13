@@ -111,7 +111,8 @@ function countUsage(totals, record) {
 const readers = new Map();
 const blank = () => ({
   offset: 0,
-  partial: Buffer.alloc(0),
+  // The line not yet ended (splitLines).
+  pending: {chunks: [], length: 0, skipping: false},
   counted: new Map(),
   tokens: {input: 0, output: 0, cacheRead: 0, cacheWrite: 0, thinking: 0},
   costUSD: 0,
@@ -427,31 +428,53 @@ function trackRelays(state, record) {
 // arrived (each message is kept from relaySince on, not from when it was read). `now`
 // reads it on the spot, for the checks that must see every message: a turn's end and a
 // final reply.
+// null is unknown: a transcript that cannot be found or read, or one
+// whose read stopped short of its size, says nothing about what arrived, so a check that
+// must see every message (a turn's end, a final reply's answered relays) must not take it as
+// "no relay".
 function relays(stateRoot, conversation, now = false) {
   const run = (conversation?.runs || []).at(-1);
   if (conversation?.mode !== 'claude' || !run) return [];
   const file = locate(path.join(stateRoot, 'workspaces', conversation.id, 'g' + run.number), run.sessionId);
-  const state = !file ? null : now ? read(file) : readCurrent(file);
-  if (state === LATER) return null;
-  return state ? [...state.relays.values()] : [];
+  if (!file) return null;
+  const state = now ? read(file) : readCurrent(file);
+  if (!state || state === LATER || !state.whole) return null;
+  return [...state.relays.values()];
 }
 
 const READ_SLICE = 16 * 1024 * 1024;
 // Bytes read since the last slice: whole records go to absorb(), the cut-off tail
 // waits for the next slice. Split on bytes, not characters: the tail may stop
 // mid-record and even mid-codepoint, and decoding that would corrupt the next line.
-function absorbSlice(state, bytes) {
-  state.offset += bytes.length;
-  const chunk = state.partial.length ? Buffer.concat([state.partial, bytes]) : bytes;
-  const end = chunk.lastIndexOf(0x0a);
-  if (end < 0) { state.partial = Buffer.from(chunk); return; }
-  state.partial = Buffer.from(chunk.subarray(end + 1));
-  for (const line of chunk.subarray(0, end).toString('utf8').split('\n')) {
-    if (!line) continue;
-    let record;
-    try { record = JSON.parse(line); } catch { continue; }
-    absorb(state, record);
+// Each line is decoded on its own (a newline byte never falls inside a UTF-8 character).
+// A line longer than LONG_LINE is skipped to its end, not held: an unended line keeps its
+// pieces as they came (chunks) and is joined once, when it ends.
+const LONG_LINE = 64 * 1024 * 1024;
+function splitLines(p, bytes, each) {
+  for (let start = 0;;) {
+    const nl = bytes.indexOf(0x0a, start);
+    if (nl < 0) {
+      if (!p.skipping && start < bytes.length) { p.chunks.push(Buffer.from(bytes.subarray(start))); p.length += bytes.length - start; }
+      if (!p.skipping && p.length > LONG_LINE) { p.chunks = []; p.length = 0; p.skipping = true; }
+      return;
+    }
+    if (p.skipping || p.length + nl - start > LONG_LINE) p.skipping = false;
+    else {
+      const line = p.length ? Buffer.concat([...p.chunks, bytes.subarray(start, nl)]).toString('utf8') : bytes.toString('utf8', start, nl);
+      if (line) each(line);
+    }
+    p.chunks = []; p.length = 0;
+    start = nl + 1;
   }
+}
+function absorbSlice(state, bytes) {
+  const at = state.offset;
+  state.offset += bytes.length;
+  splitLines(state.pending, bytes, (line) => {
+    let record;
+    try { record = JSON.parse(line); } catch { return; }
+    absorb(state, record);
+  });
 }
 function read(file) {
   let stat;
@@ -473,11 +496,13 @@ function read(file) {
         if (read <= 0) break;
         absorbSlice(state, buffer.subarray(0, read));
       }
-    } catch { return state; }
+    } catch { state.whole = false; return state; }
     finally { if (fd !== undefined) try { fs.closeSync(fd); } catch {} }
   }
+  // whole: this read reached the size it saw (relays).
+  state.whole = state.offset >= stat.size;
   // Read to the end: earlier failed background reads no longer count (readSoon).
-  if (state.offset >= stat.size) catchUpFailures.delete(file);
+  if (state.whole) catchUpFailures.delete(file);
   return state;
 }
 
@@ -488,8 +513,33 @@ function read(file) {
 // in the background instead, in small slices between requests, and is not known
 // until it is done; a little behind is still read on the spot.
 const SOON_BYTES = 4 * 1024 * 1024;
-const CATCH_UP_SLICE = Math.min(READ_SLICE, 4 * 1024 * 1024);
+// Small slices, a few files at a time across the server, the rest waiting in turn (first come,
+// first read): a look at a session with a thousand subagents behind once started a thousand
+// reads at once, seconds of stall and gigabytes held. A file waiting its
+// turn counts as being read (catching).
+const CATCH_UP_SLICE = Math.min(READ_SLICE, 1024 * 1024);
+// The admin's subagent list (list) takes one of them, and the reads a person waits on (an opened
+// chat, the Agents list, a heartbeat) go ahead of it.
+const CATCH_UP_AT_ONCE = 3;
 const catching = new Map();
+let catchUpRunning = 0, catchUpListing = 0;
+const catchUpWaiting = {now: [], list: []};
+const catchUpNext = () => {
+  for (;;) {
+    if (catchUpRunning >= CATCH_UP_AT_ONCE) return;
+    const turn = catchUpWaiting.now.shift() || (!catchUpListing ? catchUpWaiting.list.shift() : null);
+    if (!turn) return;
+    catchUpRunning++;
+    if (turn.list) catchUpListing++;
+    turn.go();
+  }
+};
+const catchUpTurn = turn => new Promise(go => {
+  turn.go = go;
+  (turn.list ? catchUpWaiting.list : catchUpWaiting.now).push(turn);
+  catchUpNext();
+});
+const catchUpDone = turn => { catchUpRunning--; if (turn.list) catchUpListing--; catchUpNext(); };
 // A transcript that can be looked at but not opened or read (EACCES) would fail its
 // background read at once every time, and the agent would count as in a turn for good.
 // After CATCH_UP_TRIES failures in a row, spread over at least CATCH_UP_SPAN_MS (three of
@@ -504,6 +554,8 @@ const givenUp = file => {
   const f = catchUpFailures.get(file);
   return !!f && f.count >= CATCH_UP_TRIES && Date.now() - f.since >= CATCH_UP_SPAN_MS;
 };
+// A file whose background read keeps failing (givenUp) is still read here on the spot, for the
+// chat and the Agents list.
 function readSoon(file) {
   let size;
   try { size = fs.statSync(file).size; } catch { return read(file); }
@@ -515,8 +567,10 @@ function readSoon(file) {
 }
 function catchUp(file) {
   if (catching.has(file)) return catching.get(file);
+  const turn = {};
   const job = (async () => {
     let handle, failed = false;
+    await catchUpTurn(turn);
     try {
       handle = await fs.promises.open(file, 'r');
       for (;;) {
@@ -535,6 +589,7 @@ function catchUp(file) {
       }
     } catch { failed = true; } finally {
       if (handle) await handle.close().catch(() => {});
+      catchUpDone(turn);
       catching.delete(file);
       if (!failed) catchUpFailures.delete(file);
       else {
@@ -715,7 +770,12 @@ const TAIL = 32 * 1024 * 1024;
 
 const clip = value => {
   const text = typeof value === 'string' ? value : JSON.stringify(value, null, 1) ?? '';
-  return text.length > MAX_TEXT ? {text: text.slice(0, MAX_TEXT), clipped: text.length} : {text};
+  if (text.length <= MAX_TEXT) return {text};
+  // The head, the true tail and how long it was, marked as cut.
+  // By code unit: a long text is never split into an array of characters.
+  const keep = Math.floor(MAX_TEXT * 0.75), last = Math.floor(MAX_TEXT / 4);
+  const head = text.slice(0, keep).replace(/[\uD800-\uDBFF]$/, ''), tail = text.slice(-last).replace(/^[\uDC00-\uDFFF]/, '');
+  return {text: head + `\n… [${text.length - keep - last} characters cut] …\n` + tail, clipped: text.length};
 };
 
 // A message that arrives while Claude is still working is not a prompt of its own:
@@ -896,14 +956,17 @@ const WEB_REPLY = /^mcp__executive__reply$/;
 // Only the notice's own block goes: a record Claude Code merged with what came in after
 // it keeps the rest.
 const EXECUTIVE_NOTICE = /^\s*<channel\s+source="executive"(?![^>]*\smessage_id="[0-9a-f-]{36}")(?:\s[^>]*)?>[\s\S]*?<\/channel>\s*/;
-const REPORT_ASK = /^\[CC Agent: [\s\S]*? refused as outside this agent's scope [\s\S]*?This note is from CC Agent, not the owner, and needs no reply\.\]\s*/;
+// Its question about a scope report, in each wording (agentStore askText), and its note to a
+// full-access agent about a refused prompt (agentStore promptText).
+const REPORT_ASK = /^\[CC Agent: [\s\S]*? (?:refused as outside this agent's scope|refused \(outside this agent's scope, or by Claude Code's auto-mode safety check\)|blocked by Claude Code's auto-mode safety check) [\s\S]*?This note is from CC Agent, not the owner, and needs no reply\.\]\s*/;
+const PROMPT_NOTE = /^\[CC Agent: a permission prompt for [\s\S]*? was refused: CC Agent refuses every prompt\.[\s\S]*?This note is from CC Agent, not the owner, and needs no reply\.\]\s*/;
 // CC Agent's note when a start-up did not finish (agentStore STARTUP_REMINDER), which a
 // report's question could follow.
 const STARTUP_NOTE = /^\[CC Agent: your start-up did not finish\.[\s\S]*?this note is from CC Agent, not the owner\.\]\s*/;
 // CC Agent's notes at the start of what was asked, however many and in whichever order.
 function withoutNotes(text) {
   let rest = text, before;
-  do { before = rest; rest = rest.replace(STARTUP_NOTE, '').replace(REPORT_ASK, ''); } while (rest !== before);
+  do { before = rest; rest = rest.replace(STARTUP_NOTE, '').replace(REPORT_ASK, '').replace(PROMPT_NOTE, ''); } while (rest !== before);
   return rest;
 }
 const MAX_IMPORT = 1000;
@@ -1088,60 +1151,114 @@ function lastCompaction(stateRoot, conversation) {
 
 // The subagents an agent started: Claude Code keeps
 // each one's own transcript beside the session's, in <session>/subagents, with a note
-// of what it was (type, task, the tool call that started it). Read once per file as
-// it stands, newest first, the largest reports cut short.
+// of what it was (type, task, the tool call that started it). The newest SUBAGENT_MAX files
+// (by when they last changed) are summed up once per file as it stands: a little on the spot
+// (SOON_BYTES in all), the rest in the background in slices, one file at a time in a lane of
+// its own behind the chat's reads, when the list
+// says it is still loading.
 const SUBAGENT_MAX = 100, SUBAGENT_FILE_MAX = 30 * 1024 * 1024;
-const subagentCache = new Map();
-function readSubagent(file, metaFile) {
-  let stat;
-  try { stat = fs.statSync(file); } catch { return null; }
-  if (!stat.isFile() || stat.size > SUBAGENT_FILE_MAX) return null;
-  const key = stat.size + ':' + stat.mtimeMs, cached = subagentCache.get(file);
-  if (cached?.key === key) return cached.value;
+const subagentCache = new Map(), subagentLoads = new Map(), subagentDirs = new Map();
+function subagentSummary(metaFile) {
   let meta = {};
   try { meta = JSON.parse(fs.readFileSync(metaFile, 'utf8')) || {}; } catch {}
   const value = {type: typeof meta.agentType === 'string' ? meta.agentType.slice(0, 80) : '', task: typeof meta.description === 'string' ? meta.description.slice(0, 200) : '',
     toolUseId: typeof meta.toolUseId === 'string' ? meta.toolUseId : null, startedAt: null, endedAt: null, messages: 0, tools: 0,
     tokens: {input: 0, output: 0, cacheRead: 0, cacheWrite: 0}, costUSD: 0, unpriced: 0, models: [], prompt: '', result: ''};
-  const models = new Set(), totals = {counted: new Map(), tokens: value.tokens, costUSD: 0, unpriced: 0, turns: 0, models};
-  let text;
-  try { text = fs.readFileSync(file, 'utf8'); } catch { return null; }
-  for (const line of text.split('\n')) {
-    if (!line) continue;
-    let record;
-    try { record = JSON.parse(line); } catch { continue; }
-    const message = record.message;
-    if (!message || (record.type !== 'user' && record.type !== 'assistant')) continue;
-    if (record.timestamp) { value.startedAt ??= record.timestamp; value.endedAt = record.timestamp; }
-    value.messages += 1;
-    if (record.type === 'user' && !value.prompt) value.prompt = (typeof message.content === 'string' ? message.content : (message.content || []).filter(b => b?.type === 'text').map(b => b.text).join('\n')).slice(0, 4000);
-    if (record.type !== 'assistant') continue;
-    const said = assistantText(record);
-    if (said) value.result = said.slice(0, 12000);
-    if (Array.isArray(message.content)) value.tools += message.content.filter(b => b?.type === 'tool_use').length;
-    countUsage(totals, record);
-  }
+  const models = new Set();
+  return {value, models, totals: {counted: new Map(), tokens: value.tokens, costUSD: 0, unpriced: 0, turns: 0, models}, lines: {chunks: [], length: 0, skipping: false}};
+}
+function subagentLine(sum, line) {
+  const {value, totals} = sum;
+  let record;
+  try { record = JSON.parse(line); } catch { return; }
+  const message = record.message;
+  if (!message || (record.type !== 'user' && record.type !== 'assistant')) return;
+  if (record.timestamp) { value.startedAt ??= record.timestamp; value.endedAt = record.timestamp; }
+  value.messages += 1;
+  if (record.type === 'user' && !value.prompt) value.prompt = (typeof message.content === 'string' ? message.content : (message.content || []).filter(b => b?.type === 'text').map(b => b.text).join('\n')).slice(0, 4000);
+  if (record.type !== 'assistant') return;
+  const said = assistantText(record);
+  if (said) value.result = said.slice(0, 12000);
+  if (Array.isArray(message.content)) value.tools += message.content.filter(b => b?.type === 'tool_use').length;
+  countUsage(totals, record);
+}
+function subagentDone(file, key, sum) {
+  const {value, totals, models} = sum;
   value.costUSD = totals.costUSD; value.unpriced = totals.unpriced;
   value.models = [...models];
   subagentCache.set(file, {key, value});
   if (subagentCache.size > 2000) subagentCache.delete(subagentCache.keys().next().value);
   return value;
 }
+async function loadSubagent(file, metaFile, key) {
+  const turn = {list: true};
+  await catchUpTurn(turn);
+  let handle;
+  try {
+    const sum = subagentSummary(metaFile);
+    handle = await fs.promises.open(file, 'r');
+    for (let at = 0;;) {
+      const buffer = Buffer.allocUnsafe(CATCH_UP_SLICE);
+      const {bytesRead} = await handle.read(buffer, 0, buffer.length, at);
+      if (bytesRead <= 0) break;
+      splitLines(sum.lines, buffer.subarray(0, bytesRead), line => subagentLine(sum, line));
+      at += bytesRead;
+    }
+    subagentDone(file, key, sum);
+  } catch {} finally {
+    if (handle) await handle.close().catch(() => {});
+    catchUpDone(turn);
+    subagentLoads.delete(file);
+  }
+}
+// The file's summary, null when there is none, or LATER while it is read in the background.
+function readSubagent(file, metaFile, budget) {
+  let stat;
+  try { stat = fs.lstatSync(file); } catch { return null; }
+  if (!stat.isFile() || stat.size > SUBAGENT_FILE_MAX) return null;
+  const key = stat.size + ':' + stat.mtimeMs, cached = subagentCache.get(file);
+  if (cached?.key === key) return cached.value;
+  if (subagentLoads.has(file)) return LATER;
+  if (stat.size > budget.left) { subagentLoads.set(file, loadSubagent(file, metaFile, key)); return LATER; }
+  budget.left -= stat.size;
+  let bytes;
+  try { bytes = fs.readFileSync(file); } catch { return null; }
+  const sum = subagentSummary(metaFile);
+  splitLines(sum.lines, bytes, line => subagentLine(sum, line));
+  splitLines(sum.lines, Buffer.from('\n'), line => subagentLine(sum, line));
+  return subagentDone(file, key, sum);
+}
+// The list, newest first; loading: how many are still being read.
 function subagents(stateRoot, conversation) {
-  if (!conversation || conversation.mode !== 'claude') return [];
   const out = [];
+  out.loading = 0;
+  if (!conversation || conversation.mode !== 'claude') return out;
+  const found = [];
   for (const run of conversation.runs || []) {
     const file = locate(path.join(stateRoot, 'workspaces', conversation.id, 'g' + run.number), run.sessionId);
     if (!file) continue;
     const dir = path.join(file.slice(0, -'.jsonl'.length), 'subagents');
-    let names = [];
-    try { names = fs.readdirSync(dir).filter(n => /^agent-[A-Za-z0-9_-]{1,80}\.jsonl$/.test(n)); } catch { continue; }
+    // The folder's listing, kept while the folder has not changed.
+    let names;
+    try {
+      const at = fs.statSync(dir).mtimeMs, seen = subagentDirs.get(dir);
+      if (seen?.at === at) names = seen.names;
+      else { names = fs.readdirSync(dir).filter(n => /^agent-[A-Za-z0-9_-]{1,80}\.jsonl$/.test(n)); subagentDirs.set(dir, {at, names}); if (subagentDirs.size > 500) subagentDirs.delete(subagentDirs.keys().next().value); }
+    } catch { continue; }
     for (const name of names) {
-      const one = readSubagent(path.join(dir, name), path.join(dir, name.replace(/\.jsonl$/, '.meta.json')));
-      if (one && one.startedAt) out.push({id: name.slice('agent-'.length, -'.jsonl'.length), generation: run.number, ...one});
+      let mtime = 0;
+      try { mtime = fs.lstatSync(path.join(dir, name)).mtimeMs; } catch { continue; }
+      found.push({run, dir, name, mtime});
     }
   }
-  return out.sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt))).slice(0, SUBAGENT_MAX);
+  const budget = {left: SOON_BYTES};
+  for (const {run, dir, name} of found.sort((a, b) => b.mtime - a.mtime).slice(0, SUBAGENT_MAX)) {
+    const one = readSubagent(path.join(dir, name), path.join(dir, name.replace(/\.jsonl$/, '.meta.json')), budget);
+    if (one === LATER) { out.loading++; continue; }
+    if (one && one.startedAt) out.push({id: name.slice('agent-'.length, -'.jsonl'.length), generation: run.number, ...one});
+  }
+  out.sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)));
+  return out;
 }
 
 module.exports = {terminalEvents, typedSettings, turnEndedSince, workedSince, subagents, lastCompaction, usage, progress, currentWork, quotaReset, waiting, skills, connectors, relays, segment, history, messageCost, priceOf, PRICES, WEB_SEARCH_USD};

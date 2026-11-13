@@ -7,7 +7,7 @@ const attachments=require('./attachments');
 const agentProfile=require('./agentProfile');
 const checklists=require('./checklists');
 const terminalPrompt=require('./terminalPrompt');
-const transcript=require('./transcript');const contextUsage=require('./contextUsage');const modelFollow=require('./modelFollow');const terminalFiles=require('./terminalFiles');
+const transcript=require('./transcript');const scopeHooks=require('./scopeHooks');const contextUsage=require('./contextUsage');const modelFollow=require('./modelFollow');const terminalFiles=require('./terminalFiles');
 const compactScreen=require('./compactScreen');
 const offThread=require('./offThread');
 const slashCommands=require('./slashCommands');
@@ -79,6 +79,15 @@ function save(target) {
   writeJson(ownerFile(owner), {conversations: state.conversations.filter(c => c.owner === owner)});
  }
 }
+// The scope intake's saves, coalesced: one write an owner a second at most; on exit what is
+// still waiting is written then.
+const savesSoon=new Map();
+function saveSoon(c){
+ if(!c?.owner||savesSoon.has(c.owner))return;
+ const t=setTimeout(()=>{savesSoon.delete(c.owner);try{save(c.owner);}catch(e){console.error('conversations of '+c.owner+' not written:',e.message);}},1000);t.unref?.();
+ savesSoon.set(c.owner,t);
+}
+process.on('exit',()=>{for(const [owner,t] of savesSoon){clearTimeout(t);try{save(owner);}catch{}}savesSoon.clear();});
 function saveSettings() { writeJson(settingsFile, state.agentSettings || {}); }
 // An agent stored on a model Claude Code has moved past is moved to its successor
 // once, at start, so its stored profile says what it runs (agentProfile.successor;
@@ -149,6 +158,8 @@ function reconcile(c,{fresh=false}={}) {
  // to the agent or start it ask afresh (fresh).
  if(!fresh&&sessionSeenAt.get(g)>Date.now()-SESSION_RECHECK_MS)return c;
  try{execFileSync('tmux',['-L',tmuxSocket,'has-session','-t',g.tmux],{stdio:'ignore',timeout:2000});sessionSeenAt.set(g,Date.now());return c;}catch{}
+ // The session is gone: what its hooks wrote is read (its spool's task is woken).
+ wakeScope(c,g);
  sessionSeenAt.delete(g);permissions.cancel(g);g.compacting=false;g.compactPending=false;g.manualCompact=false;g.phase='error';g.ready=false;g.heartbeat=0;wakeFailed(c,g);
  g.lastError='Claude session 已中斷（例如重開機後），請重新連線。';save(c);
  return c;
@@ -176,7 +187,7 @@ function messageWindow(c,{limit,before}={}) {
 // agent's explanation or, without one, what it wrote just before.
 function withReports(m){
  if(m.notice!=='blocked'||!Array.isArray(m.reports))return m;
- return {...m,reports:m.reports.map(x=>{const r=reports.get(x.id);if(!r)return {...x,status:'gone'};const e=r.explanation;return {...x,status:r.status,resolution:r.resolution||null,notified:!!r.pushedAt,...(e?{explanation:{why:e.why,instead:e.instead,stillNeeded:e.stillNeeded},explanationCount:r.explanationCount||1}:{}),...(r.agentWords?{agentWords:r.agentWords}:{})};})};
+ return {...m,reports:m.reports.map(x=>{const r=reports.get(x.id);if(!r)return {...x,status:'gone',notified:!!x.pushed};const e=r.explanation;return {...x,status:r.status,resolution:r.resolution||null,notified:!!(r.pushedAt||x.pushed),...(e?{explanation:{why:e.why,instead:e.instead,stillNeeded:e.stillNeeded},explanationCount:r.explanationCount||1}:{}),...(r.agentWords?{agentWords:r.agentWords}:{})};})};
 }
 // Full-text search over one person's own conversations. Every word must appear, in
 // any case and with or without spaces inside it (so a query without spaces still
@@ -402,9 +413,9 @@ function launchAccess(c){
  // The MCP servers an admin ticked are used on any owner's scoped agent. They run as the owner
  // of this computer: a local one outside the sandbox, a claude.ai connector on the
  // owner's account. Only an admin sets them (agentProfile.validate, setAccessFor),
- // so what is stored is an admin's choice; the runner holds an agent whose
- // owner is not an admin to exactly those connectors (mcpTickedOnly, launch). An owner
- // whose account is disabled, deleted or unknown gets none, as before.
+ // so what is stored is an admin's choice; the runner holds every scoped agent, an admin's
+ // too, to exactly those (channel/runner.mjs: the connector rules and the scope gate). An
+ // owner whose account is disabled, deleted or unknown gets none, as before.
  if(access.mcp&&!activeOwner(c.owner))delete access.mcp;
  // Programs outside the sandbox: only those that still pass every check below, and
  // none for an owner who cannot sign in. Each one dropped is logged, never widened.
@@ -551,7 +562,7 @@ function referenceInfo(c){
 function launch(c) {
  // Deleted is an admin's decision and only an admin's restore undoes it.
  if(c.archived)throw error('Agent archived',409);
- const g=active(c);turnAbandon(g);
+ const g=active(c);
  if(c.mode==='demo'){g.ready=true;g.phase='ready';g.heartbeat=Date.now();save(c);return;}
  if(['starting','ready','busy','handing-off'].includes(g.phase)&&g.heartbeat>Date.now()-15000)return;
  // A session seen before this start says nothing about the one started now.
@@ -563,7 +574,7 @@ function launch(c) {
  // Its own chat's attachments, readable where it runs scoped (a file the owner sent could not be opened).
  const attachDir=attachments.directory(stateRoot,c);fs.mkdirSync(attachDir,{recursive:true,mode:0o700});
  // Only these keys: channel/runner.mjs refuses any unsupported launch key.
- const config={tmuxSocket,...(platform.isWin?{tmux:g.tmux}:{}),agentStarter:agentStarter(c),peerSend:peerToolsFor(c),reference:referenceDir(c),attachments:attachDir,conversationId:c.id,sessionId:g.sessionId,token:g.token,generation:g.number,server:'http://127.0.0.1:'+require('./siteConfig').servicePort(),root:ROOT,cwd:dir,resume:g.number===1&&!!c.resumeSessionId,memory:c.memory,profile:agentProfile.profile(c),model,effort:agentProfile.profile(c).effort,handoff:c.handoff||null,access,...(ownerIsActiveAdmin(c.owner)?{}:{mcpTickedOnly:true}),...(subagentsApply(c)&&Object.keys(subagentEnv(c)).length?{subagentEnv:subagentEnv(c)}:{}),...(autoCompactApply(c)&&Object.keys(autoCompactEnv(c)).length?{autoCompactEnv:autoCompactEnv(c)}:{}),contextStatus:true};
+ const config={tmuxSocket,...(platform.isWin?{tmux:g.tmux}:{}),agentStarter:agentStarter(c),peerSend:peerToolsFor(c),reference:referenceDir(c),attachments:attachDir,conversationId:c.id,sessionId:g.sessionId,token:g.token,generation:g.number,server:'http://127.0.0.1:'+require('./siteConfig').servicePort(),root:ROOT,cwd:dir,resume:g.number===1&&!!c.resumeSessionId,memory:c.memory,profile:agentProfile.profile(c),model,effort:agentProfile.profile(c).effort,handoff:c.handoff||null,access,...(subagentsApply(c)&&Object.keys(subagentEnv(c)).length?{subagentEnv:subagentEnv(c)}:{}),...(autoCompactApply(c)&&Object.keys(autoCompactEnv(c)).length?{autoCompactEnv:autoCompactEnv(c)}:{}),contextStatus:true};
  const control=controlDir(c,g);fs.mkdirSync(control,{recursive:true,mode:0o700});
  // The launch files live in the control folder, outside what the agent can write; copies
  // of them in its workspace (where Claude Code would read a .mcp.json) are removed.
@@ -584,6 +595,12 @@ function launch(c) {
   delete c.pausedByOwner;
   // Started: no longer waiting for a first message (a failed start keeps it waiting).
   delete g.dormant;delete g.bootstrapped;delete g.startupSkipped;
+  // Scoped: started with the scope hooks (channel/runner.mjs), heard from afresh (hooksAlive).
+  if(!access.full)g.scopeHooks=true;else delete g.scopeHooks;
+  for(const k of ['hookSeen','hookWaitFrom','hookSilentNoticed','hooksMissingNoticed','spoolUnsafeNoticed','claudeVersion'])delete g[k];
+  // Heard from afresh: the hook's mark from an earlier start goes.
+  try{fs.rmSync(path.join(spoolOf(c,g),scopeHooks.HEARD),{force:true});}catch{}
+  wakeScope(c,g);
   g.model=config.model;g.effort=config.effort;g.subagentEnv=config.subagentEnv||{};g.autoCompactEnv=config.autoCompactEnv||{};g.profileHash=null;g.toolPolicy='native-bypass';g.phase='starting';g.ready=false;g.lastError='';g.heartbeat=Date.now();g.startedAt=Date.now();g.launchedAt=Date.now();save(c);
  }catch(e){g.phase='error';g.lastError='tmux 啟動失敗：'+e.message;save(c);throw error(g.lastError,500);}
 }
@@ -614,6 +631,8 @@ function interrupt(c) {
  try{execFileSync('tmux',['-L',tmuxSocket,'send-keys','-t',g.tmux,'Escape'],{timeout:5000,stdio:'ignore'});}
  catch{throw error('無法送出中斷，Claude 可能已離線，請重新連線',409);}
  permissions.cancel(g);
+ // No Stop follows Escape: what the scope refused in the turn is read now (its spool's task).
+ wakeScope(c,g);
  for(const m of c.messages)if(m.role==='user'&&['queued','delivered'].includes(m.delivery))m.delivery='interrupted';
  if(g.ready)g.phase='ready';
  g.lastError='已中斷這一輪。可以直接送出下一則訊息。';
@@ -958,12 +977,32 @@ function starterOps(c,action,data){
   return {...view(x),result:'started'};
  })};
 }
+// Ends an agent's tmux session. tmux answering 1 is a session already gone; anything else (it
+// timed out, was killed, could not start) leaves tmuxKillPending, so a later stop asks again.
+function killTmux(g){
+ try{execFileSync('tmux',['-L',tmuxSocket,'kill-session','-t',g.tmux],{timeout:5000,stdio:'ignore'});delete g.tmuxKillPending;}
+ catch(e){if(e&&e.status===1)delete g.tmuxKillPending;else g.tmuxKillPending=true;}
+}
 function stop(c) {
- const g=active(c);turnAbandon(g);
+ const g=active(c);
+ // Already stopped: nothing is read or woken, and nothing is written unless something still
+ // waited on it (a message, a wake, a wrap-up). A tmux session whose kill did not finish before
+ // (tmuxKillPending) is asked to end again.
+ if(g.phase==='stopped'&&!g.dormant&&!g.wokenBySend){
+  let changed=false;
+  if(c.mode==='claude'&&g.tmuxKillPending){killTmux(g);changed=true;}
+  if(g.limitResume||g.wrapUp){delete g.limitResume;delete g.wrapUp;changed=true;}
+  for(const m of c.messages)if(['queued','delivered'].includes(m.delivery)){m.delivery='interrupted';changed=true;}
+  if(changed)save(c);
+  return;
+ }
+ // What the scope refused before it stops is read, as a turn's end would have it (it may never
+ // come); what was kept in memory for its hooks goes once its spool is empty.
+ if(c.mode==='claude')wakeScope(c,g);
  // Stopped by hand or paused: a waiting session is now an ordinary stopped one, which a
  // message does not start.
  delete g.dormant;delete g.wokenBySend;
- if(c.mode==='claude') {try{execFileSync('tmux',['-L',tmuxSocket,'kill-session','-t',g.tmux],{timeout:5000,stdio:'ignore'});}catch{}}
+ if(c.mode==='claude')killTmux(g);
  sessionSeenAt.delete(g);
  permissions.cancel(g);g.compacting=false;g.compactPending=false;g.manualCompact=false;g.phase='stopped';g.ready=false;g.heartbeat=0;g.token=randomBytes(32).toString('hex');
  // Paused, deleted or restarted: a wake waiting for a usage limit is dropped, so a
@@ -1060,14 +1099,12 @@ function rotate(c,recent=handoffSetting().recent) {
 }
 // The user message this generation is working on, for a report's context.
 function turnMessage(c){return c.messages.findLast(m=>m.role==='user'&&m.generation===c.generation&&['delivered','completed','unanswered'].includes(m.delivery));}
-// The admins' push waits a little (REPORT_GRACE_MS) so the agent can first say, with
-// explain_report, that it found a way within its scope; one it never answers goes out as before.
-const REPORT_GRACE_MS=75_000;
-function fileReport(c,g,entry,ended=false){
- const m=turnMessage(c),t=turnOf(g),turnId=t&&(ended?t.ended:!t.ended)?t.id:null;
+// Nothing the agent says changes a report or its push: it is queued for the admins at once,
+// and the push queue batches an agent's reports (notifications.js).
+function fileReport(c,g,entry,m=turnMessage(c)){
  const dup=!!entry.key&&reports.hasKey(entry.key);
- const r=reports.add({owner:c.owner,conversationId:c.id,title:c.title,generation:g.number,sessionId:g.sessionId,messageId:m?.id||null,messageExcerpt:String(m?.text||'').slice(0,300),turnId,notifyAfter:new Date(Date.now()+REPORT_GRACE_MS).toISOString(),...entry});
- if(!r&&!dup)capNotice(c,g);
+ const r=reports.add({owner:c.owner,conversationId:c.id,title:c.title,generation:g.number,sessionId:g.sessionId,messageId:m?.id||null,messageExcerpt:cutText(m?.text,300),notifyAfter:new Date().toISOString(),...entry});
+ if(!r&&!dup)capNotice(c,g,[entry]);
  return r;
 }
 // At its cap of open reports (accessReports MAX_PER_CONVERSATION) an agent's refusals are still
@@ -1075,10 +1112,27 @@ function fileReport(c,g,entry,ended=false){
 // unseen: one notice of CC Agent's (kind 'cap') says the cap was reached and counts what was
 // refused since, pushed once; while it is open its count goes up, and once an admin has
 // handled it the next refusal opens another.
-function capNotice(c,g){
+// It keeps the last CAP_RECENT of them, by tool and first line, so the admins see what was
+// refused, not only how many.
+const CAP_RECENT=20;
+// keys: what it counted, so a later look at the same stretch does not count it again.
+function capNotice(c,g,entries){
+ const at=new Date().toISOString(),keys=entries.map(e=>e.key).filter(Boolean);
  const open=reports.list().find(r=>r.conversationId===c.id&&r.kind==='cap'&&r.status==='open');
- if(open){reports.update(open.id,{count:(open.count||0)+1});return;}
- reports.add({owner:c.owner,conversationId:c.id,title:c.title,generation:g.number,sessionId:g.sessionId,messageId:null,kind:'cap',key:'cap:'+c.id+':'+Date.now(),tool:'',count:1,notifyAfter:new Date().toISOString()});
+ // The first CAP_RECENT/2 different ones (tool and first line) since it opened, kept as they
+ // came (first), and the last CAP_RECENT/2 different ones, a repeat counted on its line and
+ // moved last (recent), so neither a run of the same refusal nor many different ones after it
+ // can push an early real one out.
+ const half=CAP_RECENT/2,first=[...(open?.first||[])],recent=[...(open?.recent||[])];
+ for(const e of entries){
+  const tool=toolName(e.tool),line=reportLine(e);
+  const f=first.find(x=>x.tool===tool&&x.line===line);if(f){f.n=(f.n||1)+1;continue;}
+  if(first.length<half){first.push({tool,line,at,n:1});continue;}
+  const i=recent.findIndex(x=>x.tool===tool&&x.line===line);if(i>=0){const [x]=recent.splice(i,1);recent.push({...x,n:(x.n||1)+1,at});}else recent.push({tool,line,at,n:1});
+ }
+ const patch={count:(open?.count||0)+entries.length,first,recent:recent.slice(-half),keys:[...(open?.keys||[]),...keys].slice(-500)};
+ if(open){reports.update(open.id,patch);return;}
+ reports.add({owner:c.owner,conversationId:c.id,title:c.title,generation:g.number,sessionId:g.sessionId,messageId:null,kind:'cap',key:'cap:'+c.id+':'+Date.now(),tool:'',...patch,notifyAfter:at});
 }
 // A scope report shows in the agent's own chat too: a CC Agent card where it was filed,
 // under the turn it came from. It is a system message, so it is never unread, never handed
@@ -1087,131 +1141,413 @@ function capNotice(c,g){
 // from the reports each time the chat is viewed (withReports).
 // A refused prompt is shown by Claude Code's own description; a refused call by what says
 // the most of its input: the command, the file or the address.
-const reportLine=r=>{const text=String(r.detail||''),field=r.kind!=='permission'&&/"(command|file_path|url|path|pattern)"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(text);let line='';if(field){try{line=JSON.parse('"'+field[2]+'"');}catch{line=field[2];}}return (line||text).split('\n').map(s=>s.trim()).find(Boolean)?.slice(0,160)||'';};
-function reportCard(c,filed,turn){
+// Characters that show nothing or turn the text around (C0 and C1 controls but the line
+// break, format characters such as direction marks and zero-width ones, and the Unicode line
+// and paragraph separators): out of what the agent writes before it is kept.
+const INVISIBLE=/[\x00-\x09\x0b-\x1f\x7f-\x9f\u2028\u2029\p{Cf}]/gu;
+// Half of a surrogate pair on its own, which shows as a broken character.
+const LONE_SURROGATE=/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+// Text an agent wrote, as it is kept: no invisible or direction characters, no lone surrogates.
+const cleanText=v=>String(v??'').replace(LONE_SURROGATE,'').replace(INVISIBLE,'');
+// At most n characters, counted by code point, so no half of a surrogate pair is left.
+const cutText=(v,n)=>{const a=Array.from(String(v??''));return a.length>n?a.slice(0,n).join(''):a.join('');};
+// Long text kept as its head and its tail with a mark between, so the end of a long command
+// (what it really touched) is not lost.
+const headTail=(v,n)=>{const a=Array.from(String(v??''));if(a.length<=n)return a.join('');const tail=Math.floor(n*0.35);return a.slice(0,n-tail-3).join('')+' … '+a.slice(-tail).join('');};
+const reportLine=r=>{const text=String(r.detail||''),field=r.kind!=='permission'&&/"(command|file_path|url|path|pattern)"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(text);let line='';if(field){try{line=JSON.parse('"'+field[2]+'"');}catch{line=field[2];}}return cutText((line||text).split(/\r?\n/).map(s=>s.replace(LONE_SURROGATE,'').replace(INVISIBLE,' ').replace(/\s+/g,' ').trim()).find(Boolean)||'',160);};
+// more: how many more were refused past the limit of one drain (fileFound).
+// cardKey: the refusals it shows (their report keys), so the same refusals filed again, after a
+// kill had lost their reports but not the card, take the card that is there.
+function reportCard(c,filed,turn,more=0){
  if(!filed.length)return null;
- return add(c,'system','已擋下：'+filed.map(r=>[r.tool,reportLine(r)].filter(Boolean).join(' ')).join('；').slice(0,600),{notice:'blocked',turn:turn||null,reports:filed.map(r=>({id:r.id,kind:r.kind,tool:String(r.tool||'').slice(0,80),line:reportLine(r)}))});
+ const cardKey=createHash('sha256').update(filed.map(r=>r.key||r.id).join('\n')).digest('hex').slice(0,24);
+ const there=c.messages.slice(-300).find(m=>m.notice==='blocked'&&m.cardKey===cardKey);
+ if(there){there.reports=filed.map(r=>({id:r.id,kind:r.kind,tool:toolName(r.tool),line:reportLine(r),...(r.exact===false?{exact:false}:{})}));if(more)there.more=more;return there;}
+ return add(c,'system','已擋下：'+cutText(filed.map(r=>[toolName(r.tool),reportLine(r)].filter(Boolean).join(' ')).join('；'),600)+(more?'；另有 '+more+' 項':''),{notice:'blocked',cardKey,turn:turn||null,reports:filed.map(r=>({id:r.id,kind:r.kind,tool:toolName(r.tool),line:reportLine(r),...(r.exact===false?{exact:false}:{})})),...(more?{more}:{})});
 }
 // The agent is asked to explain each report it caused (explain_report): a refused prompt's
 // at once, as a CC Agent notice into the turn it is in (Claude Code's permission verdict
-// carries only allow or deny); what the sandbox refused, found only once the turn has
-// ended, with the next message it is handed. Never a turn of its own.
-const toolName=v=>typeof v==='string'?v.replace(/[\r\n\[\]"<>]/g,' ').trim().slice(0,80):'';
-function askExplain(g,filed,when){
+// carries only allow or deny); what its hooks report, into the turn while it works, else with
+// the next message it is handed. Never a turn of its own.
+const toolName=v=>typeof v==='string'?cutText(cleanText(v).replace(/[\r\n\[\]"<>]/g,' ').trim(),80):'';
+function askExplain(c,g,filed,when){
+ // Only an agent that has explain_report: a scoped one (channel/versionedTools.mjs).
+ if(agentAccess.of(c).full)return;
  const have=new Set((g.reportAsks||[]).map(a=>a.id));
- g.reportAsks=[...(g.reportAsks||[]),...filed.filter(r=>!have.has(r.id)).map(r=>({id:r.id,tool:toolName(r.tool)||'tool',when}))].slice(-20);
+ g.reportAsks=[...(g.reportAsks||[]),...filed.filter(r=>!have.has(r.id)).map(r=>({id:r.id,tool:toolName(r.tool)||'tool',when,...(r.kind==='classifier'?{kind:'classifier'}:{})}))].slice(-20);
 }
-// late: asked only with the next message (askExplain 'next'), by when the admins' wait
-// (REPORT_GRACE_MS) has usually run out and they were told already, so it does not promise
-// that they are told only when it is still needed.
-const askText=(list,late)=>'[CC Agent: '+(list.length===1?'your '+list[0].tool+' call was':list.length+' of your tool calls ('+list.map(a=>a.tool).join(', ')+') were')+' refused as outside this agent\'s scope and filed as scope report '+list.map(a=>a.id).join(', ')+'. The owner sees '+(list.length===1?'it':'them')+' in this chat; '+(late?'it came up when your last turn ended, so an admin may have been told already. Now,':'an admin is told only if the access is still needed. Before going on,')+' call explain_report for '+(list.length===1?'it':'each')+': why (what you were trying to do and why you needed that action), instead (what you did instead, or "waiting for access") and still_needed (false if you found a way within your scope). A sentence or two each. This note is from CC Agent, not the owner, and needs no reply.]';
+// late: asked only with the next message (askExplain 'next'). Nothing in it says when or
+// whether an admin is told: that is not the agent's to steer.
+const askText=(list,late)=>'[CC Agent: '+(list.length===1?'your '+list[0].tool+' call was':list.length+' of your tool calls ('+list.map(a=>a.tool).join(', ')+') were')+' '+(list.every(a=>a.kind==='classifier')?'blocked by Claude Code\'s auto-mode safety check':list.some(a=>a.kind==='classifier')?'refused (outside this agent\'s scope, or by Claude Code\'s auto-mode safety check)':'refused as outside this agent\'s scope')+' and filed as scope report '+list.map(a=>a.id).join(', ')+'. '+(late?'It was filed after that call. Now,':'Before going on,')+' call explain_report for '+(list.length===1?'it':'each')+': why (what you were trying to do and why you needed that action), instead (what you did instead, or "waiting for access") and still_needed (false if you found a way within your scope). A sentence or two each. This note is from CC Agent, not the owner, and needs no reply.]';
 // At a turn's end an ask not yet handed over waits for the next message.
-const asksWait=g=>{for(const a of g.reportAsks||[])a.when='next';};
-// What the scope refused without asking: the OS sandbox fails a Bash command,
-// restricted mode refuses a path "outside" the agent's folders, a deny rule refuses
-// an excluded one, the sandbox proxy drops a connection. None of these reach the
-// permission relay, so they are read back from the turn's transcript when it ends.
-// explain_report's limits: calls a minute per agent (in memory); the
-// explanations a report keeps, the latest whole and the ones before it to EXPLAIN_EARLIER_CHARS;
-// and how many reports an agent may say it solved itself within SELF_DIGEST_MS before the
-// admins get one digest of them.
-const EXPLAIN_PER_MINUTE=10,EXPLAIN_KEEP=5,EXPLAIN_EARLIER_CHARS=200,SELF_DIGEST_COUNT=5,SELF_DIGEST_MS=24*3600_000;
+const asksWait=g=>{for(const a of g.reportAsks||[])a.when='next';delete g.promptNotes;};
+// The audit of a full-access agent's refused prompts: one line per agent and tool a minute, the
+// next one saying how many were not written in between.
+const promptAudits=new Map();
+function promptAuditDue(c,tool){const k=c.id+'\0'+String(tool).slice(0,80),x=promptAudits.get(k),now=Date.now();if(x&&x.at>now-60_000){x.skipped+=1;return false;}promptAudits.set(k,{at:now,skipped:0,before:x?.skipped||0,agent:c.id,agentName:c.title||'',owner:c.owner,tool:String(tool).slice(0,80)});if(promptAudits.size>2000)promptAudits.delete(promptAudits.keys().next().value);return true;}
+function promptAuditSkipped(c,tool){const x=promptAudits.get(c.id+'\0'+String(tool).slice(0,80));return x?.before?{notLoggedBefore:x.before}:{};}
+// From the relay timer: a minute after a line, the prompts it left unwritten get a line of their
+// own, so a burst and then quiet is still in the log in full.
+function flushPromptAudits(now=Date.now()){
+ for(const [k,x] of promptAudits){
+  if(x.at>now-60_000)continue;
+  if(x.skipped)try{require('./services/audit').audit({source:'permission',action:'prompt-refused',agent:x.agent,agentName:x.agentName,owner:x.owner,tool:x.tool,notLogged:x.skipped});}catch(e){console.error('prompt audit:',e.message);}
+  promptAudits.delete(k);
+ }
+}
+// What a full-access agent is told when a permission prompt in its session was refused.
+const promptText=n=>'[CC Agent: a permission prompt for '+n.tool+' in this session, likely from one of your subagents, was refused: CC Agent refuses every prompt. Do it another way, or tell the owner what it needed. This note is from CC Agent, not the owner, and needs no reply.]';
+// explain_report's limits: calls a minute per agent (in memory); the explanations a report
+// keeps, the latest whole and the ones before it to EXPLAIN_EARLIER_CHARS.
+const EXPLAIN_PER_MINUTE=10,EXPLAIN_KEEP=5,EXPLAIN_EARLIER_CHARS=200;
 const explainCalls=new Map();
 // A different word than the last is added to the report's history; the same one changes nothing.
 function explainPatch(r,entry){
  const last=r.explanation;
  if(last&&last.why===entry.why&&last.instead===entry.instead&&last.stillNeeded===entry.stillNeeded)return {};
- const short=v=>String(v||'').slice(0,EXPLAIN_EARLIER_CHARS);
+ const short=v=>cutText(v||'',EXPLAIN_EARLIER_CHARS);
  const earlier=[...(r.explanationHistory||[]),...(last?[{why:short(last.why),instead:short(last.instead),stillNeeded:last.stillNeeded,at:last.at}]:[])].slice(-(EXPLAIN_KEEP-1));
  return {explanation:entry,explanationCount:(r.explanationCount||(last?1:0))+1,...(earlier.length?{explanationHistory:earlier}:{})};
 }
-// The agent's own say-so ends a report only where the turn was the owner's or its own: an
-// agent that talks to people outside, or a turn started by an outside, peer or other
-// agent's message, could be talked into hiding what it tried.
-// Decided from every message handed over in the report's turn and in the turn explaining
-// it (turnOf): any from someone other than the owner (peerForeign, a relay that came in
-// during it included), or a turn CC Agent did not start (a terminal or relay prompt, a
-// report from before turns were kept), and it is not allowed.
-function selfResolveAllowed(c,g,r){
- if(outsideTaken(c))return false;
- // The relays that came in, read on the spot as ownerTurn does; a transcript still being
- // read in the background, or one that cannot be read, leaves the origin unknown.
- try{if(syncRelays(c,undefined,true)==='later')return false;}catch{return false;}
- const now=turnOf(g);
- return turnClean(c,(g.turns||[]).find(t=>t.id===r.turnId))&&turnClean(c,now&&!now.ended?now:null);
+// What the scope refused without asking, from Claude Code's own hooks (server/scopeHooks.js,
+// which says how the hook proves it is the hook): the OS
+// sandbox fails a Bash command, restricted mode or a deny rule refuses a file tool, the
+// auto-mode classifier blocks a call. None of these reach the permission relay. Each event is a
+// file in the generation's spool, drained here on the relay timer and when a turn ends, on Esc,
+// a stop and a session found gone. Nothing reads the transcript for this.
+//
+// Which are filed first: the classifier's denials and Claude Code's own refusal sentences for
+// its file tools (exact), then what a Bash command's failure reads as (text: a command can print
+// it too), never left out. Within each, a program or path not seen before in this drain comes
+// before repeats of one. Each call once, by its tool_use_id. Past MAX_BLOCKED_PER_TURN a drain,
+// or FILED_PER_MINUTE a session, the last report keeps how many more there were and their
+// lines, up to OVERFLOW_LINES (overflow); at the cap, the cap notice counts them.
+const MAX_BLOCKED_PER_TURN=5,FILED_PER_MINUTE=20;
+// Past the limit, every one's tool and first line, up to OVERFLOW_LINES: past that the first and
+// the last half of them, with how many between (cut: where they were cut), so a refusal among
+// many decoys at either end still shows. Their keys are not kept in the report: the agent's counted keys hold them while it runs (countKeys), and the spool files
+// they came from are gone once filed; the lines go once the report is decided (accessReports.js).
+const OVERFLOW_LINES=50;
+function overflowOf(rest,before=null){
+ const lines=[...(before?.lines||[]),...rest.map(e=>({tool:toolName(e.tool),line:reportLine(e)}))],half=OVERFLOW_LINES/2,count=(before?.count||0)+rest.length;
+ const omitted=(before?.omitted||0)+Math.max(0,lines.length-OVERFLOW_LINES);
+ return {count,...(lines.length<=OVERFLOW_LINES&&!omitted?{lines}:{lines:[...lines.slice(0,half),...lines.slice(-half)],cut:half,omitted})};
 }
-function turnClean(c,t){
- if(!t||t.unknown)return false;
- const from=Date.parse(t.at),to=t.endedAt?Date.parse(t.endedAt):Infinity;
- return !c.messages.some(m=>(t.ids.includes(m.id)&&peerForeign(m))||(m.role==='relay'&&m.relay?.direction==='in'&&(at=>at>=from&&at<=to)(Date.parse(m.relay.at||m.at))));
+// A call's whole input or error, as kept: within n characters, its head and its true tail, with
+// how long it was and a mark where it was cut.
+function textCut(v,n){
+ let raw;try{raw=typeof v==='string'?v:JSON.stringify(v??'');}catch{raw='[not readable]';}
+ const text=cleanText(raw);
+ const a=Array.from(text);if(a.length<=n)return text;
+ const back=Math.floor(n*0.35),front=n-back-40;
+ return a.slice(0,front).join('')+' … ['+a.length+' characters, cut] … '+a.slice(-back).join('');
 }
-// The turns CC Agent handed messages to (the last few, by run): a turn begins with the first
-// message or question it hands over after the last one ended, and ends at its Stop or failure.
-// A Stop with no turn of ours open ends a turn CC Agent did not start (unknown).
-const turnOf=g=>(g.turns||[]).find(t=>t.id===g.turnId)||null;
-function turnHand(g,m){
- let t=turnOf(g);
- if(!t||t.ended){t={id:randomUUID().slice(0,12),at:new Date().toISOString(),ids:[]};g.turns=[...(g.turns||[]),t].slice(-12);g.turnId=t.id;}
- if(m&&!t.ids.includes(m.id))t.ids.push(m.id);
- return t;
+// The keys of the refusals already filed or counted for an agent, kept as they are filed (one
+// read of the reports file per agent, not one per drain), the newest COUNTED_KEPT.
+const COUNTED_KEPT=20000,countedKeys=new Map();
+function countedOf(c){
+ let s=countedKeys.get(c.id);
+ if(!s){s=new Set(reports.list().filter(x=>x.conversationId===c.id).reverse().flatMap(x=>[x.key,...(x.overflow?.keys||[]),...(x.kind==='cap'?x.keys||[]:[])]).filter(Boolean));countedKeys.set(c.id,s);}
+ return s;
 }
-// A turn still open when the session is stopped, started again or found at its start-up
-// prompt never had its Stop: it ends there, of unknown origin, so a later session's report
-// is not taken as made in it.
-function turnAbandon(g){const t=turnOf(g);if(t&&!t.ended){t.ended=true;t.unknown=true;t.endedAt=new Date().toISOString();}}
-function turnEnd(g){
- let t=turnOf(g);
- if(!t||t.ended){t={id:randomUUID().slice(0,12),at:new Date().toISOString(),ids:[],unknown:true};g.turns=[...(g.turns||[]),t].slice(-12);g.turnId=t.id;}
- t.ended=true;t.endedAt=new Date().toISOString();
+function countKeys(c,keys){const s=countedOf(c);for(const k of keys)if(k){s.delete(k);s.add(k);}while(s.size>COUNTED_KEPT)s.delete(s.values().next().value);}
+// Per generation: the ids of file tool calls that succeeded (a PostToolUse) and whose result
+// carried a refusal marker, until the batch they are in has come (classify lets each go then),
+// so that batch does not take one for a refusal; kept in memory and in the control folder
+// (scope-used.json, at most USED_KEPT), so the check holds across a restart, and read from it
+// only when a batch or an id first needs it (usedOf); and, in memory, when reports were filed,
+// for FILED_PER_MINUTE.
+const USED_KEPT=20000,USED_FILE='scope-used.json',hookMemory=new Map();
+const memoryOf=(c,g)=>{const k=c.id+':'+g.number;let m=hookMemory.get(k);if(!m){m={used:null,filedAt:[]};hookMemory.set(k,m);}return m;};
+async function usedOf(c,g,m){
+ if(m.used)return m.used;
+ const used=new Set();
+ // A plain file, not too big, of ids only: anything else is left unread.
+ try{const f=path.join(controlDir(c,g),USED_FILE),st=await fs.promises.lstat(f);if(st.isFile()&&st.size<=2_000_000){const list=JSON.parse(await fs.promises.readFile(f,'utf8'));if(Array.isArray(list))for(const id of list.slice(-USED_KEPT))if(typeof id==='string'&&/^[A-Za-z0-9_-]{1,200}$/.test(id))used.add(id);}}catch{}
+ return m.used||(m.used=used);
 }
-// Many reports an agent said it solved itself (SELF_DIGEST_COUNT within SELF_DIGEST_MS) are
-// told to the admins once, as a digest report of CC Agent's (kind 'digest'): on the reports
-// page as one to review, pushed like a report. One a window per agent; while that one is
-// open its count goes on up, with no push of its own.
-function selfResolvedDigest(c,g){
- const since=Date.now()-SELF_DIGEST_MS,all=reports.list().filter(r=>r.conversationId===c.id);
- const solved=all.filter(r=>r.status==='self-resolved'&&Date.parse(r.explanation?.at||r.at)>=since);
- if(solved.length<SELF_DIGEST_COUNT)return;
- const tools=new Map();for(const r of solved)tools.set(r.tool||'tool',(tools.get(r.tool||'tool')||0)+1);
- const detail=[...tools].sort((a,b)=>b[1]-a[1]).slice(0,5).map(([t,n])=>t+' ×'+n).join(', ');
- // After an admin has handled the last one, another once the count reaches double that
- // one's, or SELF_DIGEST_COUNT more since it was handled.
- const last=all.find(r=>r.kind==='digest'&&Date.parse(r.at)>=since);
- if(last&&last.status==='open'){if(!last.adminActedAt)reports.update(last.id,{count:solved.length,detail});return;}
- if(last){const handled=Date.parse(last.adminActedAt||last.resolvedAt||last.at),after=solved.filter(r=>Date.parse(r.explanation?.at||r.at)>handled).length;if(solved.length<2*(last.count||SELF_DIGEST_COUNT)&&after<SELF_DIGEST_COUNT)return;}
- reports.add({owner:c.owner,conversationId:c.id,title:c.title,generation:g.number,sessionId:g.sessionId,messageId:null,kind:'digest',key:'digest:'+c.id+':'+Date.now(),tool:'',count:solved.length,detail,notifyAfter:new Date().toISOString()});
+// Written only once the reports of the slice that changed it are on disk (scopeCommit).
+async function keepUsed(c,g,used){
+ const list=[...used].slice(-USED_KEPT);
+ const dir=controlDir(c,g),file=path.join(dir,USED_FILE),tmp=file+'.'+process.pid+'.tmp';
+ try{await fs.promises.access(dir);}catch{return;}
+ await fs.promises.writeFile(tmp,JSON.stringify(list),{mode:0o600});await fs.promises.rename(tmp,file);
 }
-const BLOCKED=/Operation not permitted|operation not permitted| is outside |denied by your permission settings|deny network-outbound|sandbox_violations/;
-const MAX_BLOCKED_PER_TURN=5;
-function fileBlocked(c,g){
- const m=turnMessage(c);if(c.mode!=='claude'||!m)return;
- // A full-access agent has no scope to have been refused by; its refused prompts still get
- // the agent's own words read back below.
- const scan=!agentAccess.of(c).full;
- const unsaid=reports.list().filter(r=>r.conversationId===c.id&&r.messageId===m.id&&r.generation===g.number&&r.kind==='permission'&&r.agentWords===undefined).reverse();
- if(!scan&&!unsaid.length)return;
- let seg;try{seg=transcript.segment(stateRoot,c,m.id);}catch{return;}
- if(!seg)return;
- // What the agent wrote just before each call, shown on a report it has not explained.
- const words=v=>String(v||'').replace(/\s+/g,' ').trim().slice(0,300);
- const uses=[],refused=[],filed=[];let index=0,tried=0,said='';
- for(const record of seg.records)for(const block of record.blocks){
-  if(block.type==='text'&&record.role==='assistant')said=block.text;
-  else if(block.type==='tool_use')uses.push({block,said});
-  else if(block.type==='tool_result'){
-   const use=uses.shift();index+=1;const text=String(block.text||'');
-   if(block.isError&&use)refused.push(use);
-   // Only a failed call, and only a few per turn: the text is the agent's own
-   // output, so a successful command that merely prints these words must not
-   // count, and a turn cannot flood the review queue.
-   if(!scan||!block.isError||!BLOCKED.test(text)||tried>=MAX_BLOCKED_PER_TURN)continue;tried+=1;
-   const r=fileReport(c,g,{kind:'blocked',key:'blocked:'+g.sessionId+':'+m.id+':'+index,tool:use?.block.name||'',detail:String(use?.block.text||'').slice(0,1000),error:text.slice(0,500),agentWords:words(use?.said)},true);
-   if(r)filed.push(r);
+// CC Agent's notice that scope reports may be missing for an agent (kind 'hooks'), one open an
+// agent for each reason (detail), pushed once; while it is open its count goes up. Reasons:
+// 'version' (the Claude Code started is too old for the hooks), 'version-partial' (from
+// scopeHooks.HOOKS_MIN to below MIN_VERSION: the hooks run but may not report everything),
+// 'unknown-version',
+// 'silent' (no hook event arrived after its first tool calls), 'restart' (started before the
+// hooks, so nothing is collected until it restarts), 'dropped' (events that could not be read),
+// 'unsafe' (the spool was not a plain folder of this account's), 'bad' (events whose filing kept
+// failing, set aside in scope-bad), 'cut' (events kept only in
+// part, as the hook keeps an event's first 256 KiB), 'full' (events the hook did
+// not write because the spool was full, while nothing drained it), 'unscanned' (a transcript
+// stretch the old scan had left unread when it was removed).
+// items: [{key, n}] for counts tied to spool files, so a drain that failed after counting them
+// does not count them again (the notice keeps the last NOTICE_KEYS keys it counted).
+const NOTICE_KEYS=1000;
+function hooksNotice(c,g,why,{count=1,version,items}={}){
+ const at=new Date().toISOString();
+ // One open notice an agent for each reason, so two reasons never hide each other.
+ const open=reports.list().find(r=>r.conversationId===c.id&&r.kind==='hooks'&&r.status==='open'&&r.detail===why);
+ const extra=typeof version==='string'?{version:cutText(version,40)}:{};
+ let keys=[];
+ if(items){const seen=new Set(open?.counted||[]);const fresh=items.filter(x=>!seen.has(x.key));if(!fresh.length)return;count=fresh.reduce((a,x)=>a+x.n,0);keys=fresh.map(x=>x.key);}
+ const counted=[...(open?.counted||[]),...keys].slice(-NOTICE_KEYS);
+ if(open){reports.update(open.id,{count:(open.count||0)+count,...extra,...(keys.length?{counted}:{})});return;}
+ reports.add({owner:c.owner,conversationId:c.id,title:c.title,generation:g.number,sessionId:g.sessionId,messageId:null,kind:'hooks',key:'hooks:'+c.id+':'+Date.now()+':'+randomUUID().slice(0,8),tool:'',count,detail:why,minVersion:scopeHooks.MIN_VERSION,...extra,...(keys.length?{counted}:{}),notifyAfter:at});
+}
+// A refused prompt's grant suggestion: only from its input's own path or url field, read as JSON
+// (input_preview), never from its description or a command.
+function permissionTarget(data){
+ const tool=String(data.tool_name||'');
+ if(tool!=='WebFetch'&&!FILE_TOOLS.has(tool))return {};
+ let input;try{input=JSON.parse(String(data.input_preview||''));}catch{return {};}
+ if(!input||typeof input!=='object'||Array.isArray(input))return {};
+ if(tool==='WebFetch'){if(typeof input.url==='string')try{const u=new URL(input.url);if(['http:','https:'].includes(u.protocol)&&u.hostname)return {targetHost:u.hostname.toLowerCase()};}catch{}return {};}
+ const p=[input.file_path,input.notebook_path,input.path].find(v=>typeof v==='string'&&v&&v.length<=4000);
+ const full=p&&absolutePath(p);
+ return full?{targetPath:full,...(['Glob','Grep','LS'].includes(tool)?{targetIsDir:true}:{})}:{};
+}
+// The built-in file tools, whose path field names what they touch. ~ and ~/… are the home of
+// the user running CC Agent; ~someone, or a relative path, is not taken at all.
+const FILE_TOOLS=new Set(['Read','Write','Edit','MultiEdit','NotebookEdit','Glob','Grep','LS']);
+const absolutePath=p=>{const x=p==='~'||p.startsWith('~/')?homeOf()+p.slice(1):p;return path.isAbsolute(x)?path.resolve(x):null;};
+// CC Agent's own notices about an agent, not its reports: no explanation, no grant, no bulk.
+const NOTICE_KINDS=['cap','digest','scan','hooks'];
+const grantable=r=>!!r&&!NOTICE_KINDS.includes(r.kind)&&r.kind!=='classifier';
+const spoolOf=(c,g)=>scopeHooks.spoolDir(controlDir(c,g));
+// Files what a few spool files held (scopeHooks.read), in the order they came; returns whether
+// anything changed. Only once it has all been filed does the caller remove the files.
+// Files what a few spool files held (scopeHooks.read), in the order they came, in memory:
+// {changed, used}. The succeeded ids are classified against a copy (used: null when none was
+// needed), which becomes the generation's only once this has all been filed, so a filing that
+// fails and is tried again judges the same calls the same way.
+async function fileSlice(c,g,mem,read,counted=[]){
+ let changed=false;
+ const events=read.flatMap(x=>x.events),ids=read.flatMap(x=>x.ids);
+ if((events.length||ids.length)&&!g.hookSeen){g.hookSeen=true;changed=true;}
+ // What the hook only counted (counted: the listing's notes) and what could not be read.
+ const notes=[...counted,...read.filter(x=>x.note).map(x=>({why:x.note,key:x.name,n:1}))];
+ for(const why of ['dropped','full','cut']){const items=notes.filter(x=>x.why===why);if(items.length){hooksNotice(c,g,why,{items});changed=true;}}
+ // The ids a succeeded call left matter only to a batch: read from the control folder then.
+ const needUsed=ids.length||events.some(e=>e.hook_event_name==='PostToolBatch');
+ const used=needUsed?new Set(await usedOf(c,g,mem)):null;
+ const found=scopeHooks.classify(events,ids,used||new Set());
+ if(found.length&&fileFound(c,g,found))changed=true;
+ return {changed,used};
+}
+// Where a grant could be suggested from, never from text the agent chose (a command, an edit's
+// new text, a file's content): only a path Claude Code's own
+// refusal printed whole for this call (the suggest of scopeHooks' classify): the call's own path, or
+// through a symlink the real one, never where the link is. A folder for Glob, Grep and LS, else
+// the file's.
+const homeOf=()=>require('node:os').homedir();
+function targetOf(x){
+ // A website the scope gate refused as not listed (scopeHooks classify suggestHost).
+ if(x.kind==='blocked'&&x.exact&&typeof x.suggestHost==='string'&&x.suggestHost)return {targetHost:x.suggestHost};
+ if(x.kind!=='blocked'||!x.exact||typeof x.suggest!=='string'||!x.suggest||x.suggest.length>4000)return {};
+ const p=absolutePath(x.suggest);
+ return p?{targetPath:p,...(['Glob','Grep','LS'].includes(x.tool)?{targetIsDir:true}:{})}:{};
+}
+// Reached through a symlink: both ends as Claude Code printed them (shortened or not).
+const symlinkOf=x=>x.symlink&&typeof x.symlink.from==='string'&&typeof x.symlink.to==='string'?{symlink:{from:cutText(cleanText(x.symlink.from),400),to:cutText(cleanText(x.symlink.to),400)}}:{};
+function fileFound(c,g,found){
+ // What an earlier generation's hooks wrote, read after the agent moved on (a restart, a
+ // handoff): filed and shown, but under no turn of the current session, and nobody is asked to
+ // explain it: that session never made the call.
+ const current=g===active(c);
+ const counted=countedOf(c),turn=current?turnMessage(c):null,pairs=new Set(),mem=memoryOf(c,g);
+ const keyOf=(kind,id)=>kind+':'+g.sessionId+':'+id;
+ const fresh=[];
+ found.forEach((x,index)=>{
+  if(counted.has(keyOf('blocked',x.id))||counted.has(keyOf('classifier',x.id))||fresh.some(y=>y.id===x.id))return;
+  const pair=x.tool+'\0'+(x.target||x.program||'');const repeat=pairs.has(pair);pairs.add(pair);
+  // A subagent's is the agent's, marked as its subagent's in the detail.
+  const mark=x.subagent?'[subagent '+cutText(x.subagent,40)+'] ':'';
+  fresh.push({id:x.id,rank:(x.exact?0:2)+(repeat?1:0),index,entry:{kind:x.kind,key:keyOf(x.kind,x.id),exact:!!x.exact,...targetOf(x),...symlinkOf(x),tool:x.tool,detail:mark+textCut(x.input,1000-mark.length),error:textCut(x.error,500),...(x.subagent?{subagent:cutText(x.subagent,80)}:{})}});
+ });
+ if(!fresh.length)return false;
+ fresh.sort((a,b)=>a.rank-b.rank||a.index-b.index);
+ // A few per drain and per minute, so a session cannot flood the admins' queue.
+ // By a monotonic clock: setting the clock back neither lifts nor stretches the cap.
+ const now=performance.now();mem.filedAt=mem.filedAt.filter(t=>t>now-60_000);
+ const room=Math.max(0,Math.min(MAX_BLOCKED_PER_TURN,FILED_PER_MINUTE-mem.filedAt.length));
+ const take=fresh.slice(0,room),rest=fresh.slice(room).sort((a,b)=>a.index-b.index).map(x=>x.entry);
+ const filed=[];
+ reports.batch(()=>{
+  for(const x of take){const f=fileReport(c,g,x.entry,turn);if(f){filed.push(f);mem.filedAt.push(now);}}
+  if(rest.length){
+   // Onto this drain's last report, or this session's latest open one, or the cap notice.
+   const last=filed.at(-1)||reports.list().find(r=>r.conversationId===c.id&&r.sessionId===g.sessionId&&r.status==='open'&&['blocked','classifier'].includes(r.kind));
+   if(last)reports.update(last.id,{overflow:overflowOf(rest,last.overflow)});
+   else capNotice(c,g,rest);
   }
+ });
+ countKeys(c,fresh.map(x=>x.entry.key));
+ // Several in one drain are one card, as they came from one piece of work. An agent made full
+ // access since (what a scoped run of it wrote, drained later) gets the reports, not the card.
+ if(filed.length&&!agentAccess.of(c).full){reportCard(c,filed,turn?.id,rest.length);if(current)askExplain(c,g,filed,g.phase==='busy'?'now':'next');}
+ return true;
+}
+// The scope intake: one task per spool, at most
+// INTAKE_RUNNING at once, each reading one file at a time with an await between files
+// (scopeHooks.list and read), so the server's event loop turns between any two files however
+// many wait. An event, a turn's end, Esc, a stop, a session found gone, the next message or the
+// relay timer only wakes its spool's task (wakeScope); nothing drains on the spot. A task files
+// what it read every SLICE_FILES files, removes those files only then, and, when another spool
+// is waiting, goes to the back of the queue: the spool waiting longest runs next, so a heavy
+// producer cannot hold the others back. A task that fails waits (4 s doubling to 5 min) and,
+// failing BAD_AFTER times on the same files, sets them aside (scope-bad) with a notice, so what
+// comes after them is read. A generation that is not the current one, or not running, is let
+// go from memory once its spool is empty. Counts are kept only for that order and for the
+// filing cap (FILED_PER_MINUTE).
+const INTAKE_RUNNING=2,SLICE_FILES=50,BAD_AFTER=2;
+const intake={waiting:new Map(),running:new Map(),started:false,settled:[]};
+const intakeKey=(c,g)=>c.id+':'+g.number;
+function wakeScope(c,g=active(c)){
+ if(c?.mode!=='claude'||!g)return;
+ const k=intakeKey(c,g),job=intake.running.get(k);
+ if(job){job.again=true;return;}
+ if(!intake.waiting.has(k))intake.waiting.set(k,{c,g});
+ intakePump();
+}
+function intakePump(){
+ while(intake.running.size<INTAKE_RUNNING&&intake.waiting.size){
+  const [k,{c,g}]=intake.waiting.entries().next().value;intake.waiting.delete(k);
+  const job={c,g,again:false,yielded:false};intake.running.set(k,job);
+  runSpool(k,job).catch(e=>console.error('scope hooks '+c.id+':',e.message)).finally(()=>{
+   intake.running.delete(k);
+   if(job.yielded||job.again)intake.waiting.set(k,{c,g});
+   intakePump();
+   if(!intake.running.size&&!intake.waiting.size)for(const done of intake.settled.splice(0))done();
+  });
  }
- for(const r of unsaid){const at=refused.findIndex(u=>u.block.name===r.tool);const use=at>=0?refused.splice(at,1)[0]:null;reports.update(r.id,{agentWords:words(use?.said)});}
- // Several in one turn are one card, as they came from one piece of work.
- if(filed.length){reportCard(c,filed,m.id);askExplain(g,filed,'next');}
+}
+// The generation still exists (a deleted agent's spool is not read).
+const stillThere=(c,g)=>state.conversations.includes(c)&&(c.runs||[]).includes(g);
+async function runSpool(k,job){
+ const {c,g}=job,dir=spoolOf(c,g),mem=memoryOf(c,g);
+ mem.removing||(mem.removing=new Set());
+ const letGo=()=>{if(!mem.removing.size&&(active(c)!==g||!['ready','busy','starting'].includes(g.phase)))hookMemory.delete(k);};
+ if(mem.retryAt>performance.now())return;
+ for(;;){
+  if(!stillThere(c,g)){hookMemory.delete(k);return;}
+  if(!mem.queue){
+   job.again=false;
+   const l=await scopeHooks.list(dir,mem.listing||(mem.listing=new Map()));
+   if(!l){letGo();return;}
+   if(l.unsafe){if(!g.spoolUnsafeNoticed){g.spoolUnsafeNoticed=true;hooksNotice(c,g,'unsafe');saveSoon(c);}return;}
+   if(l.heard&&!g.hookSeen){g.hookSeen=true;saveSoon(c);}
+   // Files already filed and waiting for their reports to reach the disk are not read again.
+   mem.queue=l.files.filter(f=>!mem.removing.has(f.name));mem.counted=l.notes.filter(x=>!mem.removing.has(x.key));mem.taken=l.taken.filter(n=>!mem.removing.has(path.basename(n)));
+  }
+  if(!mem.queue.length&&!mem.counted.length){
+   mem.queue=null;
+   if(!mem.removing.size)await scopeHooks.restartCount(dir);
+   if(job.again)continue;
+   letGo();return;
+  }
+  const slice=mem.queue.slice(0,SLICE_FILES),read=[];
+  for(const f of slice){const r=await scopeHooks.read(dir,f);read.push({...r,name:f.name});}
+  if(!stillThere(c,g)){hookMemory.delete(k);return;}
+  let used=null;
+  try{
+   const r=await fileSlice(c,g,mem,read,mem.counted);
+   if(r.changed)saveSoon(c);
+   used=r.used;
+   delete mem.failures;delete mem.retryAt;
+  }catch(e){
+   // Nothing of it was kept: the generation's ids are as they were, its files still there.
+   mem.failures=(mem.failures||0)+1;
+   if(mem.failures<BAD_AFTER){const wait=Math.min(4000*2**(mem.failures-1),300_000);mem.retryAt=performance.now()+wait;setTimeout(()=>wakeScope(c,g),wait+10).unref?.();throw e;}
+   const n=await scopeHooks.quarantine(dir,slice.map(f=>f.name));
+   delete mem.failures;delete mem.retryAt;
+   if(n)try{hooksNotice(c,g,'bad',{count:n});}catch{}
+   console.error('scope hooks '+c.id+':',e.message);
+  }
+  // Filed in memory: what the next slices are judged by, and the files and counters, which go
+  // once the reports are on disk (scopeCommit).
+  if(used)mem.used=used;
+  const names=[...slice.map(f=>f.name),...mem.taken.map(n=>path.basename(n))];
+  for(const n of names)mem.removing.add(n);
+  scopeCommit(c,g,mem,dir,names,used?new Set(used):null,reports.changes());
+  mem.counted=[];mem.taken=[];
+  mem.queue=mem.queue.slice(slice.length);
+  if(!mem.queue.length)mem.queue=null;
+  // Another spool waiting: it goes first, this one to the back of the queue.
+  if(intake.waiting.size){job.yielded=true;return;}
+ }
+}
+// A filed slice's lasting part, in the order filed, once the report store has written what
+// it was filed as (reports.persistedUpTo): the generation's succeeded ids (scope-used.json), then
+// its spool files go. Until then a restart reads those files again, against the ids as they
+// were, and files them as before (nothing of them reached the disk). A write that failed is
+// waited for again: the store keeps trying.
+const commits=new Set();
+function scopeCommit(c,g,mem,dir,names,used,upTo){
+ const run=async()=>{
+  for(let wait=1000;;wait=Math.min(wait*2,60_000)){
+   try{await reports.persistedUpTo(upTo);break;}catch{await new Promise(r=>setTimeout(r,wait).unref?.());}
+  }
+  // The ids first: a write of them that fails leaves the files, tried again (1 s doubling to a
+  // minute) while the generation is there; a restart meanwhile reads the files again against
+  // the ids on disk, as they were.
+  for(let wait=1000;used;wait=Math.min(wait*2,60_000)){
+   try{await keepUsed(c,g,used);break;}catch(e){console.error('scope hooks '+c.id+':',e.message);if(!stillThere(c,g))return;await new Promise(r=>setTimeout(r,wait).unref?.());}
+  }
+  await scopeHooks.remove(dir,names);
+  for(const n of names){mem.removing.delete(n);mem.listing?.delete(n);}
+  if(!mem.queue&&!mem.removing.size){
+   await scopeHooks.restartCount(dir);
+   // A generation not running, its spool done: let go from memory, as runSpool would.
+   const k=intakeKey(c,g);
+   if(!intake.running.has(k)&&hookMemory.get(k)===mem&&(active(c)!==g||!['ready','busy','starting'].includes(g.phase)))hookMemory.delete(k);
+  }
+ };
+ const p=(mem.committing||Promise.resolve()).then(run,run);
+ mem.committing=p;commits.add(p);p.finally(()=>commits.delete(p)).catch(()=>{});
+}
+// Every scoped generation's spool, once after a start (what the hooks wrote while the server
+// was down): only put in the queue, read by the tasks in turn.
+function intakeStart(){
+ if(intake.started)return;intake.started=true;
+ for(const c of state.conversations)if(c.mode==='claude')for(const g of c.runs||[])wakeScope(c,g);
+}
+// Resolves once no spool is being read or waits to be, and what was filed is on disk with its
+// spool files gone; asks the report store to write now (a clean shutdown, scripts/start.mjs).
+async function scopeSettled(){
+ for(;;){
+  if(intake.running.size||intake.waiting.size)await new Promise(r=>intake.settled.push(r));
+  if(commits.size){reports.writeSoon().catch(()=>{});await Promise.allSettled([...commits]);continue;}
+  if(!intake.running.size&&!intake.waiting.size){await reports.writeSoon();return;}
+ }
+}
+// After the first tool calls (its ready), a scoped agent's hooks have fired: a PostToolBatch for
+// that batch. None by HOOK_SILENT_MS after it: one notice that reports are not collected.
+// One started before the hooks (no g.scopeHooks), still running: the same, once.
+const HOOK_SILENT_MS=90_000;
+function hooksAlive(c,g){
+ if(c.mode!=='claude'||agentAccess.of(c).full||!['ready','busy'].includes(g.phase))return false;
+ if(!g.scopeHooks){if(g.hooksMissingNoticed)return false;g.hooksMissingNoticed=true;hooksNotice(c,g,'restart');return true;}
+ if(g.hookSeen||g.hookSilentNoticed||!g.hookWaitFrom||Date.now()-g.hookWaitFrom<HOOK_SILENT_MS)return false;
+ g.hookSilentNoticed=true;hooksNotice(c,g,'silent');return true;
+}
+// The fields the old transcript scan kept. A leftover or a look still waiting
+// held a stretch it never looked at: one notice for that agent. Old scan notices stay as
+// history. Once at start.
+const OLD_SCAN_FIELDS=['refusalScan','refusalScanAt','refusalScanPending','refusalScanTries','refusalRetryAt','refusalTickAt'];
+// An agent deleted for good: what was kept in memory for it goes.
+function forgetScope(c){countedKeys.delete(c.id);for(const k of [...hookMemory.keys()])if(k.startsWith(c.id+':'))hookMemory.delete(k);}
+function dropOldScan(c){
+ let changed=false,unscanned=false;
+ if(Array.isArray(c.refusalScansLeft)&&c.refusalScansLeft.length)unscanned=true;
+ if('refusalScansLeft' in c){delete c.refusalScansLeft;changed=true;}
+ for(const g of c.runs||[]){if(g.refusalScanPending)unscanned=true;for(const k of OLD_SCAN_FIELDS)if(k in g){delete g[k];changed=true;}}
+ if(unscanned&&c.mode==='claude')try{hooksNotice(c,active(c),'unscanned');}catch(e){console.error('scope hooks notice:',e.message);}
+ return changed;
 }
 // Messages this generation actually took; ones still queued or just delivered to the next turn do not count as missed.
 // Messages between agents' sessions, shown in both chats: one that arrived, with who sent it, pushed to the owner; one this
@@ -1268,7 +1604,7 @@ function syncRelays(c,now=Date.now(),onSpot=false){
  if(c.mode!=='claude'||c.archived||!c.runs?.length||!ownerIsActiveAdmin(c.owner))return;
  if(!c.relaySince){c.relaySince=new Date(now).toISOString();save(c);return;}
  const found=transcript.relays(stateRoot,c,onSpot);
- if(!found)return 'later';
+ if(!found)return;
  let changed=false;
  for(const r of found){
   if(!r.at||r.at<c.relaySince)continue;
@@ -1288,7 +1624,10 @@ function syncRelays(c,now=Date.now(),onSpot=false){
 }
 // Only agents that are running: a stopped one receives nothing, and reading every
 // old transcript each few seconds would hold the server up.
-function syncAllRelays(){try{deliverGroups();}catch(e){console.error('groups:',e.message);}const alive=Date.now()-15000;for(const c of state.conversations)if(!c.archived&&c.mode==='claude'&&active(c).heartbeat>alive){try{syncRelays(c);}catch(e){console.error('relays '+c.id+':',e.message);}try{syncTerminalPrompt(c);}catch{}}}
+// The relay timer wakes each running agent's spool (wakeScope) and checks its hooks are heard
+// from (hooksAlive); saved only when that changed something.
+function scopeTick(c){const g=active(c);wakeScope(c,g);if(hooksAlive(c,g))save(c);}
+function syncAllRelays(){try{deliverGroups();}catch(e){console.error('groups:',e.message);}const alive=Date.now()-15000;for(const c of state.conversations)if(!c.archived&&c.mode==='claude'&&active(c).heartbeat>alive){try{syncRelays(c);}catch(e){console.error('relays '+c.id+':',e.message);}try{syncTerminalPrompt(c);}catch{}try{scopeTick(c);}catch(e){console.error('scope hooks '+c.id+':',e.message);}}try{intakeStart();}catch(e){console.error('scope hooks:',e.message);}try{flushPromptAudits();}catch(e){console.error('prompt audit:',e.message);}}
 // A menu waiting in the agent's terminal (terminalPrompt.js), kept in memory like
 // the heartbeat. Seen twice in a row, one the agent's turn is waiting on is pushed
 // to the owner once; a menu the owner opened from the chat is not.
@@ -1493,8 +1832,10 @@ function haltForGroup(c,x){
  if(work?.catching||!(g.phase==='busy'||busyElsewhere(c,g,work)))return;
  try{execFileSync('tmux',['-L',tmuxSocket,'send-keys','-t',g.tmux,'Escape'],{timeout:5000,stdio:'ignore'});}catch{return;}
  // A turn stopped with Esc gets no Stop hook: closed here, as interrupt() does, but
- // only the group's message; the rest of its queue stays.
+ // only the group's message; the rest of its queue stays. What the scope refused in it is
+ // read now, as interrupt() does.
  permissions.cancel(g);
+ wakeScope(c,g);
  for(const m of c.messages)if(m.role==='user'&&m.delivery==='delivered'&&m.group?.id===x.id)m.delivery='interrupted';
  if(g.ready)g.phase='ready';
  save(c);
@@ -1600,7 +1941,7 @@ const POSTCOMPACT_WAIT_MS=4000;
 // starting, heartbeat) and channel/hook.mjs (precompact, postcompact, result, failure).
 // Anything else is refused before it touches the agent, its heartbeat included
 // Keep it equal to the actions the channel's sources send.
-const BRIDGE_ACTIONS=new Set(['bootstrap','poll','schedule-propose','schedule-update','schedule-remove','schedule-list','permission-request','permission-ack','post','checklists','checklist','group-post','ready','reply','memory','describe','history','precompact','postcompact','result','failure','error','starting','heartbeat','peer-agents','peer-send','peer-status','starter-agents','starter-start','report-explain']);
+const BRIDGE_ACTIONS=new Set(['hook-check','plugin-check','bootstrap','poll','schedule-propose','schedule-update','schedule-remove','schedule-list','permission-request','permission-ack','post','checklists','checklist','group-post','ready','reply','memory','describe','history','precompact','postcompact','result','failure','error','starting','heartbeat','peer-agents','peer-send','peer-status','starter-agents','starter-start','report-explain']);
 function bridge(c,action,data={}) {
  if(typeof action!=='string'||!BRIDGE_ACTIONS.has(action))throw error('Unknown bridge action',404);
  const g=active(c);g.heartbeat=Date.now();
@@ -1628,25 +1969,33 @@ function bridge(c,action,data={}) {
   // its channel is polling and its session has finished a turn, so it is ready, and
   // the first message it is handed asks it to load what bootstrap gives (an agent told to translate everything sat on the waking screen with nothing running).
   // Not after an error or a usage limit at start-up, which stays shown.
-  if(g.phase==='starting'&&!g.compacting&&!g.manualCompact&&!g.bootstrapped&&!g.lastError&&!g.limitResume&&g.launchedAt&&Date.now()-g.launchedAt>STARTUP_TURN_GRACE_MS&&transcript.turnEndedSince(stateRoot,c,g.launchedAt)){try{turnAbandon(g);markReady(c,g);g.startupSkipped=true;save(c);}catch(e){console.error(`ready without handshake for ${c.id}: ${e.message}`);}}
+  if(g.phase==='starting'&&!g.compacting&&!g.manualCompact&&!g.bootstrapped&&!g.lastError&&!g.limitResume&&g.launchedAt&&Date.now()-g.launchedAt>STARTUP_TURN_GRACE_MS&&transcript.turnEndedSince(stateRoot,c,g.launchedAt)){try{markReady(c,g);g.startupSkipped=true;save(c);}catch(e){console.error(`ready without handshake for ${c.id}: ${e.message}`);}}
   const verdicts=permissions.deliveries(g);if(verdicts.length)return {permissions:verdicts};
   // A report's question, into the turn still running (askExplain): no bubble, no delivery mark.
+  // A refused prompt of a full-access agent's: said into the turn, once.
+  const note=g.phase==='busy'&&(g.promptNotes||[])[0];
+  if(note){g.promptNotes=g.promptNotes.slice(1);save(c);return {message:{id:'prompt-'+note.id,text:promptText(note),sender:'automatic'}};}
+  // A question about a report that is not there (filed in memory before a kill, filed again
+  // since under another id) is let go.
+  if((g.reportAsks||[]).some(a=>!reports.get(a.id))){g.reportAsks=g.reportAsks.filter(a=>reports.get(a.id));save(c);}
   const ask=g.phase==='busy'&&(g.reportAsks||[]).find(a=>a.when==='now');
   if(ask){g.reportAsks=g.reportAsks.filter(a=>a!==ask);save(c);return {message:{id:'report-'+ask.id,text:askText([ask]),sender:'automatic'}};}
   const pending=c.messages.find(m=>m.delivery==='queued');
+  // What the hooks wrote since the timer last looked is read now; it does not hold the message.
+  if(pending&&g.ready)wakeScope(c,g);
   // The questions waiting for the next message (what the sandbox refused, found at a turn's
   // end) go just before it, as an event of their own from CC Agent (sender automatic,
   // message_id report-<id>), never inside a message another sender's tag is on; the
   // message itself follows on the next poll, into the same turn.
   const later=pending&&g.ready?(g.reportAsks||[]).filter(a=>a.when==='next'):[];
-  if(later.length){g.reportAsks=g.reportAsks.filter(a=>a.when!=='next');turnHand(g,pending);g.phase='busy';save(c);return {message:{id:'report-'+later[0].id,text:askText(later,true),sender:'automatic'}};}
+  if(later.length){g.reportAsks=g.reportAsks.filter(a=>a.when!=='next');g.phase='busy';save(c);return {message:{id:'report-'+later[0].id,text:askText(later,true),sender:'automatic'}};}
   if(pending&&g.ready){// Working for a group from the moment its message is handed over, and for nothing
   // else once any other message is.
   // A group chat named with @ in its own chat counts the same: what the
   // agent then sends that group's members shows there.
   const named=pending.mentions?.find(m=>m.group&&groupStore.get(m.id)?.owner===c.owner);
   if(!pending.wrapUp)c.groupContext=pending.group?{id:pending.group.id,at:Date.now()}:named?{id:named.id,at:Date.now()}:null;const skipped=g.startupSkipped&&!g.bootstrapped;if(skipped)g.bootstrapped=true;
-  const text=(skipped?STARTUP_REMINDER:'')+profileMessage(c,g,pending.peer?peerWrap(c,pending,neutralSender(attachments.channelText(stateRoot,c,pending))):scheduleNote(pending)+limitResumeNote(pending)+wrapUpNote(pending)+groupNote(c,pending)+mentionNote(pending)+neutralSender(attachments.channelText(stateRoot,c,pending)));pending.delivery='delivered';pending.deliveredAt=new Date().toISOString();turnHand(g,pending);g.deliveryEpoch=(g.deliveryEpoch||0)+1;g.phase='busy';save(c);return {message:{id:pending.id,text,...senderOf(c,pending),...replyMeta(pending)},rotate:c.pendingRotation};}
+  const text=(skipped?STARTUP_REMINDER:'')+profileMessage(c,g,pending.peer?peerWrap(c,pending,neutralSender(attachments.channelText(stateRoot,c,pending))):scheduleNote(pending)+limitResumeNote(pending)+wrapUpNote(pending)+groupNote(c,pending)+mentionNote(pending)+neutralSender(attachments.channelText(stateRoot,c,pending)));pending.delivery='delivered';pending.deliveredAt=new Date().toISOString();g.deliveryEpoch=(g.deliveryEpoch||0)+1;g.phase='busy';save(c);return {message:{id:pending.id,text,...senderOf(c,pending),...replyMeta(pending)},rotate:c.pendingRotation};}
   return {rotate:c.pendingRotation};
  }
  // An agent sets up a long-running schedule the owner agreed to in its conversation;
@@ -1679,12 +2028,21 @@ function bridge(c,action,data={}) {
  }
  if(action==='schedule-list')return {checks:scheduleChecks.list().map(scheduleChecks.view),schedules:scheduleStore.list().filter(x=>x.conversationId===c.id).map(x=>({id:x.id,name:x.name,prompt:x.prompt,frequency:x.frequency,status:x.status,nextAt:x.nextAt,...(x.script?{kind:'script',onResult:x.onResult,interpreter:x.script.interpreter,domains:x.script.domains}:x.check?{kind:'check',check:x.check,onResult:x.onResult}:x.feed?{kind:'feed',feedUrl:x.feed.url,onResult:'agent'}:{kind:'agent'}),runs:(x.runs||[]).slice(0,5).map(r=>({at:r.at,outcome:r.outcome,detail:r.detail,output:r.output||''}))}))};
  if(action==='permission-request'){
+  const known=(g.permissions||[]).some(p=>p.request_id===data.request_id);
   permissions.request(g,data);
   // Nothing outside an agent's scope is granted from a prompt, to anyone: an
   // admin included. Refuse it now and file it; the
   // scope is widened, if at all, from the review of these reports.
-  const filed=fileReport(c,g,{kind:'permission',key:'permission:'+g.sessionId+':'+data.request_id,tool:data.tool_name,detail:(String(data.description||'').slice(0,500)+'\n'+String(data.input_preview||'').slice(0,1000)).trim()});
-  if(filed){reportCard(c,[filed],turnMessage(c)?.id);askExplain(g,[filed],'now');}
+  // A full-access agent has no scope to widen: its refused prompt (one of its subagents', which
+  // run restricted) is no scope report and no card, only an audit line and a CC Agent note into
+  // its turn saying the prompt was refused.
+  if(agentAccess.of(c).full){
+   if(!known&&promptAuditDue(c,data.tool_name))try{require('./services/audit').audit({source:'permission',action:'prompt-refused',...promptAuditSkipped(c,data.tool_name),agent:c.id,agentName:c.title||'',owner:c.owner,generation:g.number,tool:cutText(cleanText(data.tool_name),80),detail:headTail(cleanText(data.description),300)});}catch(e){console.error('prompt audit:',e.message);}
+   if(!known)g.promptNotes=[...(g.promptNotes||[]),{id:data.request_id,tool:toolName(data.tool_name)||'tool'}].slice(-10);
+  }else{
+  const filed=fileReport(c,g,{kind:'permission',key:'permission:'+g.sessionId+':'+data.request_id,...permissionTarget(data),tool:data.tool_name,detail:(headTail(cleanText(data.description),500)+'\n'+headTail(cleanText(data.input_preview),1000)).trim()});
+  if(filed){reportCard(c,[filed],turnMessage(c)?.id);askExplain(c,g,[filed],'now');}
+  }
   // A repeated request is answered already; only a pending one gets a verdict.
   if(permissions.pending(g).some(p=>p.request_id===data.request_id))permissions.decide(g,{request_id:data.request_id,behavior:'deny',generation:g.number});
   save(c);return {ok:true};
@@ -1693,36 +2051,33 @@ function bridge(c,action,data={}) {
  // did instead, and whether it still needs it. Only a report of this agent's current
  // session, at most EXPLAIN_PER_MINUTE calls a minute. Each different word is kept, the
  // latest whole and a few before it shortened (explainPatch); the same word again writes
- // nothing. Not needed any more, an open report becomes a record (自行解決): no push, not in
- // the admins' queue, except for an agent that talks to people outside or a turn another
- // sender's message started, where it stays open. Once an admin has
- // acted on a report (reopened, dismissed or granted it), its status is the admin's.
+ // nothing. It is a label on the report only: nothing the
+ // agent says moves a report out of the admins' queue or changes its push; still_needed false
+ // shows as 「Agent 說不需要」, and admins may dismiss those together. Once an admin has acted
+ // on a report (reopened, dismissed or granted it), its explanation is final and a new one is
+ // refused. The agent is told only that its word was recorded.
  if(action==='report-explain'){
-  const now=Date.now(),recent=(explainCalls.get(c.id)||[]).filter(t=>now-t<60_000);
+  const now=performance.now(),recent=(explainCalls.get(c.id)||[]).filter(t=>now-t<60_000);
   if(recent.length>=EXPLAIN_PER_MINUTE)throw error('Too many explain_report calls; wait a minute',429);
   recent.push(now);explainCalls.set(c.id,recent);
   const r=typeof data.reportId==='string'?reports.get(data.reportId):null;
-  if(!r||r.conversationId!==c.id||r.generation!==g.number||r.kind==='digest'||r.kind==='cap')throw error('No such scope report in this session',404);
+  if(agentAccess.of(c).full||!r||r.conversationId!==c.id||r.generation!==g.number||NOTICE_KINDS.includes(r.kind))throw error('No such scope report in this session',404);
   if(typeof data.stillNeeded!=='boolean')throw error('still_needed must be true or false',400);
-  const clip=v=>typeof v==='string'?v.replace(/\r\n?/g,'\n').replace(/[\x00-\x08\x0b-\x1f\x7f]/g,'').trim().slice(0,1000):'';
+  // Once an admin has acted on it, the report and the agent's word on it are final: the admin
+  // decided on what it said then, and the audit has that. The agent is answered as always, so
+  // it learns nothing of what an admin did.
+  if(r.adminActedAt)return {ok:true,reportId:r.id,note:'Your explanation is recorded.'};
+  const clip=v=>typeof v==='string'?cutText(v.replace(/\r\n?/g,'\n').replace(INVISIBLE,'').trim(),1000):'';
   const why=clip(data.why),instead=clip(data.instead);
   if(!why)throw error('why is required',400);
-  const patch=explainPatch(r,{why,instead,stillNeeded:data.stillNeeded,at:new Date(now).toISOString()});
-  const locked=!!r.adminActedAt,kept=!locked&&!data.stillNeeded&&r.status==='open'&&!selfResolveAllowed(c,g,r);
-  if(!locked){
-   if(!data.stillNeeded&&r.status==='open'&&!kept)Object.assign(patch,{status:'self-resolved',notifyPending:false});
-   // Reopened by the agent: one never pushed is always pushed again; once a push went out
-   // for it, flipping false and true rings no one again.
-   else if(data.stillNeeded&&r.status==='self-resolved'){const ring=!r.pushedAt;Object.assign(patch,{status:'open',notifyPending:ring,...(ring?{notifyAfter:new Date(now).toISOString()}:{})});}
-   // Still needed: the admins' wait ends now, if it has not already.
-   else if(data.stillNeeded&&r.status==='open'&&r.notifyPending&&!(Date.parse(r.notifyAfter)<=now))patch.notifyAfter=new Date(now).toISOString();
-  }
+  // A label only: the report stays where it is and its push is unchanged.
+  const patch=explainPatch(r,{why,instead,stillNeeded:data.stillNeeded,at:new Date().toISOString()});
   const asked=(g.reportAsks||[]).some(a=>a.id===r.id);
   if(Object.keys(patch).length)reports.update(r.id,patch);
-  if(patch.status==='self-resolved')selfResolvedDigest(c,g);
-  if(asked){g.reportAsks=g.reportAsks.filter(a=>a.id!==r.id);save(c);}
-  const status=patch.status||r.status;
-  return {ok:true,reportId:r.id,status,...(locked?{note:'An admin has already acted on this report, so its status stays as the admin set it; your explanation is kept.'}:kept?{note:'This report stays open for an admin: this agent talks to people outside, or the turn came from someone other than the owner. Your explanation is kept.'}:{})};
+  // The question waiting for it goes only once the label it answered with is on disk:
+  // a write that fails leaves the question, so it is asked again.
+  if(asked)reportsWritten().then(()=>{if((g.reportAsks||[]).some(a=>a.id===r.id)){g.reportAsks=g.reportAsks.filter(a=>a.id!==r.id);save(c);}}).catch(()=>{});
+  return {ok:true,reportId:r.id,note:'Your explanation is recorded.'};
  }
  if(action==='permission-ack'){permissions.ack(g,data.request_id);save(c);return {ok:true};}
  // The agent speaks in its chat on its own: an update on work it took up from
@@ -1774,7 +2129,23 @@ function bridge(c,action,data={}) {
  }
  // A ready from a session already working (an agent calling it late, after the first
  // message reached it) leaves it busy.
- if(action==='ready'){if(!g.ready||['starting','error'].includes(g.phase))markReady(c,g);}
+ if(action==='ready'){if(!g.ready||['starting','error'].includes(g.phase))markReady(c,g);if(!g.hookWaitFrom)g.hookWaitFrom=Date.now();}
+ // The runner's check of the Claude Code it starts (scopeHooks.MIN_VERSION): older, or not to be
+ // told, and the hooks may never fire, so one notice says reports are not being collected.
+ else if(action==='hook-check'){
+  const version=typeof data.version==='string'&&/^\d{1,4}\.\d{1,4}\.\d{1,6}$/.test(data.version)?data.version:null;
+  g.claudeVersion=version;
+  // Too old or unknown, the runner left the hooks out: nothing will arrive, and this notice says
+  // so instead of the silence one.
+  if(!scopeHooks.hooksAccepted(version))g.hookSilentNoticed=true;
+  // From HOOKS_MIN to below MIN_VERSION the hooks are there but may not report everything.
+  if(c.mode==='claude'&&!agentAccess.of(c).full&&!scopeHooks.supported(version))hooksNotice(c,g,!version?'unknown-version':scopeHooks.hooksAccepted(version)?'version-partial':'version',{version:version||undefined});
+ }
+ // Claude Code's built-in plugins could not be read from the program a scoped agent started:
+ // the known list was switched off, and this notice says the list was not checked.
+ else if(action==='plugin-check'){
+  if(c.mode==='claude'&&!agentAccess.of(c).full&&data.known===false)hooksNotice(c,g,'plugins');
+ }
  else if(action==='reply'&&data.answeredBy!==undefined){
   // One answer can close several messages: agents closed the second one with a bubble
   // saying the result was in the "next" one, while it was above. This closes a message
@@ -1834,7 +2205,7 @@ function bridge(c,action,data={}) {
   const raw=String(data.query||'').trim(),q=String(data.query||'').slice(0,120).toLowerCase();
   const byId=raw?c.messages.find(m=>m.id===raw):null;
   const found=[...(byId?[byId]:[]),...c.messages.filter(m=>m!==byId&&(!q||String(m.text||'').toLowerCase().includes(q))).slice(byId?-29:-30)];
-  return {messages:found.map(({replyPreview,...m})=>({...m,...(m.replyOutside?{}:replyPreview!==undefined?{replyPreview}:{}),text:m.role==='assistant'?attachments.channelText(stateRoot,c,m):neutralSender(attachments.channelText(stateRoot,c,m))}))};
+  return {messages:found.map(({replyPreview,...m})=>({...m,...(m.reports?{reports:m.reports.map(({pushed,notified,...x})=>x)}:{}),...(m.replyOutside?{}:replyPreview!==undefined?{replyPreview}:{}),text:m.role==='assistant'?attachments.channelText(stateRoot,c,m):neutralSender(attachments.channelText(stateRoot,c,m))}))};
  }
  else if(action==='precompact'){
   // When it started, for the page to say how long it has run; a /compact asked
@@ -1950,8 +2321,9 @@ function bridge(c,action,data={}) {
    g.phase=c.messages.some(m=>m.role==='user'&&m.delivery==='queued')?'busy':'ready';
   }
   permissions.cancel(g);
-  asksWait(g);turnEnd(g);
-  try{fileBlocked(c,g);}catch(e){console.error('access report scan failed:',e.message);}
+  // The turn's last batch: its hooks ran before this Stop did, so its spool is read now.
+  wakeScope(c,g);
+  asksWait(g);
   if(data.failed){g.phase='error';g.lastError=String(data.error||'Claude 執行失敗').slice(0,1000);}
   handOverDue(c,g);
   // A turn typed in the terminal ends here; its closing records follow the hook (mirrorTerminal).
@@ -1959,6 +2331,7 @@ function bridge(c,action,data={}) {
   save(c);if(c.pendingRotation&&g.phase==='ready')setTimeout(()=>{if(active(c)===g&&c.pendingRotation&&g.phase==='ready'){try{rotate(c);}catch{}}},1500);return {ok:true};
  }
  else if(action==='failure'){
+  wakeScope(c,g);
   // The turn is over and Claude is still running, so the agent is ready for the
   // next message; the one it was answering is marked unanswered and the reason
   // shown, rather than leaving the page on "thinking" with sending refused.
@@ -1966,7 +2339,7 @@ function bridge(c,action,data={}) {
   const failureKey=typeof data.eventKey==='string'?data.eventKey.slice(0,200):'';
   if(failureKey&&(g.failureKeys||[]).includes(failureKey))return {ok:true};
   if(failureKey)g.failureKeys=[...(g.failureKeys||[]),failureKey].slice(-32);
-  permissions.cancel(g);asksWait(g);turnEnd(g);
+  permissions.cancel(g);asksWait(g);
   delete g.stopReceipt;
   // A failure ends the batch already taken, without dropping questions still queued for the next turn.
   const unanswered=pendingReplies(c);
@@ -2223,12 +2596,14 @@ function avatarLocation(c){
 // Everything one person owns, in one call, because that is what the per-user
 // layout was for. Agents are stopped through stop() so no tmux session is orphaned.
 function purgeOwner(owner){
+ // Its reports first, written in the same tick: one that cannot be written stops the purge
+ // before anything else is removed.
+ try{reports.transaction(()=>reports.purgeOwner(owner));}catch{throw error('範圍報告單沒有寫進磁碟，帳號沒有刪除，請稍後再試。',500);}
  const mine=state.conversations.filter(c=>c.owner===owner);
- for(const c of mine){try{stop(c);}catch{}removeConversationFiles(c);}
+ for(const c of mine){try{stop(c);}catch{}removeConversationFiles(c);forgetScope(c);}
  state.conversations=state.conversations.filter(c=>c.owner!==owner);
  groupStore.purgeOwner(owner);
  try{fs.rmSync(path.join(stateRoot,'users',owner),{recursive:true,force:true});}catch{}
- reports.purgeOwner(owner);
  diagnostics.purgeOwner(owner);
  written.delete(ownerFile(owner));
  return {conversations:mine.length};
@@ -2245,6 +2620,7 @@ function sweepRetention({now=Date.now()}={}){
   const due=purgeAt(c,days);
   if(due===null||due>now)continue;
   try{stop(c);}catch{}
+  forgetScope(c);
   removeConversationFiles(c);
   state.conversations=state.conversations.filter(x=>x!==c);
   // Collected before the owner may vanish from the array entirely: someone whose
@@ -2348,6 +2724,7 @@ function restoreArchived(id){const c=archivedFor(id);assertProgramsSafe(c,agentA
 function purgeArchived(id){
  const c=archivedFor(id);
  try{stop(c);}catch{}
+ forgetScope(c);
  removeConversationFiles(c);
  state.conversations=state.conversations.filter(x=>x!==c);
  save(c.owner);
@@ -2867,17 +3244,106 @@ function decidePermission(c,data){permissions.decide(active(c),data);save(c);}
 // the way a profile change does, so the new scope is what it runs with.
 // callerRole is the route's verified principal: the route is an admin's already, and
 // this refuses anyone else should another caller come to it.
-function grantAccess(conversationId,{folder,website}={},callerRole){
+// readOnly: a folder it may read and not change (access.readOnly), offered for a refused read.
+// A folder as the disk has it: links followed, in its own spelling (not folded), under ~ when
+// it is in the home folder; as given when it is not there. Only shown (resolvedFolder).
+function realFolder(entry){
+ try{
+  const real=fs.realpathSync.native(agentAccess.absolute(entry)),home=fs.realpathSync.native(homeOf());
+  return real===home||real.startsWith(home+'/')?'~'+real.slice(home.length):real;
+ }catch{return entry;}
+}
+// Where a typed folder leads on disk, for the grant's confirmation to show when it differs: only
+// shown, the grant stores what was typed.
+function resolvedFolder(value){return realFolder(agentAccess.allowedFolder(value));}
+function planGrant(conversationId,{folder,website,readOnly,confirmRisky,privateSite}={},callerRole,report=null){
  if(callerRole!=='admin')throw error('Only an admin can change what an agent can reach',403);
+ // What the auto-mode safety check blocked is not let through by a wider scope, and CC Agent's
+ // own notices name no access: neither is granted from.
+ if(report&&!grantable(report))throw error('這張報告單不能從這裡開通範圍',409);
  const c=state.conversations.find(x=>x.id===conversationId&&!x.archived);
  if(!c)throw error('這個 Agent 已不存在或已封存',404);
  // Validated and normalised first, so the report records what was really granted.
- const entry=typeof folder==='string'&&folder.trim()?agentAccess.allowedFolder(folder):typeof website==='string'&&website.trim()?agentAccess.website(website):null;
- if(!entry)throw error('Grant exactly one folder or one website');
+ const typed=typeof folder==='string'&&folder.trim()?agentAccess.allowedFolder(folder):typeof website==='string'&&website.trim()?agentAccess.website(website):typeof readOnly==='string'&&readOnly.trim()?agentAccess.allowedFolder(readOnly):null;
+ // Stored as granted (a link stays a link); the confirmation shows where it leads (resolvedFolder).
+ const entry=typed;
+ if(!entry)throw error('Grant exactly one folder, read-only folder or website');
+ // Too broad, or a folder whose files the shell, the system or a tool reads or runs: granted
+ // only once the admin confirmed it knowing so; judged as typed and as the disk knows it, and
+ // the confirmation goes into the audit line (riskyConfirmed).
+ // A website that now leads to a local or private address (privateSite: the route's own check,
+ // server/siteCheck.js, never the page's word): its WebFetch would still be refused, but its Bash
+ // would reach that address through the sandbox, so it is asked about the same way.
+ const risky=website?privateSite===true:require('./accessReports').riskyGrant(entry);
+ if(risky&&confirmRisky!==true)throw Object.assign(error(website?'這個網站現在解析到本機或私有位址：Agent 讀取網頁仍會被擋下，但它的 Bash 可以經沙盒連到那個位址。確定要開通嗎？':'這個資料夾範圍太大，或含有 shell、系統或工具會讀取、執行的檔案（例如 PATH 上的資料夾、bin、hooks 或 .git）。確定要開通嗎？',409),{code:'risky'});
  const current=agentAccess.of(c);
- const next=agentAccess.normalize({...current,allow:folder?[...current.allow,entry]:current.allow,domains:website?[...current.domains,entry]:current.domains});
- return {...applyAccess(c,next,current),granted:folder?{folder:entry}:{website:entry}};
+ const next=agentAccess.normalize({...current,allow:folder?[...current.allow,entry]:current.allow,domains:website?[...current.domains,entry]:current.domains,...(readOnly?{readOnly:[...(current.readOnly||[]),entry]}:{})});
+ // What applyAccess would refuse is refused now, before anything is written.
+ if(!agentAccess.same(next,current)){if(['busy','starting','handing-off'].includes(active(c).phase))throw error('這個 Agent 正在回覆或啟動中，請稍後再調整範圍。',409);assertProgramsSafe(c,next);}
+ return {c,current,next,granted:folder?{folder:entry}:readOnly?{readOnly:entry}:{website:entry},risky};
 }
+function grantAccess(conversationId,body={},callerRole,report=null){
+ const p=planGrant(conversationId,body,callerRole,report);
+ return {...applyAccess(p.c,p.next,p.current),granted:p.granted,...(p.risky?{riskyConfirmed:true}:{})};
+}
+// An admin's decision on a report, all in one tick, so nothing else
+// runs in between: the report is checked to be as the admin saw it (open, for a dismissal or
+// a grant; handled, for a reopening; and its status, label time and last admin action as the
+// page sent them, changedSince), changed, and the report store written at once
+// (transaction, flushNow); for a grant, only then is the agent's scope saved; then the audit
+// line; then the answer. A store that cannot be written leaves the report as it was and answers
+// 500. A scope that cannot be saved puts the scope back, and the report (written again), and
+// answers 500. So the scope is saved only once the report saying granted is on disk: a kill can
+// leave a report marked granted whose scope was not saved (its accessAfter against the agent's
+// scope shows it, and the start flags it, reconcileGrants), never a widened scope with its
+// report still open.
+const NOT_WRITTEN='範圍報告單沒有寫進磁碟，這次沒有變更，請稍後再試。';
+const decisionFields=['status','resolution','granted','riskyConfirmed','accessAfter','resolvedAt','resolvedBy','adminActedAt','adminAction'];
+// seen: the report as the admin's page showed it ({status, labelAt, adminActedAt}, whatever of
+// them it sent): one that has changed since in any of these is not acted on (409). The page
+// sends seenVersion with it (1 now): a request carrying seenVersion without a usable seen is a
+// mismatch too, so a current page that lost it cannot skip the check; a page from before that
+// sends neither (an old copy still cached in a browser) is checked on the status alone, as
+// before.
+function changedSince(r,seen,seenVersion){
+ if(seenVersion!==undefined&&(!seen||typeof seen!=='object'||typeof seen.status!=='string'))return true;
+ if(!seen||typeof seen!=='object')return false;
+ if('status' in seen&&seen.status!==r.status)return true;
+ if('labelAt' in seen&&(seen.labelAt??null)!==(r.explanation?.at??null))return true;
+ if('adminActedAt' in seen&&(seen.adminActedAt??null)!==(r.adminActedAt??null))return true;
+ return false;
+}
+const CHANGED='這張報告單在你看過之後有了變動，請重新整理再看。';
+function grantFromReport(id,body,callerRole,who={},seen=null,seenVersion){
+ const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);
+ if(r.status!=='open')throw error('這張報告單已經處理過，請重新整理再看。',409);
+ if(changedSince(r,seen,seenVersion))throw error(CHANGED,409);
+ const p=planGrant(r.conversationId,body,callerRole,r);
+ const before=Object.fromEntries(decisionFields.map(k=>[k,r[k]])),at=new Date().toISOString();
+ try{reports.transaction(()=>reports.update(id,{status:'resolved',resolution:'granted',granted:p.granted,...(p.risky?{riskyConfirmed:true}:{}),accessAfter:p.next,resolvedAt:at,resolvedBy:who.name||null,adminActedAt:at,adminAction:'grant'}));}
+ catch{throw error(NOT_WRITTEN,500);}
+ const kept={access:p.c.access,profileVersion:p.c.profileVersion,updatedAt:p.c.updatedAt};
+ try{applyAccess(p.c,p.next,p.current);}
+ catch(e){
+  for(const [k,v] of Object.entries(kept)){if(v===undefined)delete p.c[k];else p.c[k]=v;}
+  try{reports.transaction(()=>reports.update(id,before));}catch(err){console.error('scope report not put back after a failed grant:',err.message);}
+  throw e.status&&e.status<500?e:error('Agent 的範圍沒有存進去，這次沒有開通，請稍後再試。',500);
+ }
+ try{require('./services/audit').audit({source:'access-report',action:'grant',...reportAudit(r),by:who.id,byName:who.name,granted:p.granted,...(p.risky?{riskyConfirmed:true}:{})});}catch(err){console.error('access report audit:',err.message);}
+ return reportView(reports.get(id));
+}
+function decideReport(id,patch,who={},seen=null,seenVersion){
+ const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);
+ const reopening=patch.status==='open',action=reopening?'reopen':'dismiss',at=new Date().toISOString();
+ if(reopening?r.status==='open':r.status!=='open')throw error('這張報告單已經處理過或已重新開啟，請重新整理再看。',409);
+ if(changedSince(r,seen,seenVersion))throw error(CHANGED,409);
+ try{reports.transaction(()=>reports.update(id,{...patch,adminActedAt:at,adminAction:action}));}catch{throw error(NOT_WRITTEN,500);}
+ try{require('./services/audit').audit({source:'access-report',action,...reportAudit(r),by:who.id,byName:who.name});}catch(err){console.error('access report audit:',err.message);}
+ return reportView(reports.get(id));
+}
+// Everything the report store holds now, on disk (explain_report waits for it).
+const reportsWritten=()=>reports.persistedUpTo(reports.changes());
+
 // Shared by a grant and by an admin editing any agent's scope: save it, then
 // relaunch an agent that is running so the scope it runs with is the new one. A
 // relaunch that fails leaves the agent in its error state with its reconnect
@@ -2912,8 +3378,7 @@ function setAccessFor(owner,id,access,callerRole){
 // An admin demoted to member keeps no full-access agent: each goes back to its scope
 // without full access, and one that is running reconnects under it.
 // Every other Claude agent of that account that is running reconnects too, so it runs
-// under a member's rules at once: only the MCP connectors ticked (mcpTickedOnly), not
-// an admin's.
+// under a member's rules at once.
 // Every agent is stopped first, whatever fails: one file write failing does not leave
 // the later full-access agents running; what could not be stopped or written is
 // returned for the admin.
@@ -2943,19 +3408,54 @@ function clearFullAccessFor(owner){
  for(const c of relaunch){try{launch(c);}catch(e){console.error(`relaunch after a demotion failed for ${c.id}: ${e.message}`);}}
  return {cleared,failed};
 }
-// An admin's decision on a report (the reports page: reopen, dismiss, grant): written to the
-// report and to the audit log, so it is on record beyond the report file, whose oldest
-// records go past its cap. Marked as the admin's, so the agent's
-// explain_report no longer changes the report's status.
-function resolveAccessReport(id,patch,who={}){
- const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);
- const action=patch.resolution==='granted'?'grant':patch.status==='open'?'reopen':'dismiss';
+// What an audit line keeps of a report, so it can be traced once the report is gone from the
+// file: which, whose, what it tried (tool, detail, error) and the agent's latest word, each cut
+// by code point.
+function reportAudit(r){const e=r.explanation;return {reportId:r.id,conversationId:r.conversationId,agentName:cutText(r.title||'',200),owner:r.owner,kind:r.kind,tool:toolName(r.tool),detail:cutText(cleanText(r.detail),1000),error:cutText(cleanText(r.error),500),...(e?{explanation:{why:cutText(e.why,1000),instead:cutText(e.instead,1000),stillNeeded:e.stillNeeded,at:e.at}}:{})};}
+// An admin's decision is written to the report and to the audit log, so it is on record beyond
+// the report file, whose oldest records go past its cap. Marked as the
+// admin's, so the agent's explain_report no longer changes the report or its explanation; the
+// audit keeps the agent's latest word as the admin saw it.
+// 略過所有標為不需要的: the reports the admin saw on the page, each with the time of the label
+// it showed (explain_report's at), dismissed together by the admin who asked. Only those still
+// open and still carrying that same label (still_needed false, the same at); never CC Agent's
+// own notices, one an admin has acted on before (reopened), one reopened from an agent's old
+// self-resolve (formerlySelfResolved), one that carries more refusals past its turn's limit
+// (overflow), or one of an agent that talks to people outside, whose
+// label outsiders could steer. One write for them all, then one audit line each, as a
+// dismissal of its own (bulk: not-needed).
+const BULK_MAX=1000;
+function dismissNotNeeded(items,who={}){
+ if(!Array.isArray(items)||items.length>BULK_MAX||items.some(x=>!x||typeof x.id!=='string'||typeof x.labelAt!=='string'))throw error('items: up to '+BULK_MAX+' of {id, labelAt}',400);
+ const facing=new Map(),steered=r=>{if(!facing.has(r.conversationId)){const c=state.conversations.find(x=>x.id===r.conversationId);facing.set(r.conversationId,!!c&&outsideTaken(c));}return facing.get(r.conversationId);};
+ const shown=new Map(items.map(x=>[x.id,x.labelAt]));
+ const list=[...shown.keys()].map(id=>reports.get(id)).filter(r=>r&&bulkDismissable(r)&&r.explanation.at===shown.get(r.id)&&!steered(r));
+ if(!list.length)return {dismissed:0};
  const at=new Date().toISOString();
- const done=reports.update(id,{...patch,adminActedAt:at,adminAction:action});
- try{require('./services/audit').audit({source:'access-report',action,reportId:id,conversationId:r.conversationId,agentName:r.title||'',owner:r.owner,kind:r.kind,tool:String(r.tool||'').slice(0,80),by:who.id,byName:who.name,...(patch.granted?{granted:patch.granted}:{})});}catch(e){console.error('access report audit:',e.message);}
- return reportView(done);
+ // Written in the same tick (decideReport), else left as they were.
+ try{reports.transaction(()=>reports.updateMany(list.map(r=>r.id),{status:'resolved',resolution:'dismissed',resolvedAt:at,resolvedBy:who.name||null,adminActedAt:at,adminAction:'dismiss'}));}catch{throw error(NOT_WRITTEN,500);}
+ const {audit}=require('./services/audit');
+ for(const r of list){try{audit({source:'access-report',action:'dismiss',bulk:'not-needed',...reportAudit(r),by:who.id,byName:who.name});}catch(err){console.error('access report audit:',err.message);}}
+ return {dismissed:list.length};
 }
-function reportView(r){const c=state.conversations.find(x=>x.id===r.conversationId);return {...r,agentTitle:c?.title||r.title,agentArchived:!c||!!c.archived,agentPhase:c?active(c).phase:null,access:c?agentAccess.of(c):null,suggestion:require('./accessReports').suggest(r)};}
+// The page offers the same set (bulkDismissable on the report view).
+const bulkDismissable=r=>r.status==='open'&&!NOTICE_KINDS.includes(r.kind)&&r.explanation?.stillNeeded===false&&!r.formerlySelfResolved&&!r.adminActedAt&&!(r.overflow?.count>0);
+// Dismiss all formerly self-resolved: the reports an upgrade reopened from an agent's old
+// self-resolve (formerlySelfResolved) that the admin saw listed, dismissed together after that
+// confirmation; only those still open, none an admin has acted on since. One write, one audit
+// line each (bulk: formerly-self-resolved).
+const formerBulk=r=>r.status==='open'&&r.formerlySelfResolved===true&&!NOTICE_KINDS.includes(r.kind)&&!r.adminActedAt;
+function dismissFormerlySelfResolved(ids,who={}){
+ if(!Array.isArray(ids)||ids.length>BULK_MAX||ids.some(x=>typeof x!=='string'))throw error('ids: up to '+BULK_MAX+' report ids',400);
+ const list=[...new Set(ids)].map(id=>reports.get(id)).filter(r=>r&&formerBulk(r));
+ if(!list.length)return {dismissed:0};
+ const at=new Date().toISOString();
+ try{reports.transaction(()=>reports.updateMany(list.map(r=>r.id),{status:'resolved',resolution:'dismissed',resolvedAt:at,resolvedBy:who.name||null,adminActedAt:at,adminAction:'dismiss'}));}catch{throw error(NOT_WRITTEN,500);}
+ const {audit}=require('./services/audit');
+ for(const r of list){try{audit({source:'access-report',action:'dismiss',bulk:'formerly-self-resolved',...reportAudit(r),by:who.id,byName:who.name});}catch(err){console.error('access report audit:',err.message);}}
+ return {dismissed:list.length};
+}
+function reportView(r){const c=state.conversations.find(x=>x.id===r.conversationId);return {...r,outsideFacing:!!c&&outsideTaken(c),bulkDismissable:bulkDismissable(r),formerBulk:formerBulk(r),agentTitle:c?.title||r.title,agentArchived:!c||!!c.archived,agentPhase:c?active(c).phase:null,access:c?agentAccess.of(c):null,suggestion:require('./accessReports').suggest(r)};}
 // Pull the turns that happened outside this conversation (the owner's own
 // terminal, a session driven by a channel plugin) into the page, without touching the ones it
 // already holds: each imported bubble keeps the transcript record's uuid, so a
@@ -3110,7 +3610,7 @@ function markAllRead(owner){
  return {marked};
 }
 function isViewing(owner,id){const at=viewing.get(owner+':'+id);return !!at&&Date.now()-at<VIEWING_MS;}
-function subagentList(c){return {subagents:transcript.subagents(stateRoot,c)};}
+function subagentList(c){const list=transcript.subagents(stateRoot,c);return {subagents:list,...(list.loading?{loading:true}:{})};}
 function messageTranscript(c,messageId){
  const found=transcript.segment(stateRoot,c,messageId);
  if(!found)throw error('這則訊息沒有對應的 transcript 紀錄。',404);
@@ -3118,10 +3618,38 @@ function messageTranscript(c,messageId){
 }
 function pendingNotifications(){return [...groupStore.list().flatMap(x=>x.messages.filter(m=>m.notifyPending).map(m=>({conversation:{id:x.id,owner:x.owner,title:x.name,groupId:x.id},message:m}))),...pendingAgentNotifications()];}
 function pendingAgentNotifications(){return state.conversations.filter(c=>!c.archived).flatMap(c=>[...c.messages.filter(m=>(m.role==='assistant'||m.role==='relay'||m.notice==='login')&&m.notifyPending),...(prompts.get(c.id)?.notifyPending?[prompts.get(c.id)]:[])].map(m=>({conversation:c,message:m})));}
-const pendingReportNotifications=()=>{const now=Date.now();return reports.list().filter(r=>r.notifyPending&&!(Date.parse(r.notifyAfter)>now));};
+// Due: pending, its wait over, and not queued for delivery within REPORT_REQUEUE_MS. Queued
+// REPORT_REQUEUE_TRIES times with no delivery taken, it is not queued again (it stays 已記錄).
+const REPORT_REQUEUE_MS=3600_000,REPORT_REQUEUE_TRIES=24;
+const pendingReportNotifications=()=>{const now=Date.now();return reports.list().filter(r=>r.notifyPending&&!(Date.parse(r.notifyAfter)>now)&&!(Date.parse(r.pushQueuedAt)>now-REPORT_REQUEUE_MS));};
 // pushed: those a push really went out for (notifications.js), so a member's card says
 // 已通知管理員 only then and 已記錄 otherwise.
-const markReportsNotified=(ids,pushed=[])=>{const sent=new Set(pushed);const rest=ids.filter(id=>!sent.has(id));if(rest.length)reports.updateMany(rest,{notifyPending:false});if(sent.size)reports.updateMany([...sent],{notifyPending:false,pushedAt:new Date().toISOString()});};
+// Handled by the push queue: ids no longer pending; queued ones queued for delivery under
+// replyId. A report is pushed only once a push service accepted one delivery of it
+// (markReportsDelivered), never just because it was queued: no device, a suppressed one or
+// a delivery that failed leaves it 已記錄.
+const markReportsNotified=(ids,queued=[],replyId=null)=>{
+ const q=new Set(queued);const rest=ids.filter(id=>!q.has(id));if(rest.length)reports.updateMany(rest,{notifyPending:false});
+ // Queued for delivery, still pending: it is queued again after REPORT_REQUEUE_MS with a reply id
+ // of its own until a delivery is accepted (markReportsDelivered), so one suppressed or failed
+ // everywhere is never left as told; after REPORT_REQUEUE_TRIES it is left 已記錄. A delivery
+ // taken later still marks it pushed. One write for them all.
+ const at=new Date().toISOString();
+ if(q.size)reports.updateMany([...q],r=>{const tries=(r.pushAttempts||0)+1;return {pushQueuedAt:at,pushAttempts:tries,...(tries>=REPORT_REQUEUE_TRIES?{notifyPending:false}:{}),...(replyId?replyIdsWith(r,replyId):{})};});
+};
+// The reply id is kept before its deliveries are queued (markReportsQueuing), so one accepted
+// after a crash between the two still counts.
+const replyIdsWith=(r,replyId)=>({pushReplyId:replyId,pushReplyIds:[...(r.pushReplyIds||[]).filter(x=>x!==replyId),replyId].slice(-10)});
+const markReportsQueuing=(ids,replyId)=>{if(ids.length&&replyId)reports.updateMany(ids,r=>replyIdsWith(r,replyId));};
+// One delivery of replyId was accepted: its reports are pushed, marked on the chat's card too
+// (pushed), so a member's card still says 已通知管理員 once a report is gone from the file.
+function markReportsDelivered(replyId){
+ const sent=new Set(reports.list().filter(r=>(r.pushReplyIds||[r.pushReplyId]).includes(replyId)&&!r.pushedAt).map(r=>r.id));
+ if(!sent.size)return;
+ const where=new Set([...sent].map(id=>reports.get(id)?.conversationId).filter(Boolean));
+ reports.updateMany([...sent],{pushedAt:new Date().toISOString(),notifyPending:false});
+ for(const c of state.conversations.filter(x=>where.has(x.id))){let changed=false;for(const m of c.messages)if(m.notice==='blocked')for(const x of m.reports||[])if(sent.has(x.id)&&!x.pushed){x.pushed=true;changed=true;}if(changed)try{save(c);}catch(e){console.error('report card push mark:',e.message);}}
+}
 // What the agent reads before a scheduled instruction, so it knows no one typed it
 // just now and who set it up.
 // What the agent reads before a scheduled instruction: who set it up, that nobody
@@ -3523,7 +4051,24 @@ const heldUntil=(x,kind)=>kind==='result'?x.resultPending?.after:kind==='failure
 const pendingScheduleNotifications=(now=Date.now())=>scheduleStore.list().flatMap(x=>Object.entries(NOTIFY_FIELD).filter(([kind,f])=>x[f]&&!(Date.parse(heldUntil(x,kind)||0)>now)).map(([kind])=>({schedule:x,kind})));
 const markScheduleNotified=(id,kind='proposal')=>{scheduleStore.patch(id,{[NOTIFY_FIELD[kind]]:false});};
 const scheduleCheckList=()=>scheduleChecks.list().map(scheduleChecks.view);
-module.exports={TERMINAL_KEEP_DAYS,attachTerminalFile,terminalFileAccess,mirrorTerminal,followSessionModel,diagnosticReports:diagnostics,pendingDiagnosticNotifications:()=>diagnostics.pending(),markDiagnosticsNotified:ids=>{diagnostics.markNotified(ids);},CHECKLIST_RETENTION_CHOICES,checklistRetentionDays,loginShutdown:signal=>claudeLogin.shutdown(signal),loginView:()=>claudeLogin.view(),loginStart:()=>claudeLogin.start(),loginCode:text=>claudeLogin.code(text),loginCancel,loginResend,loginFailed,loginProven,reviveSilentChannels,peerLinkDigest,peerExchange,peerKey,peerLink,peerConfig,peerWidens,setPeerConfig,peerDraft,peerView,relaunchMarked,tmuxSocket,subagentList,runLimitResumes,runWrapUps,setWrapUp,mentionsFor,commandInGroup,groupList,reorderGroups,groupFor,groupView,createGroup,updateGroup,removeGroup,updateGroupChecklist,sendToGroup,searchGroup,deliverGroups,chooseTerminalOption,updateChecklist:(c,data,by)=>{const r=checklists.apply(c,data,by);save(c);return r;},syncAllRelays,syncRelays,scheduleCheckList,schedulesFor,addSchedule,approveSchedule,updateSchedule,removeSchedule,rejectSchedule,runSchedules,runScheduleNow,testSchedule,SCHEDULE_WAIT_MS,pendingScheduleNotifications,markScheduleNotified,searchMessages,runCommand,commandsFor,setThreshold,setSubagents,applyAgentSubagents,applySubagentDefault,subagentEnv,setAutoCompact,applyAgentAutoCompact,profileRestartNeeds,applyAgentRestart,applyAutoCompactDefault,autoCompactEnv,AUTO_COMPACT_PRESETS,listPreferences,setListPreferences,setAvatar,clearAvatar,avatarLocation,AVATAR_MAX_BYTES,clearFullAccessFor,pendingReportNotifications,markReportsNotified,archiveFor,setAccessFor,accessReports:()=>reports.list().map(reportView),accessReport:id=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(r);},resolveAccessReport,grantAccess,reconcile,reconnect,purgeOwner,sweepRetention,stopAgentsOf,bridgeActions:()=>[...BRIDGE_ACTIONS],archivedList,restoreArchived,keepArchived,purgeArchived,archiveRetentionDays,RETENTION_MAX_DAYS,UNSENT_ATTACHMENT_HOURS,STALE_MS,STARTUP_SLOW_MS,STARTUP_LIMIT_MS,messageTranscript,importHistory,interrupt,markViewing,markAllRead,isViewing,attachableFolders,MESSAGE_PAGE,updateProfile,reorder,pendingNotifications,getPreferences,setPreferences,decidePermission,confirmWorkspace,confirmChannel,compact,stateRoot,create,get,list,publicView,launch,stop,send,rotate,bridge,byToken,active,save,error};
+// At start: the old scan's fields go (dropOldScan). What the hooks wrote while the server was
+// down is read by the intake once the relay timer first runs (intakeStart), not here.
+for(const c of state.conversations){try{if(dropOldScan(c))save(c);}catch(e){console.error('scope hooks '+c.id+':',e.message);}}
+// At start: a report marked granted whose grant is not in the agent's scope now (a kill between
+// the two writes, or taken back since) is marked so on the report (accessNow: 'missing').
+function reconcileGrants(){
+ const byId=new Map(state.conversations.map(c=>[c.id,c]));
+ for(const r of reports.list()){
+  if(r.resolution!=='granted'||!r.granted)continue;
+  const c=byId.get(r.conversationId);if(!c)continue;
+  const a=agentAccess.of(c),g=r.granted;
+  const there=g.website?a.domains.includes(g.website):g.readOnly?(a.readOnly||[]).includes(g.readOnly):g.folder?a.allow.includes(g.folder):true;
+  const want=there?undefined:'missing';
+  if(r.accessNow!==want)reports.update(r.id,{accessNow:want});
+ }
+}
+try{reconcileGrants();}catch(e){console.error('granted reports:',e.message);}
+module.exports={TERMINAL_KEEP_DAYS,attachTerminalFile,terminalFileAccess,mirrorTerminal,followSessionModel,diagnosticReports:diagnostics,pendingDiagnosticNotifications:()=>diagnostics.pending(),markDiagnosticsNotified:ids=>{diagnostics.markNotified(ids);},CHECKLIST_RETENTION_CHOICES,checklistRetentionDays,loginShutdown:signal=>claudeLogin.shutdown(signal),loginView:()=>claudeLogin.view(),loginStart:()=>claudeLogin.start(),loginCode:text=>claudeLogin.code(text),loginCancel,loginResend,loginFailed,loginProven,reviveSilentChannels,peerLinkDigest,peerExchange,peerKey,peerLink,peerConfig,peerWidens,setPeerConfig,peerDraft,peerView,relaunchMarked,tmuxSocket,subagentList,runLimitResumes,runWrapUps,setWrapUp,mentionsFor,commandInGroup,groupList,reorderGroups,groupFor,groupView,createGroup,updateGroup,removeGroup,updateGroupChecklist,sendToGroup,searchGroup,deliverGroups,chooseTerminalOption,updateChecklist:(c,data,by)=>{const r=checklists.apply(c,data,by);save(c);return r;},syncAllRelays,scopeSettled,syncRelays,scheduleCheckList,schedulesFor,addSchedule,approveSchedule,updateSchedule,removeSchedule,rejectSchedule,runSchedules,runScheduleNow,testSchedule,SCHEDULE_WAIT_MS,pendingScheduleNotifications,markScheduleNotified,searchMessages,runCommand,commandsFor,setThreshold,setSubagents,applyAgentSubagents,applySubagentDefault,subagentEnv,setAutoCompact,applyAgentAutoCompact,profileRestartNeeds,applyAgentRestart,applyAutoCompactDefault,autoCompactEnv,AUTO_COMPACT_PRESETS,listPreferences,setListPreferences,setAvatar,clearAvatar,avatarLocation,AVATAR_MAX_BYTES,clearFullAccessFor,pendingReportNotifications,markReportsNotified,markReportsQueuing,markReportsDelivered,archiveFor,setAccessFor,accessReports:()=>reports.list().map(reportView),accessReport:id=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(r);},resolvedFolder,decideReport,grantFromReport,dismissNotNeeded,dismissFormerlySelfResolved,grantAccess,reconcile,reconnect,purgeOwner,sweepRetention,stopAgentsOf,bridgeActions:()=>[...BRIDGE_ACTIONS],archivedList,restoreArchived,keepArchived,purgeArchived,archiveRetentionDays,RETENTION_MAX_DAYS,UNSENT_ATTACHMENT_HOURS,STALE_MS,STARTUP_SLOW_MS,STARTUP_LIMIT_MS,messageTranscript,importHistory,interrupt,markViewing,markAllRead,isViewing,attachableFolders,MESSAGE_PAGE,updateProfile,reorder,pendingNotifications,getPreferences,setPreferences,decidePermission,confirmWorkspace,confirmChannel,compact,stateRoot,create,get,list,publicView,launch,stop,send,rotate,bridge,byToken,active,save,error};
 
 // Account deletion checks the agents an account actually has running.
 module.exports.lifecycleInventory=async()=>({sources:[{provider:"claude",providerLabel:"Claude Code",ok:true}],schedules:state.conversations.filter(c=>!['stopped','error'].includes(active(c).phase)).map(c=>({id:c.id,ownerUserId:c.owner,provider:"claude",status:active(c).phase,running:active(c).phase==="busy"}))});

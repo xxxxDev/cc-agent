@@ -104,18 +104,36 @@ const ownerNames=()=>new Promise((ok,no)=>require('./stores').usersDB.find({},(e
 const named=async list=>{const names=await ownerNames();return list.map(r=>({...r,ownerName:names.get(r.owner)||''}));};
 app.get('/api/access-reports',...reviewer,async(req,res,next)=>{try{res.json({reports:await named(agents.accessReports())});}catch(e){next(e);}});
 app.get('/api/access-reports/:id',...reviewer,async(req,res,next)=>{try{res.json((await named([agents.accessReport(req.params.id)]))[0]);}catch(e){next(e);}});
+// The reports the admin saw as not needed, by id and the label's time: those still open and
+// still carrying that label.
+app.post('/api/access-reports/dismiss-not-needed',...reviewer,async(req,res,next)=>{try{
+ res.json(await agents.dismissNotNeeded(req.body?.items,{id:req.userId,name:req.username}));
+}catch(e){next(e);}});
+// The reports reopened from an old self-resolve that the admin saw listed, by id.
+app.post('/api/access-reports/dismiss-formerly-self-resolved',...reviewer,async(req,res,next)=>{try{
+ res.json(await agents.dismissFormerlySelfResolved(req.body?.ids,{id:req.userId,name:req.username}));
+}catch(e){next(e);}});
 app.post('/api/access-reports/:id/resolve',...reviewer,async(req,res,next)=>{try{
  const resolution=req.body?.resolution;if(!['dismissed','reopen'].includes(resolution))throw agents.error('Unknown resolution');
  agents.accessReport(req.params.id);
  const patch=resolution==='reopen'?{status:'open',resolution:null,resolvedAt:null,resolvedBy:null}:{status:'resolved',resolution:'dismissed',resolvedAt:new Date().toISOString(),resolvedBy:req.username};
- res.json((await named([agents.resolveAccessReport(req.params.id,patch,{id:req.userId,name:req.username})]))[0]);
+ res.json((await named([await agents.decideReport(req.params.id,patch,{id:req.userId,name:req.username},req.body?.seen,req.body?.seenVersion)]))[0]);
+}catch(e){next(e);}});
+// Where a typed folder leads (links followed), shown in the grant's confirmation for
+// information only: what is granted is the folder as typed.
+app.post('/api/access-reports/:id/resolve-folder',...reviewer,(req,res,next)=>{try{
+ agents.accessReport(req.params.id);
+ const value=req.body?.folder;if(typeof value!=='string'||!value.trim())throw agents.error('folder is required');
+ res.json({folder:value.trim(),resolved:agents.resolvedFolder(value)});
 }catch(e){next(e);}});
 app.post('/api/access-reports/:id/grant',...reviewer,async(req,res,next)=>{try{
- const {folder,website}=req.body||{};
- if((typeof folder==='string')===(typeof website==='string'))throw agents.error('Grant exactly one folder or one website');
- const report=agents.accessReport(req.params.id);
- const {access,granted}=agents.grantAccess(report.conversationId,typeof folder==='string'?{folder}:{website},req.role);
- res.json((await named([agents.resolveAccessReport(req.params.id,{status:'resolved',resolution:'granted',granted,accessAfter:access,resolvedAt:new Date().toISOString(),resolvedBy:req.username},{id:req.userId,name:req.username})]))[0]);
+ const {folder,website,readOnly}=req.body||{};
+ if([folder,website,readOnly].filter(v=>typeof v==='string').length!==1)throw agents.error('Grant exactly one folder, read-only folder or website');
+ agents.accessReport(req.params.id);
+ // A website's address is checked here, at the grant (server/siteCheck.js); never taken from the page.
+ const privateSite=typeof website==='string'&&website.trim()?await require('./siteCheck').resolvesPrivately(website.trim()):false;
+ const body={...(typeof folder==='string'?{folder}:typeof readOnly==='string'?{readOnly}:{website}),confirmRisky:req.body.confirmRisky===true,...(privateSite?{privateSite:true}:{})};
+ res.json((await named([await agents.grantFromReport(req.params.id,body,req.role,{id:req.userId,name:req.username},req.body?.seen,req.body?.seenVersion)]))[0]);
 }catch(e){next(e);}});
 // Diagnostics sent from Agent Profile's 「回報診斷」. Anyone
 // signed in sends one, only for an agent of their own (agents.get, as every conversation

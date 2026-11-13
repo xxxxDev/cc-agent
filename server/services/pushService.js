@@ -19,15 +19,25 @@ const RETRY_DELAYS_MS = [60_000, 5 * 60_000, 30 * 60_000, 2 * 60 * 60_000];
 const tagOf=(prefix,id)=>prefix+crypto.createHash('sha256').update(id).digest('hex').slice(0,24);
 // A scope report tells an admin which agent was stopped and by what, never the
 // tool's arguments: those are the agent's raw material, like its transcript.
-const REPORT_KINDS={permission:'要求權限',blocked:'被沙盒擋下'};
+const REPORT_KINDS={permission:'要求權限',blocked:'被範圍擋下',classifier:'自動判斷擋下'};
 // An agent at its cap of open reports: what was refused since is no longer filed.
 const capBody=n=>'未處理報告單已滿，之後又有 '+(Number.isInteger(n)&&n>0?n:'多')+' 次被擋下沒有記錄，點開查看';
-// A digest: an agent said, again and again, that it solved a refusal itself.
-const digestBody=n=>'24 小時內 '+(Number.isInteger(n)&&n>0?n:'多')+' 次說已在範圍內自行解決，點開查看';
+// An old digest, from before digests were removed: its count only.
+const digestBody=n=>'有 '+(Number.isInteger(n)&&n>0?n:'多')+' 張報告單的彙整，點開查看';
+// Refusals CC Agent could not read from the transcript, so some may not be filed.
+const scanBody=n=>'有 '+(Number.isInteger(n)&&n>0?n:'多')+' 次讀不到被擋下的紀錄，可能有沒開單的，點開查看';
+// Several reports of one agent in one push (notifications.js batchNotification).
+// CC Agent's notice that some refusals may not be filed (the hooks did not fire, an event
+// could not be read): how many times.
+const hooksBody=n=>'範圍報告可能不完整（'+(Number.isInteger(n)&&n>0?n:'多')+' 次），點開查看';
+const batchBody=n=>'又有 '+(Number.isInteger(n)&&n>0?n:'多')+' 張新的報告單，點開審查';
+// Names an agent chose (its title, a tool's name) without direction marks or other
+// characters that show nothing, so they cannot turn the line around.
+const plainName=v=>String(v||'').replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029\p{Cf}]/gu,'').trim();
 function buildPayload(reply) {
   if(reply?.kind==='access_report'){
     if(!reply.reportId||!reply.replyId)throw new Error('Unsupported notification');
-    return {title:clipPreview('範圍報告單 · '+String(reply.agentName||'Agent'),80),body:clipPreview(reply.reportKind==='cap'?capBody(reply.count):reply.reportKind==='digest'?digestBody(reply.count):(REPORT_KINDS[reply.reportKind]||'被擋下')+'：'+(String(reply.tool||'')||'未知工具')+'，點開審查',180),url:'/?access-report='+encodeURIComponent(reply.reportId),tag:tagOf('report-',reply.reportId)};
+    return {title:clipPreview('範圍報告單 · '+(plainName(reply.agentName)||'Agent'),80),body:clipPreview(reply.reportKind==='cap'?capBody(reply.count):reply.reportKind==='batch'?batchBody(reply.count):reply.reportKind==='scan'?scanBody(reply.count):reply.reportKind==='hooks'?hooksBody(reply.count):reply.reportKind==='digest'?digestBody(reply.count):(REPORT_KINDS[reply.reportKind]||'被擋下')+(reply.exact===false?'（依文字判斷）':'')+'：'+(plainName(reply.tool)||'未知工具')+'，點開審查',180),url:'/?access-report='+encodeURIComponent(reply.reportId),tag:tagOf('report-',reply.reportKind==='batch'?String(reply.replyId):reply.reportId)};
   }
   if(reply?.kind==='diagnostic_report'){
     if(!reply.reportId||!reply.replyId)throw new Error('Unsupported notification');
@@ -88,6 +98,9 @@ function createPushService({
   if (!store) throw new Error('push store is required');
   let draining = null;
   let timer = null;
+  // Told of each delivery a push service accepted (notifications.js marks a scope report pushed then).
+  const sentListeners = new Set();
+  function onSent(fn) { sentListeners.add(fn); return () => sentListeners.delete(fn); }
 
   // Enqueue this reply's webpush deliveries for one recipient's active devices.
   // Owner rows pass recipientReason 'owner'; scope-report rows pass 'admin_report'.
@@ -252,6 +265,7 @@ function createPushService({
         lastErrorCode: null,
         providerStatusCode: Number(response?.statusCode || 201),
       });
+      for (const fn of sentListeners) { try { fn({ replyId: delivery.replyId, conversationId: delivery.conversationId, category: delivery.category }); } catch {} }
     } catch (error) {
       // The device's VAPID key is gone (neither current nor previous matches):
       // fail closed as a suppression, never a `failed` send and never a retry:
@@ -361,7 +375,7 @@ function createPushService({
     timer = null;
   }
 
-  return { notifyAgentReply, notifyAccessReport, enqueueForRecipient, sendTest, drain, start, stop };
+  return { notifyAgentReply, notifyAccessReport, enqueueForRecipient, sendTest, drain, start, stop, onSent };
 }
 
 // Who may receive scope-report notifications, checked again at every send.

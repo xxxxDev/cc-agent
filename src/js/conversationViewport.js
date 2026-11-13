@@ -78,8 +78,15 @@ export function bindConversationViewport(page,{viewport=window.visualViewport}={
       hiddenInput=null;parked=false;
     }
   }
+  // The page in a tab that is not shown measures 0 tall. Painted then, the history kept a
+  // height of 0 after its tab came back, and the chat stayed black until the window was
+  // resized. A hidden page waits, and is measured again once it has a size.
+  let hidden=false;
+  const shown=typeof ResizeObserver==='function'?new ResizeObserver(()=>{if(hidden&&page.clientHeight){hidden=false;sync();}}):null;
+  shown?.observe(page);
   function sync(){
     if(viewport.scale!==1)return;
+    if(!page.clientHeight){hidden=true;return;}
     keyboard=(Boolean(input())||keyboard)&&baseline-visibleHeight(viewport,Boolean(input()))>100;
     if(!input()&&!keyboard)baseline=window.innerHeight;
 
@@ -188,5 +195,5 @@ export function bindConversationViewport(page,{viewport=window.visualViewport}={
   viewport.addEventListener('resize',sync);viewport.addEventListener('scroll',shellScrolled);window.addEventListener('resize',sync);
   page.ownerDocument?.addEventListener('scroll',shellScrolled,true);
   page.addEventListener('touchstart',touchStart,{passive:true});page.addEventListener('touchmove',touchMove,{passive:true});page.addEventListener('touchend',touchEnd,touchOptions);page.addEventListener('touchcancel',touchCancel);page.addEventListener('focusin',focus);page.addEventListener('focusout',stuckBlur);page.addEventListener('focusout',sync);page.addEventListener('conversation:unpin',unpin);page.addEventListener('scroll',historyScrolled,true);sync();
-  return ()=>{cancelAnimationFrame(motionFrame);cancelAnimationFrame(focusFrame);reveal();page.style.removeProperty('--conversation-visible-height');page.style.removeProperty('--conversation-composer-lift');page.classList.remove('conversation-keyboard');page.removeEventListener('focusout',stuckBlur);viewport.removeEventListener('resize',sync);viewport.removeEventListener('scroll',shellScrolled);page.ownerDocument?.removeEventListener('scroll',shellScrolled,true);releaseShell();window.removeEventListener('resize',sync);page.removeEventListener('touchstart',touchStart);page.removeEventListener('touchmove',touchMove);page.removeEventListener('touchend',touchEnd,touchOptions);page.removeEventListener('touchcancel',touchCancel);page.removeEventListener('focusin',focus);page.removeEventListener('focusout',sync);page.removeEventListener('conversation:unpin',unpin);page.removeEventListener('scroll',historyScrolled,true);};
+  return ()=>{shown?.disconnect();cancelAnimationFrame(motionFrame);cancelAnimationFrame(focusFrame);reveal();page.style.removeProperty('--conversation-visible-height');page.style.removeProperty('--conversation-composer-lift');page.classList.remove('conversation-keyboard');page.removeEventListener('focusout',stuckBlur);viewport.removeEventListener('resize',sync);viewport.removeEventListener('scroll',shellScrolled);page.ownerDocument?.removeEventListener('scroll',shellScrolled,true);releaseShell();window.removeEventListener('resize',sync);page.removeEventListener('touchstart',touchStart);page.removeEventListener('touchmove',touchMove);page.removeEventListener('touchend',touchEnd,touchOptions);page.removeEventListener('touchcancel',touchCancel);page.removeEventListener('focusin',focus);page.removeEventListener('focusout',sync);page.removeEventListener('conversation:unpin',unpin);page.removeEventListener('scroll',historyScrolled,true);};
 }

@@ -105,8 +105,12 @@ export default {
   watch(() => [props.agent?.id, !props.data && !props.busy, props.agent?.updatedAt], async ([id, overview]) => {
    if (!id || !overview) return;
    const run = ++asked;
-   try { const r = await api('/conversations/' + id + '/subagents'); if (run === asked) subagents.value = Array.isArray(r?.subagents) ? r.subagents : []; }
-   catch { if (run === asked) subagents.value = []; }
+   // Still reading some in the background (loading): asked again shortly, a few times.
+   for (let tries = 0; tries < 10 && run === asked; tries++) {
+    try { const r = await api('/conversations/' + id + '/subagents'); if (run === asked) subagents.value = Array.isArray(r?.subagents) ? r.subagents : []; if (!r?.loading) break; }
+    catch { if (run === asked) subagents.value = []; break; }
+    await new Promise((ok) => setTimeout(ok, 1500));
+   }
   }, {immediate: true});
   const clock = iso => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? '' : `${d.getMonth() + 1}/${d.getDate()} ${d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: false})}`; };
   const subCost = a => a.unpriced && !a.costUSD ? '' : '$' + Number(a.costUSD || 0).toFixed(2);

@@ -56,6 +56,7 @@
     <f7-list-input :label="ct('排除的資料夾')" type="textarea" :value="raw.exclude" @update:value="setLines('exclude',$event)" :placeholder="ct('允許範圍裡要擋掉的資料夾')" :resizable="true" rows="2"/>
     <f7-list-input :label="ct('允許的網站')" type="textarea" :value="raw.domains" @update:value="setLines('domains',$event)" :placeholder="ct('每行一個，例如 api.github.com')" :resizable="true" rows="2"/>
    </f7-list>
+   <f7-block-footer v-if="!(allowFull&&modelValue.access?.full)" class="exclude-note">{{ct('排除是照路徑：排除的資料夾在設定後被移動或改名，就不再被排除。排除不能取代不開通上層資料夾。')}}</f7-block-footer>
    <!-- Folders it may read and never write, such as
         where a program run outside the sandbox saves its output. -->
    <f7-list v-if="!(allowFull&&modelValue.access?.full)" inset strong-ios class="agent-read-only">
@@ -80,8 +81,8 @@
    </template>
    <!-- An admin's own agent (allowFull) may use claude.ai connectors unticked, in auto
         mode; anyone else's uses only the ticked ones. -->
-   <f7-block-footer v-if="allowFull&&!modelValue.access?.full" class="mcp-note">{{ct('這個 Agent 以 auto mode 執行：範圍外的檔案一律讀寫不到；上網和 claude.ai 的 MCP（用你的帳號）由它自己判斷使用，允許的網站與勾選只是預先放行。本機的 MCP（例如 excel、word）要勾選才會載入，而且在範圍限制之外執行，選了它，這個 Agent 就能透過它讀寫範圍外的檔案。')}}</f7-block-footer>
-   <f7-block-footer v-else-if="!allowFull" class="mcp-note">{{ct('這個 Agent 以 auto mode 執行：範圍外的檔案一律讀寫不到；上網由它自己判斷，允許的網站只是預先放行。MCP 只有勾選的能用，claude.ai 的也一樣，使用者自己不能改。勾選的 MCP 以這台電腦擁有者的身分執行：claude.ai 的用擁有者的帳號，本機的（例如 excel、word）在範圍限制之外，選了它，使用這個 Agent 的人就能透過它讀寫擁有者在那裡碰得到的資料。')}}</f7-block-footer>
+   <f7-block-footer v-if="allowFull&&!modelValue.access?.full" class="mcp-note">{{ct('這個 Agent 以 auto mode 執行：範圍外的檔案一律讀寫不到；讀取網頁只能連到「允許的網站」，其他網站由 CC Agent 擋下（Bash 照沙盒的網站清單、不擋解析到私有位址的名稱；網頁搜尋不受限；同一網站的 www. 轉址、檢查後改變解析位址、檢查逾時這幾種情況擋不到）；MCP 只有勾選的能用，claude.ai 的（用你的帳號）也一樣。本機的 MCP（例如 excel、word）要勾選才會載入，而且在範圍限制之外執行，選了它，這個 Agent 就能透過它讀寫範圍外的檔案。')}}</f7-block-footer>
+   <f7-block-footer v-else-if="!allowFull" class="mcp-note">{{ct('這個 Agent 以 auto mode 執行：範圍外的檔案一律讀寫不到；讀取網頁只能連到「允許的網站」，其他網站由 CC Agent 擋下（Bash 照沙盒的網站清單、不擋解析到私有位址的名稱；網頁搜尋不受限；同一網站的 www. 轉址、檢查後改變解析位址、檢查逾時這幾種情況擋不到）。MCP 只有勾選的能用，claude.ai 的也一樣，使用者自己不能改。勾選的 MCP 以這台電腦擁有者的身分執行：claude.ai 的用擁有者的帳號，本機的（例如 excel、word）在範圍限制之外，選了它，使用這個 Agent 的人就能透過它讀寫擁有者在那裡碰得到的資料。')}}</f7-block-footer>
   </template>
   <f7-list v-else inset strong-ios class="agent-access"><f7-list-item :title="ct('可存取範圍')" :after="summary"/></f7-list>
   <f7-block-footer v-if="!modelValue.access?.full">{{ct('預設只有這個 Agent 自己的工作區。範圍外的動作會被擋下，並開一張報告單給管理員。')}}</f7-block-footer>

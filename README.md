@@ -48,7 +48,7 @@ For every feature in detail, see [docs/FEATURES.md](docs/FEATURES.md).
 </tr>
 <tr>
 <td align="center"><img src=".github/assets/sticker-work-dark.svg" width="120" alt=""></td>
-<td><b>Full access, or a fenced folder.</b> Trust an agent with your whole machine, or let it read and write only the folders you allow and load only the local MCP servers you tick. Scoped agents run in Claude Code's sandbox and auto mode: they may fetch web pages when they judge it useful, with the domains you list approved in advance and Bash's network held to them, and anything they were refused is filed as a report for you to review.</td>
+<td><b>Full access, or a fenced folder.</b> Trust an agent with your whole machine, or let it read and write only the folders you allow and load only the local MCP servers you tick. Scoped agents run in Claude Code's sandbox and auto mode, fetch web pages only from the websites you list and use only the MCP servers you tick, and anything they were refused is filed as a report for you to review. Limits apply: shell commands follow the sandbox's site list without a private-address check, web search is not limited, and same-site redirects, DNS rebinding and a timed-out check are not caught (<a href="docs/FEATURES.md">details</a>).</td>
 </tr>
 <tr>
 <td align="center"><img src=".github/assets/sticker-done-dark.svg" width="120" alt=""></td>
@@ -109,7 +109,7 @@ Use the latest release of each dependency: they regularly ship security fixes. T
 
 | Dependency | Why |
 | --- | --- |
-| [Claude Code](https://code.claude.com/docs/en/overview), latest (tested 2.1.306; 2.1.293 or later works), signed in | Every agent is a Claude Code session; CC Agent uses its channels and hooks |
+| [Claude Code](https://code.claude.com/docs/en/overview), latest (tested 2.1.322; 2.1.293 or later runs agents, scope reports need 2.1.322 or later), signed in | Every agent is a Claude Code session; CC Agent uses its channels and hooks |
 | [Node.js](https://nodejs.org) 24 LTS, latest (tested 24.22.1; 22.12 or later works), and npm | Runs the server and builds the web app |
 | [tmux](https://github.com/tmux/tmux), latest (tested 3.8; 3.5 or later works) | Keeps each agent's session running in the background |
 | Xcode Command Line Tools (macOS) | Optional; provides python3 for background scripts written in Python |

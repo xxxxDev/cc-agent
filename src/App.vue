@@ -136,6 +136,8 @@
       </template>
     </template>
     <AgentOverlays v-if="currentUser"/>
+    <!-- A chat's scope-report card, opened over the chat (components/AccessReportPopup.vue). -->
+    <AccessReportPopup v-if="currentUser"/>
     <RecordingBadge v-if="currentUser"/>
   </f7-app>
 </template>
@@ -160,6 +162,7 @@ import {useTheme} from './theme.js';
 const {theme,applyTheme}=useTheme();
 import {useAgentChat} from './js/agent-chat.js';
 import AgentOverlays from './components/AgentOverlays.vue';
+import AccessReportPopup from './components/AccessReportPopup.vue';
 const workspace=useAgentChat();provide('workspace',workspace);
 const {unreadTotal,unreadLabel}=workspace;
 import { resolveTabTap } from './tabNavigation.js';

@@ -48,7 +48,7 @@ CC Agent 跑在你自己的 Mac 上。你建立的每個 agent，都是 tmux 裡
 </tr>
 <tr>
 <td align="center"><img src=".github/assets/sticker-work-dark.svg" width="120" alt=""></td>
-<td><b>完整權限，或圈好的範圍。</b>信任的 agent 可以給整台電腦的權限；其他的只能讀寫你允許的資料夾、只載入你勾選的本機 MCP。限定範圍的 agent 跑在 Claude Code 的沙盒與 auto mode 裡：上網由它自己判斷，你列的網域只是預先放行，Bash 的網路則被沙盒限制在這些網域；被擋下的動作會寫成報告讓你審。</td>
+<td><b>完整權限，或圈好的範圍。</b>信任的 agent 可以給整台電腦的權限；其他的只能讀寫你允許的資料夾、只載入你勾選的本機 MCP。限定範圍的 agent 跑在 Claude Code 的沙盒與 auto mode 裡，讀取網頁只能連到你列的網站、只能用你勾選的 MCP；被擋下的動作會寫成報告讓你審。有幾個限制：shell 指令照沙盒的網站清單、不檢查私有位址，網頁搜尋不受限，同一網站的轉址、DNS rebinding 與檢查逾時都擋不到（<a href="docs/FEATURES.zh-TW.md">詳細</a>）。</td>
 </tr>
 <tr>
 <td align="center"><img src=".github/assets/sticker-done-dark.svg" width="120" alt=""></td>
@@ -109,7 +109,7 @@ CC Agent 跑在你自己的 Mac 上。你建立的每個 agent，都是 tmux 裡
 
 | 需要 | 用途 |
 | --- | --- |
-| [Claude Code](https://code.claude.com/docs/en/overview) 最新版（測試過 2.1.306；2.1.293 以上可用），且已登入 | 每個 agent 都是一個 Claude Code session，CC Agent 用它的 channels 與 hooks |
+| [Claude Code](https://code.claude.com/docs/en/overview) 最新版（測試過 2.1.322；2.1.293 以上可執行 agent，範圍報告單需要 2.1.322 以上），且已登入 | 每個 agent 都是一個 Claude Code session，CC Agent 用它的 channels 與 hooks |
 | [Node.js](https://nodejs.org) 24 LTS 最新版（測試過 24.22.1；22.12 以上可用）與 npm | 執行伺服器、建置網頁 |
 | [tmux](https://github.com/tmux/tmux) 最新版（測試過 3.8；3.5 以上可用） | 讓每個 agent 的 session 在背景持續執行 |
 | Xcode Command Line Tools（macOS） | 選用，排程背景腳本用 Python 時提供 python3 |
