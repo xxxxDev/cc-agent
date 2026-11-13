@@ -3,8 +3,10 @@
       member's answers under its name, and what members send one another. Laid out as
       an agent's conversation, with checklists and search; no profile or transcript. -->
  <f7-page name="group" class="chat-page group-page" :data-chat="['switchless',sidePanel?'side-open':''].filter(Boolean).join(' ')" :page-content="false" @page:afterin="toBottom">
+  <!-- Beside the Groups list (listDetail.js), the column's edge, dragged as on the Agents tab. -->
+  <div v-if="listDetailActive" class="list-column-divider" role="separator" aria-orientation="vertical" :aria-label="ct('拖曳調整清單寬度')" :title="ct('拖曳調整清單寬度，按兩下恢復')" @pointerdown.stop="startListColumnResize" @dblclick="setListColumnWidth(null)" @mousedown.stop @touchstart.stop/>
   <f7-navbar>
-   <f7-nav-left><f7-link class="back" icon-only :aria-label="ct('返回群組清單')" @click="toGroups"><i class="icon icon-back"/></f7-link></f7-nav-left>
+   <f7-nav-left><f7-link class="back" icon-only :data-animate="listDetailActive?'false':null" :aria-label="ct('返回群組清單')" @click="toGroups"><i class="icon icon-back"/></f7-link></f7-nav-left>
    <f7-nav-title sliding><span class="nav-agent-name group-title">{{room?.name||ct('群組')}}<small v-if="room" class="group-sub">{{room.members.length}} {{ct('位成員')}} · {{ct('主負責')}} {{leadName}}</small></span></f7-nav-title>
    <f7-nav-right>
     <f7-link icon-only icon-f7="checkmark_square" class="checklist-open" :class="{'inspector-on':sidePanel==='checklist'}" :aria-label="ct('待辦事項')" @click="toggle('checklist')"/>
@@ -83,15 +85,18 @@ import MessageSearchResults from '../components/MessageSearchResults.vue';
 import AttachmentPreview from '../components/AttachmentPreview.vue';
 import GlassDropdown from '../components/GlassDropdown.vue';
 import TerminalPane from '../TerminalPane.vue';
+import {listDetailActive,startListColumnResize,setListColumnWidth} from '../js/listDetail.js';
 
-const props=defineProps({f7route:Object});
-const id=props.f7route?.query?.id;
+const props=defineProps({f7route:Object,f7router:Object});
+// The room shown. Beside the Groups list another room takes its place on this same page
+// (agent-chat.js openGroup changes the address; follow() below).
+const id=ref(props.f7route?.query?.id);
 const w=inject('workspace');
 const toGroups=()=>w.toGroups();
 const isAdmin=computed(()=>w.user.value?.role==='admin');
 const scroll=ref(null),draft=ref(''),error=ref(''),sending=ref(false),previewFile=ref(null),foundId=ref(null),searchText=ref('');
 const panel=ref(null),settingsOpen=ref(false);
-const sidePanel=computed(()=>w.wideScreen.value&&room.value?.id===id?panel.value:null);
+const sidePanel=computed(()=>w.wideScreen.value&&room.value?.id===id.value?panel.value:null);
 const popup=computed(()=>!w.wideScreen.value?panel.value:null);
 const toggle=name=>{panel.value=panel.value===name?null:name;};
 const leadName=computed(()=>room.value?.members.find(m=>m.id===room.value.lead)?.title||'');
@@ -100,7 +105,7 @@ const member=agentId=>room.value?.members.find(m=>m.id===agentId);
 const titleOf=(agentId,fallback)=>member(agentId)?.title||fallback||(w.conversations.value||[]).find(c=>c.id===agentId)?.title||ct('已離開的成員');
 // The server's messages as bubbles: each member's under its name and picture, the
 // ones members send one another marked as such, and to whom the owner's went.
-const bubbles=computed(()=>(room.value?.id===id?room.value.messages:[]).map(m=>{
+const bubbles=computed(()=>(room.value?.id===id.value?room.value.messages:[]).map(m=>{
  if(m.role==='user'){const to=listJoin((m.targets||[]).map(t=>titleOf(t)+(Object.values(m.deliveries||{}).length&&m.deliveries[t]?.status==='failed'?ct('（未送達）'):'')));return {...m,footnote:to?ct('給 ')+to:''};}
  if(m.role==='system')return m;
  const a=member(m.agentId),avatar=a?.avatar||defaultAvatar(a||{});
@@ -132,10 +137,13 @@ function keydown(e){if(slash.onKeydown(e,send))return;if(mention.onKeydown(e,()=
 let atBottom=true;
 function onScroll(){const el=scroll.value;if(el)atBottom=el.scrollHeight-el.scrollTop-el.clientHeight<48;}
 function toBottom(){nextTick(()=>{const el=scroll.value;if(el)el.scrollTop=el.scrollHeight;atBottom=true;});}
+// An answer for a room no longer shown (another took its place on this page meanwhile) is left
+// out, its error too: it would blank the room shown now.
 async function refresh(opening=false){
- if(!id)return;
- try{await loadRoom(id,{viewing:activeTab.value==='view-groups'&&!document.hidden,opening});error.value='';}
- catch(e){error.value=e.message;}
+ const want=id.value;
+ if(!want)return;
+ try{await loadRoom(want,{viewing:activeTab.value==='view-groups'&&!document.hidden,opening});if(id.value===want)error.value='';}
+ catch(e){if(id.value===want)error.value=e.message;}
 }
 watch(()=>room.value?.messages?.length,()=>{if(atBottom)toBottom();});
 async function send(){
@@ -145,15 +153,15 @@ async function send(){
   // A terminal command for one member runs in its terminal, which then opens; a skill
   // or anything else goes to it as a message, as in its own chat.
   const target=slashTarget.value;
-  if(target&&isAdmin.value&&await slash.resolveTerminal(slashDraft.value)){await commandInGroup(id,target.member.id,slashDraft.value.trim());draft.value='';terminalFor.value=target.member;return;}
-  await sendToGroup(id,text,mention.current.value.map(m=>m.id));draft.value='';toBottom();
+  if(target&&isAdmin.value&&await slash.resolveTerminal(slashDraft.value)){await commandInGroup(id.value,target.member.id,slashDraft.value.trim());draft.value='';terminalFor.value=target.member;return;}
+  await sendToGroup(id.value,text,mention.current.value.map(m=>m.id));draft.value='';toBottom();
  }
  catch(e){f7.dialog.alert(ct(e.message),ct('傳送失敗'));}
  finally{sending.value=false;}
 }
-const checklistSource=computed(()=>({lists:room.value?.checklists||[],change:body=>changeGroupChecklist(id,body)}));
-function newChecklist(){f7.dialog.prompt('',ct('新清單名稱'),title=>{title=String(title??'').trim();if(title)changeGroupChecklist(id,{title});},()=>{},'');}
-const searcher=q=>searchGroup(id,q);
+const checklistSource=computed(()=>({lists:room.value?.checklists||[],change:body=>changeGroupChecklist(id.value,body)}));
+function newChecklist(){f7.dialog.prompt('',ct('新清單名稱'),title=>{title=String(title??'').trim();if(title)changeGroupChecklist(id.value,{title});},()=>{},'');}
+const searcher=q=>searchGroup(id.value,q);
 // A tag in a bubble opens that agent's own chat.
 const openAgent=agentId=>w.select(agentId);
 function found(hit){
@@ -168,18 +176,28 @@ const terminalItems=computed(()=>(room.value?.members||[]).map(m=>({value:m.id,l
 function openTerminalMenu(e){const r=e?.currentTarget?.getBoundingClientRect?.();menuPoint.value={clientX:r?r.left+r.width/2:e?.clientX??0,clientY:r?r.bottom:e?.clientY??0};terminalMenu.value=true;}
 function chooseTerminal(memberId){terminalMenu.value=false;terminalFor.value=member(memberId)||null;}
 
+// Another room in place: its own draft kept for each room, as an agent's is.
+const drafts=new Map();
+function follow(route){
+ const next=route?.path==='/group/'?route.query?.id:null;
+ if(!next||next===id.value)return;
+ drafts.set(id.value,draft.value);draft.value=drafts.get(next)||'';
+ id.value=next;viewingGroup.value=next;room.value=null;error.value='';foundId.value=null;searchText.value='';terminalFor.value=null;
+ refresh(true).then(toBottom);
+}
 let cleanup,cleanupComposer,timer;
 const onChanged=()=>{if(activeTab.value==='view-groups')refresh();};
 onMounted(()=>{
- viewingGroup.value=id;
- if(room.value?.id!==id)room.value=null;
+ viewingGroup.value=id.value;
+ if(room.value?.id!==id.value)room.value=null;
  refresh(true).then(toBottom);
  const el=page();cleanupComposer=bindConversationComposer(el);cleanup=bindConversationViewport(el);
  window.addEventListener('cc-agent-changed',onChanged);
+ props.f7router?.on('routeUrlUpdate',follow);
  // A slow safety net for when the live socket is down.
  timer=setInterval(()=>{if(activeTab.value==='view-groups'&&!document.hidden)refresh();},15000);
 });
-onBeforeUnmount(()=>{if(viewingGroup.value===id)viewingGroup.value=null;clearInterval(timer);window.removeEventListener('cc-agent-changed',onChanged);cleanup?.();cleanupComposer?.();});
+onBeforeUnmount(()=>{props.f7router?.off('routeUrlUpdate',follow);if(viewingGroup.value===id.value)viewingGroup.value=null;clearInterval(timer);window.removeEventListener('cc-agent-changed',onChanged);cleanup?.();cleanupComposer?.();});
 </script>
 <style scoped src="../agent-pages/chatPage.css"></style>
 <style scoped>

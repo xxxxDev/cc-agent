@@ -14,7 +14,9 @@ export async function loadGroups() { const r = await api('/groups'); groups.valu
 export async function loadRoom(id, {viewing = false, opening = false} = {}) {
   const q = [viewing ? 'viewing=1' : '', opening ? 'open=1' : ''].filter(Boolean).join('&');
   const r = await api('/groups/' + encodeURIComponent(id) + (q ? '?' + q : ''));
-  if (viewingGroup.value === id || !viewingGroup.value) room.value = r;
+  // Only the room on screen, or, with none told, the room already held (or none): an answer that
+  // arrives after another room was opened never takes its place.
+  if (viewingGroup.value ? viewingGroup.value === id : !room.value || room.value.id === id) room.value = r;
   return r;
 }
 export async function createGroup(body) { const r = await api('/groups', {method: 'POST', body: JSON.stringify(body)}); await loadGroups(); return r; }

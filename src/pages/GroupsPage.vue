@@ -1,7 +1,7 @@
 <template>
   <!-- Group chats: several agents in one room, on
        a tab of their own, apart from the Agents list. -->
-  <f7-page name="groups" class="page-large-static" @page:afterin="load">
+  <f7-page name="groups" class="page-large-static" @page:afterin="load" @page:position="onPosition">
     <f7-navbar large>
       <!-- Edit drags the groups into the owner's order, as on the Agents list. -->
       <f7-nav-left v-if="groups.length > 1"><f7-link class="group-edit" :aria-label="ct('編輯群組順序')" @click="toggleEdit">{{ editMode ? 'Done' : 'Edit' }}</f7-link></f7-nav-left>
@@ -17,7 +17,7 @@
     <f7-block v-else-if="!groups.length" class="group-empty">{{ ct('還沒有群組。按右上角的＋，挑幾個 agent 組成一個聊天室，指定一位主負責。') }}</f7-block>
     <f7-block v-else-if="!shown.length" class="group-state">{{ ct('沒有符合的群組') }}</f7-block>
     <f7-list v-else inset media-list sortable :sortable-enabled="editMode && !search && !orderBusy" :sortable-move-elements="false" class="group-list" :class="{ editing: editMode }" @sortable:sort="reorder">
-      <f7-list-item v-for="g in shown" :key="g.id" :swipeout="!editMode" :link="editMode ? false : '#'" :data-id="g.id" @click.prevent="!editMode && open(g)">
+      <f7-list-item v-for="g in shown" :key="g.id" :swipeout="!editMode" :link="editMode ? false : '#'" :class="{ 'row-current': viewingGroup === g.id }" :data-id="g.id" @click.prevent="!editMode && open(g)">
         <template #media><span class="group-avatar"><img v-if="leadOf(g)?.avatar" :src="leadOf(g).avatar" :class="'group-avatar-' + avatarShape(leadOf(g).avatar)" alt="" /><img v-else-if="leadOf(g)" :src="defaultAvatar(leadOf(g))" class="group-avatar-icon" alt="" /><span class="group-count" :aria-label="g.members.length + ' ' + ct('位成員')">{{ g.members.length }}</span></span></template>
         <template #title>{{ g.name }}<i v-if="g.notify === false" class="icon f7-icons group-muted" :aria-label="ct('通知已關')">bell_slash_fill</i></template>
         <template #after>{{ when(g.updatedAt) }}</template>
@@ -38,19 +38,20 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watch, Teleport } from 'vue';
+import { ref, computed, inject, nextTick, onMounted, onBeforeUnmount, watch, Teleport } from 'vue';
 import { f7 } from 'framework7-vue';
 import { t, timeLocale } from '../js/i18n.js';
 import { ct } from '../js/agent-i18n.js';
 import { avatarShape, defaultAvatar } from '../js/avatarShape.js';
 import { activeTab } from '../js/tab-session.js';
-import { groups, loadGroups, removeGroup, reorderGroups, updateGroup } from '../js/groups.js';
+import { groups, viewingGroup, loadGroups, removeGroup, reorderGroups, updateGroup } from '../js/groups.js';
+import { listIsColumn } from '../js/listDetail.js';
 import GroupForm from '../components/GroupForm.vue';
 
 // The lead, or the first member if the lead is gone.
 const leadOf = (g) => g.members.find((m) => m.id === g.lead) || g.members[0];
 
-const props = defineProps({ f7router: Object });
+const w = inject('workspace');
 const loaded = ref(false), error = ref(''), formOpen = ref(false), editing = ref(null);
 const editMode = ref(false), orderBusy = ref(false), search = ref('');
 // A group by its name or any member's; what was
@@ -77,7 +78,12 @@ function when(iso) {
   const d = new Date(iso), today = new Date();
   return d.toDateString() === today.toDateString() ? d.toLocaleTimeString(timeLocale(), { hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString(timeLocale(), { month: 'numeric', day: 'numeric' });
 }
-function open(g) { props.f7router.navigate('/group/?id=' + encodeURIComponent(g.id)); }
+// The room over the list, or beside it as the list's column, where another row switches the
+// room in place (listDetail.js, agent-chat.js openGroup).
+function open(g) { w.openGroup(g.id); }
+// Framework7 hides the page under the current one from assistive technology; as the
+// column it is in use.
+function onPosition() { nextTick(() => { const el = document.querySelector('#view-groups > .page[data-name="groups"]'); if (listIsColumn(el, 'group')) el.removeAttribute('aria-hidden'); }); }
 function openForm(g = null) { editing.value = g; formOpen.value = true; }
 function saved(g) { formOpen.value = false; if (!editing.value && g?.id) open(g); }
 async function toggleNotify(g) {

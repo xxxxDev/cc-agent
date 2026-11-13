@@ -5,6 +5,8 @@
 // same two pages of #view-chat as always (ChatListPage under ConversationPage); the
 // layout is styles/listDetail.css, keyed on <html>.list-detail-on and the same width as
 // LIST_DETAIL_WIDE here. Kept on each device, as the sidebar's fold is (sidebarState.js).
+// The Groups tab does the same with its list and one room:
+// GroupsPage under GroupRoomPage in #view-groups, the same setting, width and resize.
 import {ref, computed} from 'vue';
 import {PRODUCT} from './productConfig.js';
 import {embedded, splitView} from './embed.js';
@@ -29,9 +31,10 @@ export function setListDetail(on) {
   try { localStorage.setItem(KEY, on ? '1' : '0'); } catch {}
 }
 
-// The list's page is the column right now: it sits under an open conversation.
-export function listIsColumn(pageEl) {
-  return listDetailActive.value && !!pageEl?.classList?.contains('page-previous') && pageEl.nextElementSibling?.dataset?.name === 'conversation';
+// The list's page is the column right now: it sits under an open conversation (or, on the
+// Groups tab, an open room: detail 'group').
+export function listIsColumn(pageEl, detail = 'conversation') {
+  return listDetailActive.value && !!pageEl?.classList?.contains('page-previous') && pageEl.nextElementSibling?.dataset?.name === detail;
 }
 
 // The column's width, dragged at its edge: kept on the device;
@@ -49,7 +52,7 @@ export function setListColumnWidth(width) {
   try { width == null ? localStorage.removeItem(WIDTH_KEY) : localStorage.setItem(WIDTH_KEY, String(Math.round(width))); } catch {}
 }
 export function startListColumnResize(event) {
-  const view = event.currentTarget?.closest?.('#view-chat');
+  const view = event.currentTarget?.closest?.('#view-chat, #view-groups');
   if (!view) return;
   event.preventDefault();
   const handle = event.currentTarget, box = view.getBoundingClientRect();

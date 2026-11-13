@@ -5,63 +5,74 @@
  * conversation is the page after it; the conversation takes the rest. The conversation opens
  * and closes with no Framework7 slide (agent-chat.js), so the column narrows and widens back by
  * its own transition, and the conversation comes in from the right. Below that width, or with
- * the setting off, nothing here applies and the pages slide over each other as before. */
+ * the setting off, nothing here applies and the pages slide over each other as before.
+ * The Groups tab does the same with its list and one room:
+ * the shared rules name both pairs, and the group rows' compact look follows the agents'. */
 @media (min-width: 1280px) {
-  html.list-detail-on #view-chat {
+  html.list-detail-on :is(#view-chat, #view-groups) {
     --list-column: var(--list-column-set, clamp(320px, 25vw, 360px));
     --list-detail-motion: .32s cubic-bezier(.2, .8, .2, 1);
   }
   /* The list takes its column at once, with the conversation's own entrance as the motion: a
    * narrowing width let the conversation arrive first and the column's buttons and row edges
    * settle a third of a second later. */
-  html.list-detail-on #view-chat > .page[data-name="chats"] {
+  html.list-detail-on #view-chat > .page[data-name="chats"],
+  html.list-detail-on #view-groups > .page[data-name="groups"] {
     transition: none;
   }
   /* The column. */
-  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) {
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]),
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) {
     width: var(--list-column);
     transform: none;
     pointer-events: auto;
     box-sizing: border-box;
     border-right: 1px solid var(--f7-list-item-border-color, rgba(255, 255, 255, .12));
   }
-  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"])::after {
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"])::after,
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"])::after {
     display: none;
   }
   /* The conversation beside it; its side panels share what is left (chatPage.css). */
-  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous + .page[data-name="conversation"] {
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous + .page[data-name="conversation"],
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous + .page[data-name="group"] {
     left: var(--list-column);
     width: calc(100% - var(--list-column));
     --transcript-inspector-width: min(500px, 45%);
     animation: list-detail-in var(--list-detail-motion) both;
   }
-  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous + .page[data-name="conversation"] .page-shadow-effect {
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous + .page[data-name="conversation"] .page-shadow-effect,
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous + .page[data-name="group"] .page-shadow-effect {
     display: none;
   }
 
   /* A computer that shows scroll bars all the time (a mouse attached) takes their width off the
    * column's right side only, so the rows sat further left than right;
    * the column still scrolls by wheel and trackpad. */
-  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .page-content {
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .page-content,
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .page-content {
     scrollbar-width: none;
   }
   /* The navbar's buttons line up with the search row and the rows, 10px from each edge
    * (Edit and + sat 6px further in than the rows). */
-  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .navbar {
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .navbar,
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .navbar {
     --f7-navbar-inner-padding-left: 10px;
     --f7-navbar-inner-padding-right: 10px;
   }
   /* Scrolled, Framework7 brings the small "Agents" title into the navbar, centred; in the narrow
    * column it ran under the buttons, so the column keeps none. */
-  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .navbar .title {
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .navbar .title,
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .navbar .title {
     display: none;
   }
   /* The column's edge can be dragged (listDetail.js startListColumnResize); while it is, nothing
    * eases, so the column follows the pointer. */
-  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous + .page[data-name="conversation"] .list-column-divider {
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous + .page[data-name="conversation"] .list-column-divider,
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous + .page[data-name="group"] .list-column-divider {
     display: block;
   }
-  html.list-detail-on.list-resizing #view-chat > .page {
+  html.list-detail-on.list-resizing :is(#view-chat, #view-groups) > .page {
     transition: none !important;
   }
   /* Compact rows in the column: a smaller picture, the name and one line of the latest. */
@@ -197,6 +208,68 @@
     padding-right: 0;
   }
 }
+/* The Groups list as the column: rows as compact as the agents' there, the lead's face, the
+ * group's name and one line of the latest; the members line is left to the room's navbar. */
+@media (min-width: 1280px) {
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .page-content > :is(.list.inset, .group-search-row) {
+    max-width: calc(100% - 20px);
+    margin-left: auto;
+    margin-right: auto;
+  }
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-search-row {
+    padding: 0;
+    margin-top: 12px;
+    margin-bottom: 16px;
+  }
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list > ul > li {
+    margin-bottom: 6px;
+  }
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .item-content {
+    padding-left: 10px;
+    min-height: 0;
+  }
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .item-inner {
+    padding-top: 8px;
+    padding-bottom: 8px;
+    padding-right: 10px;
+    min-height: 0;
+  }
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .item-link :is(.item-inner, .item-title-row)::before {
+    display: none;
+  }
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .item-title-row {
+    padding-right: 0;
+  }
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .item-media {
+    padding-top: 0;
+    align-self: center;
+  }
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .group-avatar {
+    width: 36px;
+    height: 36px;
+  }
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .item-subtitle {
+    display: none;
+  }
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .item-title {
+    font-size: 15px;
+  }
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .item-text {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+    max-height: var(--f7-list-item-text-line-height, 21px);
+    margin-right: 0;
+    font-size: 13px;
+  }
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list > ul > li.row-current {
+    background: color-mix(in srgb, var(--f7-list-bg-color) 88%, var(--dp-color-text, #fff));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dp-color-text, #fff) 16%, transparent);
+  }
+  /* Edit in the column: the rows keep the drag handle's room. */
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list.sortable-enabled li .item-content > .item-inner {
+    padding-right: calc(var(--f7-sortable-handler-width) + 4px);
+  }
+}
 @media (min-width: 1280px) {
   @container list-column (max-width: 359px) {
     html.list-detail-on #view-chat > .page[data-name="chats"] .navbar .bulk-count {
@@ -209,8 +282,9 @@
   to { opacity: 1; transform: none; }
 }
 @media (min-width: 1280px) and (prefers-reduced-motion: reduce) {
-  html.list-detail-on #view-chat > .page[data-name="chats"] { transition: none; }
-  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous + .page[data-name="conversation"] { animation: none; }
+  html.list-detail-on #view-chat > .page[data-name="chats"], html.list-detail-on #view-groups > .page[data-name="groups"] { transition: none; }
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous + .page[data-name="conversation"],
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous + .page[data-name="group"] { animation: none; }
 }
 
 /* The drag handle at the conversation's left edge; shown only beside the column (above). It looks

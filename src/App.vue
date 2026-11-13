@@ -342,6 +342,8 @@ function syncAddress() {
     if (router && !boundRouters.has(router)) {
       boundRouters.add(router);
       router.on('routeChanged', () => nextTick(syncAddress));
+      // A room switched in place beside the Groups list (agent-chat.js openGroup).
+      router.on('routeUrlUpdate', () => nextTick(syncAddress));
     }
   }
   const route = f7?.views?.get('#' + activeTab.value)?.router?.currentRoute;

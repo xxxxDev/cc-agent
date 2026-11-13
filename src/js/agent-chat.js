@@ -1112,14 +1112,18 @@ function openGroup(group){
  const router=f7.views?.get('#view-groups')?.router;if(!router)return;
  if(router.currentRoute.path==='/group/'&&router.currentRoute.query?.id===group)return;
  const url='/group/?id='+encodeURIComponent(group);
- if(router.currentRoute.path==='/group/'){router.navigate(url,{reloadCurrent:true});return;}
+ // Beside the list (listDetail.js) another room takes the open one's place on the same
+ // page, as another agent does in a conversation (GroupRoomPage.vue follows the address),
+ // and the first comes in by CSS instead of Framework7's slide (styles/listDetail.css).
+ if(router.currentRoute.path==='/group/'){if(listDetailActive.value)router.updateCurrentUrl(url);else router.navigate(url,{reloadCurrent:true});return;}
  if(router.currentRoute.path!=='/groups/')router.back('/groups/',{force:true,animate:false});
- router.navigate(url);
+ router.navigate(url,{animate:!listDetailActive.value});
 }
 function toGroups(){
  const router=f7.views?.get('#view-groups')?.router;if(!router)return;
  const h=router.history||[];
- if(h.length>=2&&h[h.length-2]==='/groups/')router.back();else router.back('/groups/',{force:true});
+ const animate=!listDetailActive.value;
+ if(h.length>=2&&h[h.length-2]==='/groups/')router.back({animate});else router.back('/groups/',{force:true,animate});
 }
 // A notification tapped while the app is already open: the service worker posts
 // the address here.
