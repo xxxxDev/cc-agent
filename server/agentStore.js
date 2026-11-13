@@ -962,6 +962,45 @@ function starterState(x){
  if(g.phase==='error'){try{execFileSync('tmux',['-L',tmuxSocket,'has-session','-t',g.tmux],{stdio:'ignore',timeout:2000});return 'unresponsive';}catch{return 'stopped';}}
  return g.phase==='busy'?'busy':g.heartbeat>Date.now()-15000?'running':'unresponsive';
 }
+// The last messages the agent is answering, all typed by its owner in this chat, or 403:
+// nothing from another session, machine, agent, group, schedule or outside chat in the turn.
+function ownerTurn(c){
+ try{syncRelays(c,undefined,true);}catch(e){console.error('relays '+c.id+':',e.message);}
+ const owners=m=>m.role==='user'&&senderOf(c,m).sender==='owner'&&!m.group&&!m.relay&&!m.external&&!m.peer&&!m.agentMessage&&!m.sentBy;
+ const here=c.messages.filter(m=>m.generation===c.generation);
+ const open=here.filter(m=>m.role==='user'&&m.delivery==='delivered');
+ const from=open.length?here.indexOf(open[0]):-1;
+ if(from<0||!open.every(owners)||here.slice(from).some(m=>(m.role==='user'||m.role==='relay')&&!owners(m)))throw error('Only while answering a message the owner typed: ask the owner in this chat',403);
+ return open.at(-1);
+}
+// Restart running agents for an allowlisted starter: only while it answers a message its
+// owner typed (ownerTurn), so an outside chat, another session or machine cannot have it
+// restart anyone. Each is stopped and started again on its own profile and scope, keeping what
+// stop() would drop (restartKeeping), and only when it would lose nothing (quietForRestart: no
+// turn, compaction or handoff, no background subagent or command, no delivered unanswered
+// message, no terminal prompt, nobody at its terminal; a transcript still being read counts as
+// in a turn). A stopped one is agent_start's.
+function restartOps(c,data){
+ if(!agentStarter(c))throw error('Not allowed',403);
+ ownerTurn(c);
+ const targets=starterTargets(c),view=x=>({id:x.id,name:x.title||x.name||'',account:activeOwner(x.owner)?.username||'',state:starterState(x)});
+ const ids=Array.isArray(data?.ids)?[...new Set(data.ids.filter(id=>typeof id==='string'))].slice(0,20):[];
+ if(!ids.length)throw error('Give the ids of the agents to restart');
+ const by=c.title||c.name||'agent';
+ return {results:ids.map(id=>{
+  const x=targets.find(t=>t.id===id);if(!x)return {id,result:'not-found'};
+  if(x.pausedForUpdate)return {...view(x),result:'held-for-update'};
+  const now=starterState(x);
+  if(now==='stopped')return {...view(x),result:'not-running'};
+  const g=active(x);
+  let quiet;try{quiet=quietForRestart(x,g);}catch{quiet=false;}
+  if(!quiet)return {...view(x),result:'busy'};
+  const ok=restartKeeping(x);
+  add(x,'system',ok?'由 '+by+' 重新連線。':'由 '+by+' 重新連線，但沒有啟動成功：'+(active(x).lastError||''),{notice:'restarted-by',restartedBy:c.id});save(x);
+  try{require('./services/audit').audit({action:'agent-restart',by:c.id,byName:by,agent:x.id,agentName:x.title||'',owner:x.owner,was:now,ok});}catch{}
+  return ok?{...view(x),result:'restarted'}:{...view(x),result:'failed',error:active(x).lastError||''};
+ })};
+}
 function starterOps(c,action,data){
  if(!agentStarter(c))throw error('Not allowed',403);
  const targets=starterTargets(c),view=x=>({id:x.id,name:x.title||x.name||'',account:activeOwner(x.owner)?.username||'',state:starterState(x),pausedByOwner:!!x.pausedByOwner,pausedForUpdate:!!x.pausedForUpdate});
@@ -1945,7 +1984,7 @@ const POSTCOMPACT_WAIT_MS=4000;
 // starting, heartbeat) and channel/hook.mjs (precompact, postcompact, result, failure).
 // Anything else is refused before it touches the agent, its heartbeat included
 // Keep it equal to the actions the channel's sources send.
-const BRIDGE_ACTIONS=new Set(['hook-check','plugin-check','bootstrap','poll','schedule-propose','schedule-update','schedule-remove','schedule-list','permission-request','permission-ack','post','checklists','checklist','group-post','ready','reply','memory','describe','history','precompact','postcompact','result','failure','error','starting','heartbeat','peer-agents','peer-send','peer-status','starter-agents','starter-start','report-explain']);
+const BRIDGE_ACTIONS=new Set(['hook-check','plugin-check','bootstrap','poll','schedule-propose','schedule-update','schedule-remove','schedule-list','permission-request','permission-ack','post','checklists','checklist','group-post','ready','reply','memory','describe','history','precompact','postcompact','result','failure','error','starting','heartbeat','peer-agents','peer-send','peer-status','starter-agents','starter-start','starter-restart','report-explain']);
 function bridge(c,action,data={}) {
  if(typeof action!=='string'||!BRIDGE_ACTIONS.has(action))throw error('Unknown bridge action',404);
  const g=active(c);g.heartbeat=Date.now();
@@ -1953,6 +1992,7 @@ function bridge(c,action,data={}) {
  // heartbeat goes on while the channel is gone. The first poll after a revive is saved,
  // so a restart of this service still knows the channel came back.
  if(action==='poll'){const back=g.revivedAt&&!(g.lastPoll>g.revivedAt);g.lastPoll=Date.now();if(back)save(c);}
+ if(action==='starter-restart')return restartOps(c,data);
  if(action==='starter-agents'||action==='starter-start')return starterOps(c,action,data);
  // A session that read its bootstrap has its channel working. A session that then
  // says ready is not among its tools and stops there would stay starting for good;
