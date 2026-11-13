@@ -60,11 +60,29 @@
     --f7-navbar-inner-padding-left: 10px;
     --f7-navbar-inner-padding-right: 10px;
   }
-  /* Scrolled, Framework7 brings the small "Agents" title into the navbar, centred; in the narrow
-   * column it ran under the buttons, so the column keeps none. */
-  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .navbar .title,
-  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .navbar .title {
-    display: none;
+  /* Scrolled, the small title shows in the column's navbar as in a navbar: centred in the room
+   * between Edit and the buttons, not on the whole column, where it ran under the buttons; a long
+   * one ends in an ellipsis. */
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .navbar .navbar-inner > .title,
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .navbar .navbar-inner > .title {
+    position: relative; left: auto !important; transform: none !important;
+    flex: 1 1 auto; min-width: 0; margin: 0 8px; text-align: center; justify-content: center;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .navbar .navbar-inner > :is(.left, .right),
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .navbar .navbar-inner > :is(.left, .right) {
+    flex: 0 0 auto;
+  }
+  /* The search row stays under the navbar while the list scrolls, on the column's own
+   * background so rows pass beneath it. */
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .page-content > .agent-search-row {
+    position: sticky;
+    /* Sticky offsets count from the page's padding, which already holds the navbar and the large
+     * title: going back by the large title's height leaves the row right under the navbar. */
+    top: calc(-1 * var(--f7-navbar-large-title-height, 52px));
+    z-index: 3;
+    background: var(--f7-page-bg-color);
+    box-shadow: 0 -12px 0 var(--f7-page-bg-color), 0 10px 0 var(--f7-page-bg-color);
   }
   /* The column's edge can be dragged (listDetail.js startListColumnResize); while it is, nothing
    * eases, so the column follows the pointer. */
