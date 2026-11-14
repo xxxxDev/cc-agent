@@ -144,8 +144,8 @@
   }
   /* The agent shown beside the column, a soft lift (dimmed). */
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .conversation-list > ul > li.row-current {
-    background: color-mix(in srgb, var(--f7-list-bg-color) 88%, var(--dp-color-text, #fff));
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dp-color-text, #fff) 16%, transparent);
+    background: color-mix(in srgb, var(--f7-list-bg-color) 94%, var(--dp-color-text, #fff));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dp-color-text, #fff) 11%, transparent);
   }
   /* Source and group titles kept, closer together. */
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .conversation-list > ul > li.agent-source-title {
@@ -280,8 +280,8 @@
     font-size: 13px;
   }
   html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list > ul > li.row-current {
-    background: color-mix(in srgb, var(--f7-list-bg-color) 88%, var(--dp-color-text, #fff));
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dp-color-text, #fff) 16%, transparent);
+    background: color-mix(in srgb, var(--f7-list-bg-color) 94%, var(--dp-color-text, #fff));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dp-color-text, #fff) 11%, transparent);
   }
   /* Edit in the column: the rows keep the drag handle's room. */
   html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list.sortable-enabled li .item-content > .item-inner {
