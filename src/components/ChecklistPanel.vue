@@ -3,7 +3,7 @@
       things still to verify. The agent keeps them with its checklist tool; the owner
       follows them here and changes them too. The circle steps an item on; a long
       press or right click has the rest. -->
- <div class="ck">
+ <div ref="root" class="ck">
   <p v-if="!lists.length" class="ck-empty">{{ct('還沒有清單。agent 整理出步驟、待辦或未驗證事項時會放在這裡，你也可以按右上角的＋自己建。')}}</p>
   <section v-for="list in lists" :key="list.id" class="ck-list" :data-list="list.id">
    <div class="ck-top" role="button" tabindex="0" :aria-expanded="String(isOpen(list))" @click="toggle(list)" @keydown.enter="toggle(list,true)" @contextmenu.prevent="listMenu(list,$event)" @pointerdown="press($event,()=>listMenu(list,$event))" @pointerup="release" @pointerleave="release" @pointercancel="release">
@@ -33,7 +33,7 @@
 <script>
 import {timeLocale} from '../js/i18n.js';
 import GlassDropdown from "./GlassDropdown.vue";
-import {inject,computed,ref,reactive} from "vue";
+import {inject,computed,ref,reactive,onMounted,nextTick} from "vue";
 import {f7} from "framework7-vue";
 const ICON={todo:'',doing:'●',done:'✓',blocked:'!'};
 const STATUS_LABEL={todo:'待做',doing:'進行中',done:'完成',blocked:'卡住'};
@@ -42,7 +42,11 @@ const OPEN_KEY='cc-agent-checklist-open';
 function readOpen(){try{return JSON.parse(localStorage.getItem(OPEN_KEY)||'{}')||{};}catch{return {};}}
 // A group's lists come with their own change;
 // otherwise the open agent's.
-export default {components:{GlassDropdown},props:{source:Object},setup(props){
+// startAtEnd: opened scrolled to the end, where the newest list is (the phone's popup), so as
+// not to scroll down past every older list.
+export default {components:{GlassDropdown},props:{source:Object,startAtEnd:Boolean},setup(props){
+ const root=ref(null);
+ onMounted(()=>{if(!props.startAtEnd)return;nextTick(()=>requestAnimationFrame(()=>{const box=root.value?.closest('.page-content');if(box)box.scrollTop=box.scrollHeight;}));});
  const w=inject("workspace");
  const lists=computed(()=>props.source?props.source.lists:w.detail.value?.checklists||[]);
  // Which lists are open is the reader's, per device. Unset, the one changed last is open.
@@ -84,7 +88,7 @@ const change=async body=>{if(changing)return;changing=true;try{return await (pro
   else if(value==='rename')prompt(w.ct('清單名稱'),list.title,title=>title&&change({listId:list.id,title}));
   else if(value==='delete-list')f7.dialog.confirm(w.ct('刪除「')+list.title+w.ct('」和裡面的所有項目？'),w.ct('刪除清單'),()=>change({listId:list.id,deleteList:true}));
  };
- return {ct:w.ct,lists,isOpen,toggle,done,percent,countText,when,step,drafts,addItem,press,release,menu,menuPoint,itemMenu,listMenu,choose,ICON,STATUS_LABEL};
+ return {root,ct:w.ct,lists,isOpen,toggle,done,percent,countText,when,step,drafts,addItem,press,release,menu,menuPoint,itemMenu,listMenu,choose,ICON,STATUS_LABEL};
 }};
 // The header's ＋: a new list, named by the reader.
 // Made in the agent it was asked for, even if the reader moved on meanwhile.

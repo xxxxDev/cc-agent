@@ -35,7 +35,7 @@
 <!-- The agent's checklists on a phone. -->
   <f7-popup :opened="checklistPopupOpen" :swipe-to-close="sheetSwipe" :push="sheetSwipe" @popup:closed="checklistPopupOpen&&(checklistOpen=false)" class="checklist-popup" :class="{'sheet-swipe':sheetSwipe}"><div v-if="sheetSwipe" class="sheet-grabber" aria-hidden="true"/><f7-view><f7-page>
    <f7-navbar><f7-nav-left><f7-link popup-close icon-only icon-f7="xmark" :aria-label="ct('關閉待辦事項')"/></f7-nav-left><f7-nav-title>{{ct('待辦事項')}}</f7-nav-title><f7-nav-right><f7-link icon-only icon-f7="plus" class="checklist-new" :aria-label="ct('新增清單')" @click="newChecklist"/></f7-nav-right></f7-navbar>
-   <ChecklistPanel v-if="checklistPopupOpen" :key="selected"/>
+   <ChecklistPanel v-if="checklistPopupOpen" :key="selected" start-at-end/>
   </f7-page></f7-view></f7-popup>
 <!-- How full the context is, from the phone's 「⋯」 menu or beside the terminal; the right
        column on a desktop. -->
