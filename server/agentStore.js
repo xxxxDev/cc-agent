@@ -2589,7 +2589,7 @@ const DAY=86400000;
 // How long a checklist whose every item is done is kept, counted from its last change,
 // or null to keep it (the default, as before). An admin's setting for every agent; one with
 // anything to do, doing or blocked is kept.
-const CHECKLIST_RETENTION_CHOICES=[1,3,7,30];
+const CHECKLIST_RETENTION_CHOICES=[1,3,7,14,30];
 function checklistRetentionDays(){const d=state.agentSettings?.checklistRetentionDays;return CHECKLIST_RETENTION_CHOICES.includes(d)?d:null;}
 const checklistFinished=(l,now,days)=>Array.isArray(l?.items)&&l.items.length>0&&l.items.every(i=>i?.status==='done')&&now-Date.parse(l.updatedAt)>days*DAY;
 // Archived agents are left as they were deleted. Each list removed is in the audit log;

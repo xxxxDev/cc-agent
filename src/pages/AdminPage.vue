@@ -232,7 +232,7 @@ async function saveRetention(value){
  }catch(e){f7.dialog.alert(e.message);}
 }
 // Finished checklists: kept (the default) or removed this many days after their last change.
-const CHECKLIST_RETENTION_CHOICES=[1,3,7,30];
+const CHECKLIST_RETENTION_CHOICES=[1,3,7,14,30];
 const checklistRetentionLabel=days=>days?days+' '+ct('天'):ct('不刪除');
 async function saveChecklistRetention(value){
  const days=value==='never'?null:Number(value);
