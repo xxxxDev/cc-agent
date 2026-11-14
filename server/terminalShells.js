@@ -34,7 +34,9 @@ const SEP = '|~|';
 const cleanTitle = (t) => String(t || '').replace(/[\u0000-\u001f\u007f]/g, '').replace(/^[^\p{L}\p{N}]+/u, '').trim().slice(0, 60);
 const SHELLS = new Set(['zsh', 'bash', 'sh', 'fish', 'dash', 'ksh', 'tcsh', 'csh', 'login']);
 
-function create({stateRoot, run = execFileSync}) {
+// Seconds without output after which a running program counts as waiting, not working.
+const BUSY_QUIET_S = 4;
+function create({stateRoot, run = execFileSync, now = Date.now}) {
   const dir = path.join(stateRoot, 'shells');
   const socket = path.join(dir, 'tmux.sock');
   // A failed tmux is the server's fault, never its exit code as an HTTP status (an exit
@@ -57,16 +59,20 @@ function create({stateRoot, run = execFileSync}) {
     // tab as "_". The title a program gave itself (a terminal app's tab shows it: "Claude
     // Code") and the path can hold anything, so they are
     // last and kept apart by a sequence neither has.
-    try { out = tmux(['list-sessions', '-F', '#{session_name}|#{pane_current_command}' + SEP + '#{pane_title}' + SEP + '#{pane_current_path}']); }
+    try { out = tmux(['list-sessions', '-F', '#{session_name}|#{pane_current_command}|#{window_activity}' + SEP + '#{pane_title}' + SEP + '#{pane_current_path}']); }
     catch (e) { if (/no server running|error connecting to|No such file or directory/.test(String(e.stderr || ''))) return []; throw e; }
     const p = prefix(c);
     return out.split('\n').filter((l) => l.startsWith(p)).map((l) => {
       const [head, title = '', ...rest] = l.split(SEP);
-      const cut = head.indexOf('|'), name = cut < 0 ? head : head.slice(0, cut), command = cut < 0 ? '' : head.slice(cut + 1);
+      const [name, command = '', activity = ''] = head.split('|');
       const cwd = rest.join(SEP);
       const n = Number(name.slice(p.length));
-      const busy = !!command && !SHELLS.has(command.replace(/^-/, ''));
-      return {n, cwd: tilde(cwd || ''), busy, ...(busy ? {command: command.slice(0, 40), title: cleanTitle(title)} : {})};
+      // A program open in it names the tab; it is busy only while it is putting something on
+      // the screen: codex or Claude waiting at their prompt is open, not busy.
+      const running = !!command && !SHELLS.has(command.replace(/^-/, ''));
+      const quiet = Math.floor(now() / 1000) - Number(activity);
+      const busy = running && Number.isFinite(quiet) && quiet <= BUSY_QUIET_S;
+      return {n, cwd: tilde(cwd || ''), busy, running, ...(running ? {command: command.slice(0, 40), title: cleanTitle(title)} : {})};
     }).filter((s) => Number.isInteger(s.n) && s.n >= 1 && s.n <= MAX).sort((a, b) => a.n - b.n);
   }
 

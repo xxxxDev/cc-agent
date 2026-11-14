@@ -41,7 +41,7 @@
   <!-- Agent Profile beside the conversation on a desktop width; the popup elsewhere. -->
   <!-- The terminal beside the conversation on a desktop, with a divider to set their
        widths; on a phone it takes the page instead. -->
-  <aside v-if="terminalSide&&user?.role==='admin'&&detail" class="terminal-column" :aria-label="ct('Claude 終端機')"><div class="terminal-divider" role="separator" aria-orientation="vertical" :aria-label="ct('拖曳調整聊天室與終端機寬度')" :title="ct('拖曳調整聊天室與終端機寬度')" @pointerdown.stop="startTerminalResize" @mousedown.stop @touchstart.stop/><TerminalTabs ref="terminalPane" :accept-files="terminalTakes" @files="filesToTerminal" :key="detail.sessionId" :conversation-id="detail.id" :avatar="agentAvatar" :agent-state="detail.phase==='busy'&&presence==='online'?'working':presence"/></aside>
+  <aside v-if="terminalSide&&user?.role==='admin'&&detail" class="terminal-column" :aria-label="ct('Claude 終端機')"><div class="terminal-divider" role="separator" aria-orientation="vertical" :aria-label="ct('拖曳調整聊天室與終端機寬度')" :title="ct('拖曳調整聊天室與終端機寬度，按兩下恢復')" @pointerdown.stop="startTerminalResize" @dblclick="resetTerminalWidth" @mousedown.stop @touchstart.stop/><TerminalTabs ref="terminalPane" :accept-files="terminalTakes" @files="filesToTerminal" :key="detail.sessionId" :conversation-id="detail.id" :avatar="agentAvatar" :agent-state="detail.phase==='busy'&&presence==='online'?'working':presence"/></aside>
   <aside v-if="searchPanelVisible" class="profile-panel search-panel" :aria-label="ct('搜尋對話')">
    <header class="pp-head"><f7-link icon-only icon-f7="xmark" :aria-label="ct('關閉搜尋')" @click="searchOpen=false"/><div class="pp-title">{{ct('搜尋對話')}}</div><span class="pp-spacer"/></header>
    <div class="pp-body">

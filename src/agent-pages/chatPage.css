@@ -101,7 +101,7 @@
 .chat-page[data-chat~="terminal-full"] > .terminal-column {border-left:0;}
 .terminal-column :deep(.terminal-pane) {flex:1;min-height:0;}
 .terminal-divider {position:absolute;left:-6px;top:0;bottom:0;width:12px;z-index:30;cursor:col-resize;touch-action:none;}
-.terminal-divider::after {content:'';position:absolute;left:5px;top:50%;width:2px;height:44px;margin-top:-22px;border-radius:1px;background:color-mix(in srgb,currentColor 28%,transparent);}
+/* No grip drawn on it: the edge itself is where it drags. */
 .chat-page[data-chat~="terminal-full"] .terminal-divider {left:0;}
 /* F7's .toolbar sets width:100% as well as left:0, which over-constrains an
    absolutely positioned box and makes `right` ignored, so narrow it by width. */

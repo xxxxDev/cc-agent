@@ -4,7 +4,7 @@
       the screen, and the note under the terminal is gone too. -->
  <!-- In the terminal page's tabs (TerminalTabs.vue) the line names the tab and its folder,
       and says the state only while the line is not up. -->
- <div class="terminal-bar" :class="{focused}"><span class="terminal-status" :class="{on:status==='終端已連線'}" role="status"><template v-if="label"><b class="terminal-label">{{label}}</b><span class="terminal-path">{{status==='終端已連線'?path:ct(status)}}</span></template><template v-else>{{ct(status)}}</template></span><f7-link class="terminal-reattach" icon-only icon-f7="arrow_clockwise" :aria-label="ct('重新附接')" :title="ct('重新附接')" @click="connect(true)"/></div>
+ <div class="terminal-bar" :class="{focused}"><span class="terminal-status" :class="{on:status==='終端已連線'}" role="status"><template v-if="label"><b class="terminal-label">{{label}}</b><span v-if="status!=='終端已連線'||path!==label" class="terminal-path">{{status==='終端已連線'?path:ct(status)}}</span></template><template v-else>{{ct(status)}}</template></span><f7-link class="terminal-reattach" icon-only icon-f7="arrow_clockwise" :aria-label="ct('重新附接')" :title="ct('重新附接')" @click="connect(true)"/><f7-link v-if="choosable" class="terminal-choose" icon-only icon-f7="arrow_right_arrow_left" :aria-label="ct('切換這格的分頁')" :title="ct('切換這格的分頁')" @click.stop="emit('choose',$event)"/></div>
  <div ref="host" class="terminal-host"/>
  <!-- Keys a phone keyboard does not have, for Claude Code's menus: Esc to back out,
        arrows to choose, Shift+Tab for the mode (a
@@ -32,12 +32,13 @@ import SpinnerIcon from './components/SpinnerIcon.vue';
 import {isDraftPicture} from './js/pictureFiles.js';
 import {Terminal} from '@xterm/xterm';import {FitAddon} from '@xterm/addon-fit';import '@xterm/xterm/css/xterm.css';
 // shell: one of the shells opened in the terminal page's tabs, by number; none is Claude's own.
-const props=defineProps({conversationId:String,acceptFiles:Boolean,shell:{type:Number,default:null},label:String,path:String,focused:Boolean,autofocus:{type:Boolean,default:true}});
+const props=defineProps({conversationId:String,acceptFiles:Boolean,shell:{type:Number,default:null},label:String,path:String,focused:Boolean,choosable:Boolean,autofocus:{type:Boolean,default:true}});
 // A picture or file pasted here goes to the terminal as its path (the page
 // keeps it, ConversationPage.vue), not to the chat's message box. Text
 // copied from an office document also carries a picture of itself: there the text is meant,
 // and xterm pastes it as before.
-const emit=defineEmits(['files']);
+// choose: in a split, the switch at the pane's right asks which tab to show in it (TerminalTabs.vue).
+const emit=defineEmits(['files','choose']);
 function pasteFiles(e){if(!props.acceptFiles)return;const data=e.clipboardData,list=Array.from(data?.files||[]);if(!list.length)return;const types=Array.from(data.types||[]);if(types.includes('text/plain')&&(types.includes('text/html')||types.includes('text/rtf')))return;e.preventDefault();e.stopPropagation();emit('files',list);}
 // Text typed at Claude's prompt as a paste (bracketed when Claude asked for it, as a desktop
 // terminal pastes a dropped file's path), never with Enter. False when the line is not open.
@@ -199,6 +200,9 @@ onUnmounted(()=>{disposed=true;keyboardWatch?.disconnect();host.value?.removeEve
 .terminal-label {flex:0 0 auto;font-weight:600;color:rgba(255,255,255,.85);}
 .terminal-path {min-width:0;overflow:hidden;text-overflow:ellipsis;font-family:Menlo,monospace;font-size:12px;}
 .terminal-bar.focused .terminal-label {color:#fff;}
+/* At the pane's right, a switch for the tab it shows. */
+.terminal-choose {flex:0 0 auto;margin-left:auto;width:auto;min-width:0;height:auto;padding:0 2px;color:inherit;}
+.terminal-choose :deep(.icon) {font-size:15px;}
 .terminal-reattach {flex:0 0 auto;width:auto;min-width:0;height:auto;padding:0;color:inherit;}
 .terminal-reattach :deep(.icon) {font-size:14px;}
 /* The rows fill the height in whole lines; what is left under the last one takes
