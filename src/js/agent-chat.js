@@ -66,6 +66,7 @@ const preferenceThreshold=agentPreferences.compactThreshold;
 // can hold a thousand turns, and rendering them all made the page slow to open.
 const MESSAGE_PAGE=10;
 const MESSAGE_WINDOW_MAX=200;
+const JUMP_WINDOW=30;
 const olderBusy=ref(false),foundMessage=ref(null),jumping=ref(false),searchOpen=ref(false),searchText=ref('');
 const atBottom=ref(true);
 // History that arrives above the reader must not play the arrival animation: ten
@@ -298,12 +299,31 @@ const checklistPopupOpen=computed(()=>checklistOpen.value&&!checklistPanelVisibl
 const usageOpen=ref(false);
 const usagePanelVisible=computed(()=>usageOpen.value&&wideScreen.value&&!terminalOpen.value&&!!detail.value);
 const usagePopupOpen=computed(()=>usageOpen.value&&!usagePanelVisible.value&&!!detail.value);
+// The conversation's files: every file sent either way, in
+// the same right column on a desktop width, a popup on a phone or beside the terminal, one
+// panel in the column at a time as the checklists are.
+const filesOpen=ref(false);
+const filesPanelVisible=computed(()=>filesOpen.value&&wideScreen.value&&!terminalOpen.value&&!!detail.value);
+const filesPopupOpen=computed(()=>filesOpen.value&&!filesPanelVisible.value&&!!detail.value);
 watch(checklistPanelVisible,open=>{if(!open)return;profilePanelOpen.value=false;searchOpen.value=false;usageOpen.value=false;if(inspectorOpen.value){inspectorOpen.value=false;clearInspection();}});
-watch(()=>[profilePanelOpen.value,searchPanelVisible.value,inspectorOpen.value,usagePanelVisible.value],([p,s,i,u])=>{if((p||s||i||u)&&wideScreen.value)checklistOpen.value=false;});
+watch(()=>[profilePanelOpen.value,searchPanelVisible.value,inspectorOpen.value,usagePanelVisible.value,filesPanelVisible.value],([p,s,i,u,f])=>{if((p||s||i||u||f)&&wideScreen.value)checklistOpen.value=false;});
 async function toggleChecklist(){if(!checklistOpen.value&&profilePanelVisible.value&&!(await mayCloseProfile()))return;checklistOpen.value=!checklistOpen.value;}
 watch(usagePanelVisible,open=>{if(!open)return;profilePanelOpen.value=false;searchOpen.value=false;checklistOpen.value=false;if(inspectorOpen.value){inspectorOpen.value=false;clearInspection();}});
-watch(()=>[profilePanelOpen.value,searchPanelVisible.value,inspectorOpen.value,checklistPanelVisible.value],([p,s,i,k])=>{if((p||s||i||k)&&wideScreen.value)usageOpen.value=false;});
+watch(()=>[profilePanelOpen.value,searchPanelVisible.value,inspectorOpen.value,checklistPanelVisible.value,filesPanelVisible.value],([p,s,i,k,f])=>{if((p||s||i||k||f)&&wideScreen.value)usageOpen.value=false;});
 async function toggleUsage(){if(!usageOpen.value&&profilePanelVisible.value&&!(await mayCloseProfile()))return;usageOpen.value=!usageOpen.value;}
+watch(filesPanelVisible,open=>{if(!open)return;profilePanelOpen.value=false;searchOpen.value=false;checklistOpen.value=false;usageOpen.value=false;if(inspectorOpen.value){inspectorOpen.value=false;clearInspection();}});
+watch(()=>[profilePanelOpen.value,searchPanelVisible.value,inspectorOpen.value,checklistPanelVisible.value,usagePanelVisible.value],([p,s,i,k,u])=>{if((p||s||i||k||u)&&wideScreen.value)filesOpen.value=false;});
+async function toggleFiles(){if(!filesOpen.value&&profilePanelVisible.value&&!(await mayCloseProfile()))return;filesOpen.value=!filesOpen.value;}
+// A file's bubble, from that list. On a phone the sheet is closed first and the jump waits
+// for it to be gone: a jump under a sheet still pushing the page back took an iPhone's page
+// down with it.
+async function showFile(file){if(!file?.messageId||!detail.value)return false;if(!filesPanelVisible.value){filesOpen.value=false;await new Promise(resolve=>setTimeout(resolve,450));}if(!detail.value)return false;return showMessage(detail.value.id,file.messageId);}
+// A file deleted from that list is marked in the bubbles already shown too, older pages
+// included, which the next poll's window would not reach.
+function markFileRemoved(fileId,removedAt){
+ const d=detail.value;if(!d?.messages?.some(m=>m.attachments?.some(f=>f.id===fileId)))return;
+ detail.value={...d,messages:d.messages.map(m=>m.attachments?.some(f=>f.id===fileId)?{...m,attachments:m.attachments.map(f=>f.id===fileId?{id:f.id,name:f.name,size:f.size,removed:true,removedAt}:f)}:m)};
+}
 // The usage view's refresh button: the agent asked again, and the plan's limits asked of
 // Anthropic again (the server still asks at most every five minutes).
 const usageRefreshing=ref(false);
@@ -555,7 +575,9 @@ function keepRows(local,fresh){const byId=new Map(fresh.map(c=>[c.id,c]));return
 // Avoid redrawing unchanged conversations on each poll.
 function reuseRows(prev,fresh){const byId=new Map(prev.map(c=>[c.id,c])),next=fresh.map(c=>{const old=byId.get(c.id);return old&&JSON.stringify(old)===JSON.stringify(c)?old:c;});return next.length===prev.length&&next.every((c,i)=>c===prev[i])?prev:next;}
 // The list's groups are fetched with it, so a group made on another device shows up here too.
-async function refresh(){if(!user.value)return;const owner=user.value.id;const [list,groups]=await Promise.all([api('/conversations'),api('/agent-list').catch(()=>null)]);if(user.value?.id!==owner)return;if(!orderBusy.value){if(groups)agentPreferences.absorbList(groups);const nextRows=reuseRows(conversations.value,editMode.value?keepRows(conversations.value,list.conversations):list.conversations);if(nextRows!==conversations.value)conversations.value=nextRows;listLoaded.value=true;}if(selected.value){const id=selected.value;const d=await api('/conversations/'+id+'?limit='+windowSize()+(conversationOnScreen()?'&viewing=1':''));if(user.value?.id===owner&&selected.value===id){
+async function refresh(){if(!user.value)return;const owner=user.value.id;const [list,groups]=await Promise.all([api('/conversations'),api('/agent-list').catch(()=>null)]);if(user.value?.id!==owner)return;if(!orderBusy.value){if(groups)agentPreferences.absorbList(groups);const nextRows=reuseRows(conversations.value,editMode.value?keepRows(conversations.value,list.conversations):list.conversations);if(nextRows!==conversations.value)conversations.value=nextRows;listLoaded.value=true;}if(selected.value){const id=selected.value;const detached=!!detail.value?.hasNewer;const d=await api('/conversations/'+id+'?limit='+(detached?MESSAGE_PAGE:windowSize())+(conversationOnScreen()?'&viewing=1':''));if(user.value?.id===owner&&selected.value===id){
+ // A window opened by a jump stays as it is: the newest page does not join onto it.
+ if(detached&&detail.value?.hasNewer){const next={...d,messages:detail.value.messages,hasOlder:detail.value.hasOlder,hasNewer:true};if(JSON.stringify(next)!==JSON.stringify(detail.value))detail.value=next;return;}
  const merged=mergeMessages(detail.value?.messages,d.messages||[]);
  const changed=merged.at(-1)?.id!==detail.value?.messages?.at(-1)?.id||merged.length!==detail.value?.messages?.length;
  const next={...d,messages:merged,hasOlder:merged.length>(d.messages||[]).length?(detail.value?.hasOlder??d.hasOlder):d.hasOlder};
@@ -728,9 +750,24 @@ function onMessagesScroll(event){
  if(terminalOpen.value&&!terminalSide.value)return;
  if(box===scroll.value&&sizeOf(box)!==boxSize){boxResized();return;}
  atBottom.value=box.scrollHeight-box.scrollTop-box.clientHeight<80;
+ if(detail.value?.hasNewer){atBottom.value=false;if(!newerBusy&&!pagingBack.value&&box.scrollHeight-box.scrollTop-box.clientHeight<400)loadNewer();}
  // Start loading before the reader reaches the top, so a prepend during a phone's momentum scroll does not jump.
  // The anchor correction itself moves the container over two layout frames, so further loads are held off throughout.
  if(!pagingBack.value&&!olderBusy.value&&!noVerticalOverflow(box)&&box.scrollTop<400)loadOlder();
+}
+// The page below a window opened by a jump; bubbles added below do not move the view.
+let newerBusy=false;
+async function loadNewer(){
+ const id=selected.value,last=detail.value?.messages?.at(-1)?.id;
+ if(newerBusy||!id||!last||!detail.value?.hasNewer)return;
+ newerBusy=true;
+ try{
+  const page=await api('/conversations/'+id+'?after='+encodeURIComponent(last)+'&limit='+JUMP_WINDOW);
+  if(selected.value!==id||detail.value?.messages?.at(-1)?.id!==last)return;
+  const known=new Set(detail.value.messages.map(m=>m.id));
+  detail.value={...detail.value,messages:[...detail.value.messages,...(page.messages||[]).filter(m=>!known.has(m.id))],hasNewer:!!page.hasNewer};
+ }catch(e){error.value=e.message;}
+ finally{newerBusy=false;}
 }
 // Back to the newest bubbles, whatever was loaded above them.
 async function toLatest(){
@@ -768,12 +805,15 @@ async function jumpTo(conversationId,messageId){
  for(let n=0;n<100&&olderBusy.value;n++)await new Promise(resolve=>setTimeout(resolve,50));
  olderBusy.value=true;pagingBack.value=true;
  try{
-  for(let n=0;n<50&&detail.value?.hasOlder&&!detail.value.messages.some(m=>m.id===messageId);n++){
-   const first=detail.value.messages[0]?.id;if(!first)break;
-   const page=await attempt(()=>api('/conversations/'+id+'?before='+encodeURIComponent(first)+'&limit='+MESSAGE_WINDOW_MAX));
+  // A message not loaded opens a window around it, apart from the newest: bringing in
+  // every page down to it put thousands of bubbles on an iPhone after a few jumps and
+  // the page crashed. Scrolling down that window
+  // loads the pages below it (loadNewer); sending or 回到最新 goes back to the newest.
+  if(!detail.value.messages.some(m=>m.id===messageId)){
+   const page=await attempt(()=>api('/conversations/'+id+'?around='+encodeURIComponent(messageId)+'&limit='+JUMP_WINDOW));
    if(!page||selected.value!==id||!detail.value)return false;
-   const known=new Set(detail.value.messages.map(m=>m.id));
-   detail.value={...detail.value,messages:[...(page.messages||[]).filter(m=>!known.has(m.id)),...detail.value.messages],hasOlder:page.hasOlder};
+   if(!(page.messages||[]).some(m=>m.id===messageId))return false;
+   detail.value={...detail.value,messages:page.messages,hasOlder:page.hasOlder,hasNewer:page.hasNewer};
   }
   // On a phone the page may still be sliding in, its bubbles not drawn yet.
   let box=null,el=null;
@@ -953,7 +993,7 @@ async function runSlashCommand(id,text){
  busy.value=false;
 }
 function composerKeydown(e){if(slash.onKeydown(e,send))return;if(mention.onKeydown(e,mentionCaret))return;if(e.key==='Enter'&&!e.shiftKey&&!e.altKey&&!e.ctrlKey&&!e.metaKey)enterSend(e);}
-async function send(){if(!canSend.value)return;if(!files.value.length&&user.value?.role==='admin'&&detail.value?.mode==='claude'&&await slash.resolveTerminal(draft.value))return runSlashCommand(selected.value,draft.value);const id=selected.value,text=draft.value,items=[...files.value],requestId=attachmentDrafts.requestId(id,text,items),quote=replyDraft.value;busy.value=true;attachmentDrafts.begin(id);await attempt(async()=>{const attachmentIds=await attachmentDrafts.upload(id,items);await api('/conversations/'+id+'/messages',{method:'POST',body:JSON.stringify({text,requestId,attachmentIds,mentions:mention.current.value.map(m=>m.id),...(quote?{replyTo:quote.id}:{})})});attachmentDrafts.sent(id,items);if(replyDraft.value===quote)replyDraft.value=null;if(drafts.get(id)===text)drafts.delete(id);if(selected.value===id&&draft.value===text)draft.value='';await refresh();await bottom();});attachmentDrafts.end(id);busy.value=false;}
+async function send(){if(!canSend.value)return;if(!files.value.length&&user.value?.role==='admin'&&detail.value?.mode==='claude'&&await slash.resolveTerminal(draft.value))return runSlashCommand(selected.value,draft.value);const id=selected.value,text=draft.value,items=[...files.value],requestId=attachmentDrafts.requestId(id,text,items),quote=replyDraft.value;busy.value=true;attachmentDrafts.begin(id);await attempt(async()=>{const attachmentIds=await attachmentDrafts.upload(id,items);await api('/conversations/'+id+'/messages',{method:'POST',body:JSON.stringify({text,requestId,attachmentIds,mentions:mention.current.value.map(m=>m.id),...(quote?{replyTo:quote.id}:{})})});attachmentDrafts.sent(id,items);if(replyDraft.value===quote)replyDraft.value=null;if(drafts.get(id)===text)drafts.delete(id);if(selected.value===id&&draft.value===text)draft.value='';if(detail.value?.hasNewer)await toLatest();else{await refresh();await bottom();}});attachmentDrafts.end(id);busy.value=false;}
 
 function enterSend(e){if(!shouldSendOnEnter(e,f7.device))return;e.preventDefault();send();}
 async function action(name,body={}){
@@ -1070,7 +1110,7 @@ async function saveProfile({ask=true,retried=false,back=true}={}){
 async function latestProfile(id){
  const d=await attempt(()=>api('/conversations/'+encodeURIComponent(id)));
  if(!d||selected.value!==id)return null;
- detail.value={...detail.value,...d,messages:detail.value?.messages||d.messages,hasOlder:detail.value?.hasOlder};
+ detail.value={...detail.value,...d,messages:detail.value?.messages||d.messages,hasOlder:detail.value?.hasOlder,hasNewer:detail.value?.hasNewer};
  return agentOperation.profileDraftOf(detail.value);
 }
 // An operation with unsaved profile changes: save first, drop them, or not go on.
@@ -1189,6 +1229,6 @@ onMounted(()=>{
  poll=setInterval(tick,1200);});
 onUnmounted(()=>{boxWatch?.disconnect();document.removeEventListener('keydown',onEscape);document.removeEventListener('keydown',onFind);window.removeEventListener('popstate',restoreUrl);notifications.stop();document.removeEventListener('visibilitychange',onAppVisible);window.removeEventListener('focus',onAppFocus);unwatchWidth?.();disposed=true;cancelHistoryPaging();operations.value={};clearInterval(poll);live?.close();live=null;wakeRun++;});
 
-return {resetTerminalWidth,isPinned,chosenPinned,togglePins,togglePin,pinBusy,editRowTap,handToAgent,replyDraft,startReply,cancelReply,unreadOf,unreadLabel,unreadTotal,markAllRead,markingAllRead,mixedList:computed(mixed),chosenByPresence,chooseByPresence,atStart,directOpening,toGroups,openingId,toList,cancelOpening,toggleGroupCollapse,openGroup,mention,pickMention,checklistOpen,checklistPanelVisible,checklistPopupOpen,toggleChecklist,usageOpen,usagePanelVisible,usagePopupOpen,toggleUsage,usageRefreshing,refreshUsage,openAutoCompactChoice,typingBubble,searchPanelVisible,searchPopupOpen,toggleSearch,enterConversation,searchOpen,searchText,foundMessage,searchMessages,showMessage,noteInBubble,pauseAgent,startAgent,allChosen,toggleAllChosen,slash,composerKeydown,chosenList,isChosen,toggleChosen,groupChosen,toggleGroupChosen,terminalSide,chatHidden,terminalWidthCss,startTerminalResize,moveGroups,listRows,sections,listGroups,listSources,listSource,chooseSource,addGroup,editingGroup,startGroupRename,cancelGroupRename,finishGroupRename,deleteGroup,uploadAvatar,resetAvatar,autoSort:agentPreferences.autoSort,backgroundProgress,agentAvatar,presence,embedded,recoverOrphanedConversation,activity,progressInBubble,progressInBar,showViewSwitch,showTerminalSwitch,showSubnavbar,olderBusy,pagingBack,atBottom,loadOlder,onMessagesScroll,onHistoryWheel,onHistoryTouchStart,onHistoryTouchMove,onHistoryTouchEnd,onHistoryTouchCancel,toLatest,
+return {filesOpen,filesPanelVisible,filesPopupOpen,toggleFiles,showFile,markFileRemoved,resetTerminalWidth,isPinned,chosenPinned,togglePins,togglePin,pinBusy,editRowTap,handToAgent,replyDraft,startReply,cancelReply,unreadOf,unreadLabel,unreadTotal,markAllRead,markingAllRead,mixedList:computed(mixed),chosenByPresence,chooseByPresence,atStart,directOpening,toGroups,openingId,toList,cancelOpening,toggleGroupCollapse,openGroup,mention,pickMention,checklistOpen,checklistPanelVisible,checklistPopupOpen,toggleChecklist,usageOpen,usagePanelVisible,usagePopupOpen,toggleUsage,usageRefreshing,refreshUsage,openAutoCompactChoice,typingBubble,searchPanelVisible,searchPopupOpen,toggleSearch,enterConversation,searchOpen,searchText,foundMessage,searchMessages,showMessage,noteInBubble,pauseAgent,startAgent,allChosen,toggleAllChosen,slash,composerKeydown,chosenList,isChosen,toggleChosen,groupChosen,toggleGroupChosen,terminalSide,chatHidden,terminalWidthCss,startTerminalResize,moveGroups,listRows,sections,listGroups,listSources,listSource,chooseSource,addGroup,editingGroup,startGroupRename,cancelGroupRename,finishGroupRename,deleteGroup,uploadAvatar,resetAvatar,autoSort:agentPreferences.autoSort,backgroundProgress,agentAvatar,presence,embedded,recoverOrphanedConversation,activity,progressInBubble,progressInBar,showViewSwitch,showTerminalSwitch,showSubnavbar,olderBusy,pagingBack,atBottom,loadOlder,onMessagesScroll,onHistoryWheel,onHistoryTouchStart,onHistoryTouchMove,onHistoryTouchEnd,onHistoryTouchCancel,toLatest,
  inspectorOpen,inspectorVisible,showInspectorButton,profilePanelOpen,profilePanelVisible,openProfile,wideScreen,inspectId,inspectData,inspectBusy,inspectError,inspect,toggleInspector,clearInspection,agentLocked,agentOperationTitle,agentOperationSteps,agentOperationPercent,agentOperationError,newProfile,profileDraft,profileSaving,saveProfile,profileDirty,closeProfile,guardOperation,syncProfileVersion,profileConflicts,files,fileInput,pickFiles,dropFiles,pasteFiles,removeFile,chooseFiles,previewDraft,sendStatus,ct,generation,user,busy,error,theme,menuConversation,menuPoint,preferenceThreshold,editMode,orderBusy,toggleEdit,bulkBusy,pauseEveryAgent,startEveryAgent,restartEveryAgent,reorderChats,onChatsIn,terminalOpen,conversations,selected,detail,search,draft,scroll,newOpen,infoOpen,newTitle,memoryDraft,filtered,statusLabel,awaitingReply,canSend,conversationMenu,renameConversation,deleteConversation,savePreferences,wakingId,waking,wakeError,closeNew,openNewChat,create,select,bottom,send,enterSend,action,interrupting,canInterrupt,interruptTurn,pause,restart,handoff,importHistory,saveMemory,time,renderMarkdown,renderTypedMarkdown};
 }

@@ -28,15 +28,15 @@ export const checklistRetentionDays = ref(null);
 export const wrapUp = ref({enabled: false, minutes: 10, text: '', custom: false});
 // The conversation page's buttons on a computer and a split cell's header, in the order an
 // admin set on the Admin page; everyone reads it.
-export const NAV_KEYS = ['usage', 'checklist', 'search', 'terminal', 'transcript', 'profile'];
+export const NAV_KEYS = ['usage', 'checklist', 'files', 'search', 'terminal', 'transcript', 'profile'];
 export const navOrder = ref([...NAV_KEYS]);
 const takeNavOrder = (v) => { if (!Array.isArray(v)) return; const next = [...new Set([...v.filter((k) => NAV_KEYS.includes(k)), ...NAV_KEYS])]; if (JSON.stringify(next) !== JSON.stringify(navOrder.value)) navOrder.value = next; };
-// A button's place in that order, for its CSS order: 1 to 7.
+// A button's place in that order, for its CSS order: 1 to 8.
 export const navPlace = (key) => navOrder.value.indexOf(key) + 1;
 // How many buttons a phone shows at the top right, 「⋯」 included: 1 to 3, 2 by default.
 export const phoneNavCount = ref(2);
 // A phone's own order: no Transcript there, the terminal first by default.
-export const PHONE_KEYS = ['terminal', 'checklist', 'usage', 'search', 'profile'];
+export const PHONE_KEYS = ['terminal', 'checklist', 'usage', 'search', 'files', 'profile'];
 export const phoneNavOrder = ref([...PHONE_KEYS]);
 const takePhoneOrder = (v) => { if (!Array.isArray(v)) return; const next = [...new Set([...v.filter((k) => PHONE_KEYS.includes(k)), ...PHONE_KEYS])]; if (JSON.stringify(next) !== JSON.stringify(phoneNavOrder.value)) phoneNavOrder.value = next; };
 const takePhoneCount = (v) => { if ([1, 2, 3].includes(v) && v !== phoneNavCount.value) phoneNavCount.value = v; };

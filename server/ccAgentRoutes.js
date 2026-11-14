@@ -228,14 +228,15 @@ app.post('/api/conversations/search',(req,res,next)=>{try{
 app.post('/api/conversations/read-all',(req,res,next)=>{try{res.json(agents.markAllRead(req.userId));}catch(e){next(e);}});
 app.post('/api/conversations/reorder',(req,res,next)=>{try{res.json({conversations:agents.reorder(req.userId,req.body.ids,req.body.groups)});}catch(e){next(e);}});
 // ?limit= and ?before= page the bubbles: the newest ones on open, older ones when
-// the reader scrolls back.
+// the reader scrolls back; ?around= opens a window at one message, ?after= the page below it.
 app.get('/api/conversations/:id',(req,res,next)=>{try{
  const limit=req.query.limit===undefined?undefined:Number(req.query.limit);
  if(limit!==undefined&&!Number.isInteger(limit))throw agents.error('limit 必須是整數',400);
- const before=typeof req.query.before==='string'&&req.query.before?req.query.before:undefined;
+ const id=name=>typeof req.query[name]==='string'&&req.query[name]?req.query[name]:undefined;
+ const before=id('before'),around=id('around'),after=id('after');
  const c=agents.get(req.params.id,req.userId);
  if(req.query.viewing==='1')agents.markViewing(req.userId,c.id);
- res.json(agents.publicView(c,true,{limit,before}));
+ res.json(agents.publicView(c,true,{limit,before,around,after}));
 }catch(e){next(e);}});
 // The raw model input and output behind one bubble. Two gates, both server-side:
 // the role comes from the verified live principal, and get() still requires the
@@ -254,7 +255,28 @@ app.get('/api/conversations/:id/subagents',(req,res,next)=>{try{
 }catch(e){next(e);}});
 const own=(req,res,next)=>{try{req.conversation=agents.get(req.params.id,req.userId);next();}catch(e){next(e);}};
 app.post('/api/conversations/:id/attachments',own,express.raw({type:()=>true,limit:attachments.MAX_BYTES}),(req,res,next)=>{try{res.status(201).json(attachments.put(agents.stateRoot,req.conversation,req.query.name,req.body));}catch(e){next(e);}});
-app.get('/api/conversations/:id/attachments/:fileId',own,(req,res,next)=>{try{const file=attachments.location(agents.stateRoot,req.conversation,req.params.fileId);res.set('Cache-Control','private, no-store');res.set('Content-Type','application/octet-stream');res.download(file.path,file.meta.name);}catch(e){next(e);}});
+// A video asked for as one (?as=video, the file list's preview) is served as its kind,
+// inline and in ranges, so a phone draws its first frame; an iPhone draws nothing for
+// application/octet-stream. Only the video kinds; nosniff keeps it from being read as
+// anything else. Every other request is the download it always was.
+const VIDEO_TYPES={'.mp4':'video/mp4','.m4v':'video/mp4','.mov':'video/quicktime','.webm':'video/webm'};
+app.get('/api/conversations/:id/attachments/:fileId',own,(req,res,next)=>{try{const file=attachments.location(agents.stateRoot,req.conversation,req.params.fileId);res.set('Cache-Control','private, no-store');
+ const kind=req.query.as==='video'&&VIDEO_TYPES[require('node:path').extname(String(file.meta.name||'')).toLowerCase()];
+ if(kind){res.set('X-Content-Type-Options','nosniff');res.set('Content-Disposition','inline');return res.sendFile(file.path,{headers:{'Content-Type':kind}});}
+ res.set('Content-Type','application/octet-stream');res.download(file.path,file.meta.name);}catch(e){next(e);}});
+// A small still of a sent picture or video for the file list (fileThumbs.js): made once
+// and kept, so the browser may keep it too. Only a file a message holds and the list shows;
+// none to give is a 404 and the list shows the icon.
+const fileThumbs=require('./fileThumbs').create();
+app.get('/api/conversations/:id/attachments/:fileId/thumb',own,async(req,res,next)=>{try{
+ const c=req.conversation,fileId=req.params.fileId;
+ if(!c.messages.some(m=>(m.attachments||[]).some(a=>a.id===fileId&&a.removed!==true)))throw agents.error('Attachment not found',404);
+ const file=attachments.location(agents.stateRoot,c,fileId);
+ const out=await fileThumbs.still({dir:attachments.directory(agents.stateRoot,c),id:fileId,name:file.meta.name,source:file.path});
+ if(!out)throw agents.error('No preview',404);
+ res.set('Cache-Control','private, max-age=604800');res.set('X-Content-Type-Options','nosniff');
+ res.sendFile(out,{headers:{'Content-Type':'image/jpeg'}});
+}catch(e){next(e);}});
 // An .html attachment shown as the page it is, inside the preview's frame (one self-contained file). The page is
 // someone's or an agent's own HTML, so it is served as a document with no origin: the
 // sandbox header (no allow-same-origin) takes away this site's cookies, storage and
@@ -285,6 +307,16 @@ app.get('/api/conversations/:id/attachments/:fileId/page',own,(req,res,next)=>{t
 // and only where the agent can read it (agentStore.attachTerminalFile). A POST, since it marks
 // the file (the origin and CSRF checks apply).
 app.post('/api/conversations/:id/attachments/:fileId/terminal-path',own,(req,res,next)=>{try{if(req.role!=='admin')throw agents.error('Admin only',403);res.set('Cache-Control','private, no-store');res.json(agents.attachTerminalFile(req.conversation,req.params.fileId));}catch(e){next(e);}});
+// The conversation's file list (agentStore.conversationFiles):
+// whoever owns the conversation sees it. Deleting a sent file is for good, so it is an admin's,
+// as deleting an agent is ('archive' below); a member keeps removing only unsent drafts.
+app.get('/api/conversations/:id/files',own,(req,res,next)=>{try{res.set('Cache-Control','private, no-store');res.json({files:agents.conversationFiles(req.conversation)});}catch(e){next(e);}});
+app.delete('/api/conversations/:id/files/:fileId',own,(req,res,next)=>{try{
+ if(req.role!=='admin')throw agents.error('檔案由管理員刪除。',403);
+ const r=agents.removeSentFile(req.conversation,req.params.fileId);
+ try{require('./services/audit').audit({action:'conversation-file-delete',by:req.userId,agent:req.conversation.id,file:r.id,name:r.name,size:r.size,already:r.already});}catch(e){console.error('file delete audit:',e.message);}
+ res.json({ok:true,file:r});
+}catch(e){next(e);}});
 app.delete('/api/conversations/:id/attachments/:fileId',own,(req,res,next)=>{try{attachments.remove(agents.stateRoot,req.conversation,req.params.fileId);res.json({ok:true});}catch(e){next(e);}});
 // An agent's picture: whoever can open the agent sees it, only an admin changes it. The address carries a version, so it is kept.
 app.get('/api/conversations/:id/avatar',own,(req,res,next)=>{try{const file=agents.avatarLocation(req.conversation);res.set('Cache-Control','private, max-age=31536000, immutable');res.set('X-Content-Type-Options','nosniff');res.type(file.type);res.sendFile(file.path);}catch(e){next(e);}});

@@ -37,6 +37,11 @@
    <f7-navbar><f7-nav-left><f7-link popup-close icon-only icon-f7="xmark" :aria-label="ct('關閉待辦事項')"/></f7-nav-left><f7-nav-title>{{ct('待辦事項')}}</f7-nav-title><f7-nav-right><f7-link icon-only icon-f7="plus" class="checklist-new" :aria-label="ct('新增清單')" @click="newChecklist"/></f7-nav-right></f7-navbar>
    <ChecklistPanel v-if="checklistPopupOpen" :key="selected" start-at-end/>
   </f7-page></f7-view></f7-popup>
+<!-- The conversation's files on a phone or beside the terminal. -->
+  <f7-popup :opened="filesPopupOpen" :swipe-to-close="sheetSwipe" :push="sheetSwipe" @popup:closed="filesPopupOpen&&(filesOpen=false)" class="files-popup" :class="{'sheet-swipe':sheetSwipe}"><div v-if="sheetSwipe" class="sheet-grabber" aria-hidden="true"/><f7-view><f7-page>
+   <f7-navbar><f7-nav-left><f7-link popup-close icon-only icon-f7="xmark" :aria-label="ct('關閉檔案清單')"/></f7-nav-left><f7-nav-title>{{ct('檔案清單')}}</f7-nav-title></f7-navbar>
+   <FilesPanel v-if="filesPopupOpen" :key="selected"/>
+  </f7-page></f7-view></f7-popup>
 <!-- How full the context is, from the phone's 「⋯」 menu or beside the terminal; the right
        column on a desktop. -->
   <f7-popup :opened="usagePopupOpen" :swipe-to-close="sheetSwipe" :push="sheetSwipe" @popup:closed="usagePopupOpen&&(usageOpen=false)" class="usage-popup" :class="{'sheet-swipe':sheetSwipe}"><div v-if="sheetSwipe" class="sheet-grabber" aria-hidden="true"/><f7-view><f7-page>
@@ -52,9 +57,10 @@ import {scopedAgents} from "../js/agentPreferences.js";
 import AgentProfilePanel from "./AgentProfilePanel.vue";
 import MessageSearchResults from "./MessageSearchResults.vue";
 import ChecklistPanel,{askNewChecklist} from "./ChecklistPanel.vue";
+import FilesPanel from "./FilesPanel.vue";
 import ContextUsagePanel from "./ContextUsagePanel.vue";
 import {inject,computed,ref,watch,onBeforeUnmount} from "vue";import {f7} from "framework7-vue";import GlassDropdown from "./GlassDropdown.vue";import {parseAgentJson} from "../js/agentImport.js";import {ct} from "../js/agent-i18n.js";import {sheetSwipe,guardSheet} from "../js/sheetSwipe.js";
-export default {components:{GlassDropdown,AgentProfileFields,AgentProfilePanel,MessageSearchResults,ChecklistPanel,ContextUsagePanel},setup(){const w=inject("workspace");
+export default {components:{GlassDropdown,AgentProfileFields,AgentProfilePanel,MessageSearchResults,ChecklistPanel,FilesPanel,ContextUsagePanel},setup(){const w=inject("workspace");
  // Its items are fixed as it opens, so they stay as they were while it fades out after a choice.
  const rowMenuItems=ref([]);
  watch(()=>w.menuConversation.value,c=>{if(!c)return;const pinned=w.isPinned(c.id);

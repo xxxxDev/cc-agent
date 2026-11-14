@@ -56,8 +56,8 @@ const view = ref('phone');
 const countOpen = ref(false), countPoint = ref(null);
 const countItems = [1, 2, 3].map((n) => ({ value: String(n), label: String(n) }));
 function openCount(e) { countPoint.value = { clientX: e?.clientX ?? 0, clientY: e?.clientY ?? 0 }; countOpen.value = true; }
-const NAMES = { usage: '用量統計', extensions: '擴充功能', checklist: '待辦事項', search: '搜尋對話', terminal: 'Claude 終端機', transcript: 'Transcript 檢視', profile: 'Agent Profile' };
-const ICONS = { usage: 'gauge', checklist: 'checkmark_square', search: 'search', terminal: 'chevron_left_slash_chevron_right', transcript: 'ant', profile: 'info' };
+const NAMES = { usage: '用量統計', extensions: '擴充功能', checklist: '待辦事項', files: '檔案清單', search: '搜尋對話', terminal: 'Claude 終端機', transcript: 'Transcript 檢視', profile: 'Agent Profile' };
+const ICONS = { usage: 'gauge', checklist: 'checkmark_square', files: 'folder', search: 'search', terminal: 'chevron_left_slash_chevron_right', transcript: 'ant', profile: 'info' };
 const label = (key) => ct(NAMES[key] || key);
 const icon = (key) => ICONS[key] || 'circle';
 // With 「⋯」 among the count, the buttons shown are one fewer; all of them when they fit.

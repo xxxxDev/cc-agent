@@ -172,9 +172,20 @@ function byToken(id,token) {const c=state.conversations.find(c=>c.id===id);if(!c
 // a thousand turns; sending them all on every poll made the page slow to open.
 const MESSAGE_PAGE=10;
 const MESSAGE_PAGE_MAX=200;
-function messageWindow(c,{limit,before}={}) {
+function messageWindow(c,{limit,before,around,after}={}) {
  const all=c.messages||[];
  const size=Math.min(MESSAGE_PAGE_MAX,Math.max(1,Number.isInteger(limit)?limit:MESSAGE_PAGE));
+ // A window around one message (a jump from search or the file list), and the page
+ // after one (scrolling down such a window): a jump to an old message used to bring
+ // in every page between it and the newest, thousands of bubbles after a few jumps,
+ // and an iPhone's page crashed. An unknown id gets the newest window, as before= does.
+ const at=around||after?all.findIndex(m=>m.id===(around||after)):-1;
+ if(at>=0){
+  let start=around?Math.max(0,at-Math.floor(size/3)):at+1;
+  const end=Math.min(all.length,start+size);
+  if(around)start=Math.max(0,end-size);
+  return {messages:all.slice(start,end).map(withReports),hasOlder:start>0,hasNewer:end<all.length,messageTotal:all.length};
+ }
  let end=all.length;
  if(before){
   const at=all.findIndex(m=>m.id===before);
@@ -183,7 +194,7 @@ function messageWindow(c,{limit,before}={}) {
   if(at>=0)end=at;
  }
  const start=Math.max(0,end-size);
- return {messages:all.slice(start,end).map(withReports),hasOlder:start>0,messageTotal:all.length};
+ return {messages:all.slice(start,end).map(withReports),hasOlder:start>0,hasNewer:false,messageTotal:all.length};
 }
 // A scope-report card (reportCard) as it stands now: what became of each report, and the
 // agent's explanation or, without one, what it wrote just before.
@@ -333,13 +344,14 @@ function listPins(owner){const own=ownAgentIds(owner);const kept=state.agentSett
 // The order of the conversation page's buttons on a computer and of a split cell's header
 // set by an admin for everyone: a list of these keys. One
 // left out keeps its place after the named ones, in the default order; an unknown one is dropped.
-const NAV_KEYS=['usage','checklist','search','terminal','transcript','profile'];
+// files: the conversation's file list.
+const NAV_KEYS=['usage','checklist','files','search','terminal','transcript','profile'];
 function navOrder(){const saved=Array.isArray(state.agentSettings?.navOrder)?state.agentSettings.navOrder.filter(k=>NAV_KEYS.includes(k)):[];return [...new Set([...saved,...NAV_KEYS])];}
 // How many buttons a phone shows at the top right of a conversation, 「⋯」 included: 1 to 3,
 // 2 by default; the rest, in navOrder, are in 「⋯」.
 // A phone's own order, apart from a computer's: no
 // Transcript there; the terminal first by default, as a phone showed it before.
-const PHONE_KEYS=['terminal','checklist','usage','search','profile'];
+const PHONE_KEYS=['terminal','checklist','usage','search','files','profile'];
 function phoneNavOrder(){const saved=Array.isArray(state.agentSettings?.phoneNavOrder)?state.agentSettings.phoneNavOrder.filter(k=>PHONE_KEYS.includes(k)):[];return [...new Set([...saved,...PHONE_KEYS])];}
 const phoneNavCount=()=>[1,2,3].includes(state.agentSettings?.phoneNavCount)?state.agentSettings.phoneNavCount:2;
 function listPreferences(owner){return {autoSort:autoSort(owner),groups:listGroups(owner),pins:listPins(owner),navOrder:navOrder(),phoneNavOrder:phoneNavOrder(),phoneNavCount:phoneNavCount()};}
@@ -3092,6 +3104,47 @@ function mirrorTerminal(c){
 // picture is otherwise kept as a new one from the transcript's copy, within the store's
 // limits (attachments.put). Paths anywhere else are never read: only names in this
 // conversation's own folder, matched by their id.
+// The conversation's file list: every file on any of its messages, the owner's, the agent's
+// and the terminal's alike, newest first, with the bubble that carries it so the page can go
+// there. Names and sizes only, never the bytes.
+function conversationFiles(c){
+ const out=[],seen=new Set();
+ for(let i=c.messages.length-1;i>=0;i--){
+  const m=c.messages[i];
+  for(const f of m.attachments||[]){
+   if(!f||typeof f.id!=='string'||seen.has(f.id))continue;seen.add(f.id);
+   const from=m.external?'outside':m.peer?'peer':m.role==='user'?'you':'agent';
+   out.push({id:f.id,name:f.name,size:f.size,messageId:m.id,role:m.role,from,at:m.at||null,via:m.via||null,removed:f.removed===true,...(f.removedAt?{removedAt:f.removedAt}:{})});
+  }
+ }
+ return out;
+}
+// A sent file deleted for good from that list: its stored bytes and description go (attachments.removeSent), and every message that carried it keeps
+// only its name and size with removed set, so the bubble says it was deleted rather than
+// offering a link that no longer opens. A file no message holds is not this one's (404): an
+// unsent draft keeps attachments.remove. Deleting one already deleted answers as done.
+function removeSentFile(c,fileId){
+ if(typeof fileId!=='string'||!/^[-a-f0-9]{36}$/.test(fileId))throw error('找不到這個檔案',404);
+ if(c.archived)throw error('這個 Agent 已刪除',409);
+ const holders=c.messages.filter(m=>(m.attachments||[]).some(f=>f?.id===fileId));
+ if(!holders.length)throw error('找不到這個檔案',404);
+ const first=holders[0].attachments.find(f=>f.id===fileId);
+ const already=holders.every(m=>m.attachments.find(f=>f.id===fileId).removed===true);
+ const removedAt=first.removedAt||new Date().toISOString();
+ const mark=f=>f.id===fileId&&f.removed!==true?{id:f.id,name:f.name,size:f.size,removed:true,removedAt}:f;
+ // Marked and saved first, the bytes taken after (independent review): a save that
+ // fails leaves the file and its messages as they were; bytes that fail to go leave messages
+ // saying removed, and the same delete again takes them.
+ const before=holders.map(m=>m.attachments);
+ for(const m of holders)m.attachments=m.attachments.map(mark);
+ try{save(c);}catch(e){holders.forEach((m,i)=>{m.attachments=before[i];});throw e;}
+ // A group chat's copy of an agent's file points back here: marked too, so it is no dead link.
+ let groups=false;
+ for(const x of groupStore.list())for(const gm of x.messages||[])if(gm.attachmentsFrom===c.id&&(gm.attachments||[]).some(f=>f?.id===fileId&&f.removed!==true)){gm.attachments=gm.attachments.map(mark);groups=true;}
+ if(groups)try{groupStore.save();}catch(e){console.error(`group copies of a removed file: ${e.message}`);}
+ attachments.removeSent(stateRoot,c,fileId);
+ return {id:fileId,name:first.name,size:first.size,removed:true,removedAt,already};
+}
 // Words without the paths of the files shown as attachments, as a terminal typed them (quoted
 // or with backslash escapes); everything else as it was.
 function withoutPaths(text,files){
@@ -4155,7 +4208,7 @@ function reconcileGrants(){
  }
 }
 try{reconcileGrants();}catch(e){console.error('granted reports:',e.message);}
-module.exports={withoutPaths,shells,TERMINAL_KEEP_DAYS,attachTerminalFile,terminalFileAccess,mirrorTerminal,followSessionModel,diagnosticReports:diagnostics,pendingDiagnosticNotifications:()=>diagnostics.pending(),markDiagnosticsNotified:ids=>{diagnostics.markNotified(ids);},CHECKLIST_RETENTION_CHOICES,checklistRetentionDays,loginShutdown:signal=>claudeLogin.shutdown(signal),loginView:()=>claudeLogin.view(),loginStart:()=>claudeLogin.start(),loginCode:text=>claudeLogin.code(text),loginCancel,loginResend,loginFailed,loginProven,reviveSilentChannels,peerLinkDigest,peerExchange,peerKey,peerLink,peerConfig,peerWidens,setPeerConfig,peerDraft,peerView,relaunchMarked,tmuxSocket,subagentList,runLimitResumes,runWrapUps,setWrapUp,mentionsFor,commandInGroup,groupList,reorderGroups,groupFor,groupView,createGroup,updateGroup,removeGroup,updateGroupChecklist,sendToGroup,searchGroup,deliverGroups,chooseTerminalOption,updateChecklist:(c,data,by)=>{const r=checklists.apply(c,data,by);save(c);return r;},syncAllRelays,scopeSettled,syncRelays,scheduleCheckList,schedulesFor,addSchedule,approveSchedule,updateSchedule,removeSchedule,rejectSchedule,runSchedules,runScheduleNow,testSchedule,SCHEDULE_WAIT_MS,pendingScheduleNotifications,markScheduleNotified,searchMessages,runCommand,commandsFor,setThreshold,setSubagents,applyAgentSubagents,applySubagentDefault,subagentEnv,setAutoCompact,applyAgentAutoCompact,profileRestartNeeds,applyAgentRestart,applyAutoCompactDefault,autoCompactEnv,AUTO_COMPACT_PRESETS,listPreferences,setListPreferences,setAvatar,clearAvatar,avatarLocation,AVATAR_MAX_BYTES,clearFullAccessFor,pendingReportNotifications,markReportsNotified,markReportsQueuing,markReportsDelivered,archiveFor,setAccessFor,accessReports:()=>reports.list().map(reportView),accessReport:id=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(r);},resolvedFolder,decideReport,grantFromReport,dismissNotNeeded,dismissFormerlySelfResolved,grantAccess,reconcile,reconnect,purgeOwner,sweepRetention,stopAgentsOf,bridgeActions:()=>[...BRIDGE_ACTIONS],archivedList,restoreArchived,keepArchived,purgeArchived,archiveRetentionDays,RETENTION_MAX_DAYS,UNSENT_ATTACHMENT_HOURS,STALE_MS,STARTUP_SLOW_MS,STARTUP_LIMIT_MS,messageTranscript,importHistory,interrupt,markViewing,markAllRead,isViewing,attachableFolders,MESSAGE_PAGE,updateProfile,reorder,pendingNotifications,getPreferences,setPreferences,decidePermission,confirmWorkspace,confirmChannel,compact,stateRoot,create,get,list,publicView,launch,stop,send,rotate,bridge,byToken,active,save,error};
+module.exports={conversationFiles,removeSentFile,withoutPaths,shells,TERMINAL_KEEP_DAYS,attachTerminalFile,terminalFileAccess,mirrorTerminal,followSessionModel,diagnosticReports:diagnostics,pendingDiagnosticNotifications:()=>diagnostics.pending(),markDiagnosticsNotified:ids=>{diagnostics.markNotified(ids);},CHECKLIST_RETENTION_CHOICES,checklistRetentionDays,loginShutdown:signal=>claudeLogin.shutdown(signal),loginView:()=>claudeLogin.view(),loginStart:()=>claudeLogin.start(),loginCode:text=>claudeLogin.code(text),loginCancel,loginResend,loginFailed,loginProven,reviveSilentChannels,peerLinkDigest,peerExchange,peerKey,peerLink,peerConfig,peerWidens,setPeerConfig,peerDraft,peerView,relaunchMarked,tmuxSocket,subagentList,runLimitResumes,runWrapUps,setWrapUp,mentionsFor,commandInGroup,groupList,reorderGroups,groupFor,groupView,createGroup,updateGroup,removeGroup,updateGroupChecklist,sendToGroup,searchGroup,deliverGroups,chooseTerminalOption,updateChecklist:(c,data,by)=>{const r=checklists.apply(c,data,by);save(c);return r;},syncAllRelays,scopeSettled,syncRelays,scheduleCheckList,schedulesFor,addSchedule,approveSchedule,updateSchedule,removeSchedule,rejectSchedule,runSchedules,runScheduleNow,testSchedule,SCHEDULE_WAIT_MS,pendingScheduleNotifications,markScheduleNotified,searchMessages,runCommand,commandsFor,setThreshold,setSubagents,applyAgentSubagents,applySubagentDefault,subagentEnv,setAutoCompact,applyAgentAutoCompact,profileRestartNeeds,applyAgentRestart,applyAutoCompactDefault,autoCompactEnv,AUTO_COMPACT_PRESETS,listPreferences,setListPreferences,setAvatar,clearAvatar,avatarLocation,AVATAR_MAX_BYTES,clearFullAccessFor,pendingReportNotifications,markReportsNotified,markReportsQueuing,markReportsDelivered,archiveFor,setAccessFor,accessReports:()=>reports.list().map(reportView),accessReport:id=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(r);},resolvedFolder,decideReport,grantFromReport,dismissNotNeeded,dismissFormerlySelfResolved,grantAccess,reconcile,reconnect,purgeOwner,sweepRetention,stopAgentsOf,bridgeActions:()=>[...BRIDGE_ACTIONS],archivedList,restoreArchived,keepArchived,purgeArchived,archiveRetentionDays,RETENTION_MAX_DAYS,UNSENT_ATTACHMENT_HOURS,STALE_MS,STARTUP_SLOW_MS,STARTUP_LIMIT_MS,messageTranscript,importHistory,interrupt,markViewing,markAllRead,isViewing,attachableFolders,MESSAGE_PAGE,updateProfile,reorder,pendingNotifications,getPreferences,setPreferences,decidePermission,confirmWorkspace,confirmChannel,compact,stateRoot,create,get,list,publicView,launch,stop,send,rotate,bridge,byToken,active,save,error};
 
 // Account deletion checks the agents an account actually has running.
 module.exports.lifecycleInventory=async()=>({sources:[{provider:"claude",providerLabel:"Claude Code",ok:true}],schedules:state.conversations.filter(c=>!['stopped','error'].includes(active(c).phase)).map(c=>({id:c.id,ownerUserId:c.owner,provider:"claude",status:active(c).phase,running:active(c).phase==="busy"}))});

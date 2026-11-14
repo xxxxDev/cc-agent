@@ -254,6 +254,7 @@ const english = {
 "聊天室終端機切換":"Chat / terminal switch",
 "收起鍵盤":"Hide keyboard",
 "訊息或指令":"Message or command",
+"切換這格的分頁":"Switch this pane's tab",
 "拖曳調整聊天室與終端機寬度，按兩下恢復":"Drag to set the chat and terminal widths, double-click to reset",
 "拖曳調整大小，按兩下恢復":"Drag to resize, double-click to reset",
 "切換這格的分頁":"Switch this pane's tab",
@@ -1011,7 +1012,20 @@ const english = {
 "目前沒有進行中的回覆":"No reply is in progress",
 "只有 Claude Agent 可以中斷":"Only a Claude agent can be interrupted",
 "無法送出中斷，Claude 可能已離線，請重新連線":"Could not send the interrupt. Claude may be offline: reconnect",
-"Claude 正在處理，請等這一輪結束再執行指令。":"Claude is working. Wait for this turn to end before running a command."
+"Claude 正在處理，請等這一輪結束再執行指令。":"Claude is working. Wait for this turn to end before running a command.",
+// The conversation's file list.
+"檔案清單":"Files",
+"關閉檔案清單":"Close the file list",
+"已刪除":"Deleted",
+"刪除檔案":"Delete file",
+"刪除失敗":"Could not delete",
+"檔案由管理員刪除。":"Files are deleted by an admin.",
+"找不到這個檔案":"This file is gone",
+"到這則訊息":"Go to the message",
+"外部對話":"Outside chat",
+"已刪除的檔案：":"Deleted file: ",
+"這個對話還沒有檔案。你或 agent 傳的檔案都會列在這裡。":"No files in this conversation yet. Files you or the agent send are listed here.",
+"會永久刪除這個檔案，無法復原。對話裡的訊息會顯示它已刪除。":"This deletes the file for good and cannot be undone. Its message will show it was deleted."
 };
 // {product} in a text is the product's name (productConfig.js), so the account and
 // settings texts need no product name of their own.
