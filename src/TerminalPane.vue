@@ -1,4 +1,4 @@
-<template><section class="terminal-pane">
+<template><section class="terminal-pane" :style="bg?{'--terminal-bg':bg}:null">
  <!-- One slim line: the state, and right after it a small icon to attach again at any
       time, such as when the screen looks stuck. A full-width button took a band of
       the screen, and the note under the terminal is gone too. -->
@@ -15,6 +15,7 @@
 import {ct} from './js/agent-i18n.js';
 import {bindTerminalTouch} from './js/terminalTouch.js';
 import {retryDelay,strikesAfterLoss,WEBGL_RETRY_MS} from './js/terminalRetry.js';
+import {terminalTheme} from './js/terminalTheme.js';
 import {ref,onMounted,onUnmounted} from 'vue';
 import {Terminal} from '@xterm/xterm';import {FitAddon} from '@xterm/addon-fit';import '@xterm/xterm/css/xterm.css';
 // shell: one of the shells opened in the terminal page's tabs, by number; none is Claude's own.
@@ -32,7 +33,7 @@ function focus(){term?.focus();}
 defineExpose({paste,focus});
 const KEYS=[{label:'Esc',name:'Esc',seq:'\x1b'},{label:'Tab',name:'Tab',seq:'\t'},{label:'⇧Tab',name:'Shift+Tab',seq:'\x1b[Z'},{label:'↑',name:'Up',seq:'\x1b[A'},{label:'↓',name:'Down',seq:'\x1b[B'},{label:'←',name:'Left',seq:'\x1b[D'},{label:'→',name:'Right',seq:'\x1b[C'},{label:'^C',name:'Ctrl+C',seq:'\x03'}];
 const touch=typeof matchMedia==='function'&&matchMedia('(pointer: coarse)').matches;
-function press(seq){if(ws?.readyState===1)ws.send(JSON.stringify({type:'input',data:seq}));}const host=ref(null),status=ref('正在附接終端…');let term,fit,ws,observer,cleanupTouch,disposed=false;
+function press(seq){if(ws?.readyState===1)ws.send(JSON.stringify({type:'input',data:seq}));}const host=ref(null),status=ref('正在附接終端…'),bg=ref('');let term,fit,ws,observer,cleanupTouch,disposed=false;
 // The view follows every change of size at once, and Claude is told the new size
 // once it settles: a divider dragged across the screen would otherwise make Claude
 // redraw its whole screen for every step of the drag.
@@ -94,7 +95,9 @@ async function loadWebgl(){
   const addon=new WebglAddon();webgl=addon;addon.onContextLoss(()=>{if(webgl!==addon)return;webgl=null;webglAttempts=strikesAfterLoss(webglAttempts,Date.now()-webglSince);try{addon.dispose();}catch{}scheduleWebgl();});term.loadAddon(addon);webglSince=Date.now();
  }catch{const addon=webgl;webgl=null;try{addon?.dispose();}catch{}if(webglAttempts<3)scheduleWebgl();}finally{webglLoading=false;}
 }
-onMounted(()=>{term=new Terminal({cursorBlink:true,fontSize:13,fontFamily:'Menlo, monospace',scrollback:5000,theme:{background:'#121212',foreground:'#ececec'},allowProposedApi:false});fit=new FitAddon();term.loadAddon(fit);term.open(host.value);
+// The computer's own terminal colours and size once they are known (js/terminalTheme.js).
+function applyTheme(t){if(disposed||!term||!t?.theme)return;term.options.theme={...term.options.theme,...t.theme};if(t.fontSize)term.options.fontSize=t.fontSize;bg.value=t.theme.background||'';resize();}
+onMounted(()=>{terminalTheme().then(applyTheme);term=new Terminal({cursorBlink:true,fontSize:13,fontFamily:'Menlo, monospace',scrollback:5000,theme:{background:'#121212',foreground:'#ececec'},allowProposedApi:false});fit=new FitAddon();term.loadAddon(fit);term.open(host.value);
  loadWebgl();
  cleanupTouch=bindTerminalTouch(host.value,term);host.value.addEventListener('paste',pasteFiles,true);term.onData(data=>{if(ws?.readyState===1)ws.send(JSON.stringify({type:'input',data}));});
  // Shift+Enter is a new line in Claude Code: xterm sends a bare Enter for both, so it goes as
@@ -110,11 +113,11 @@ onUnmounted(()=>{disposed=true;host.value?.removeEventListener('paste',pasteFile
 .terminal-pane > .block,.terminal-pane > .block-footer {flex-shrink:0;margin-top:8px;margin-bottom:8px;}
 /* The bar belongs to the terminal, which is dark in both themes: in the light one
    it sat as a pale strip on top of it. */
-.terminal-bar {flex-shrink:0;display:flex;align-items:center;gap:6px;padding:6px 16px;font-size:13px;background:#121212;color:rgba(255,255,255,.6);}
+.terminal-bar {flex-shrink:0;display:flex;align-items:center;gap:6px;padding:6px 16px;font-size:13px;background:var(--terminal-bg,#121212);color:rgba(255,255,255,.6);}
 .terminal-status {min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:6px;}
 .terminal-status::before {content:'';flex:0 0 auto;width:7px;height:7px;border-radius:50%;background:#8e8e93;}
 .terminal-status.on::before {background:#34c759;}
-.terminal-keys {flex-shrink:0;display:flex;gap:6px;padding:0 12px 6px;overflow-x:auto;scrollbar-width:none;background:#121212;}
+.terminal-keys {flex-shrink:0;display:flex;gap:6px;padding:0 12px 6px;overflow-x:auto;scrollbar-width:none;background:var(--terminal-bg,#121212);}
 .terminal-keys::-webkit-scrollbar {display:none;}
 .terminal-key {flex:0 0 auto;width:auto;margin:0;display:inline-flex;align-items:center;justify-content:center;line-height:1;text-transform:none;min-width:34px;height:30px;padding:0 7px;border:1px solid rgba(255,255,255,.18);border-radius:7px;background:rgba(255,255,255,.08);color:#ececec;font:13px Menlo,monospace;touch-action:manipulation;-webkit-user-select:none;user-select:none;}
 .terminal-key:active {background:rgba(255,255,255,.25);}
@@ -127,7 +130,7 @@ onUnmounted(()=>{disposed=true;host.value?.removeEventListener('paste',pasteFile
    the terminal's own background, not the page's (a darker strip under the terminal). xterm's own viewport spans that space too,
    black by its stylesheet, and the GPU renderer never paints it the theme's colour,
    so it is set here as well (the strip was still there). */
-.terminal-host {flex:1;min-height:0;overflow:hidden;touch-action:pan-x pinch-zoom;overscroll-behavior:contain;background:#121212;}
+.terminal-host {flex:1;min-height:0;overflow:hidden;touch-action:pan-x pinch-zoom;overscroll-behavior:contain;background:var(--terminal-bg,#121212);}
 .terminal-host :deep(.xterm) {height:100%;}
-.terminal-host :deep(.xterm-viewport) {background-color:#121212;}
+.terminal-host :deep(.xterm-viewport) {background-color:var(--terminal-bg,#121212);}
 </style>

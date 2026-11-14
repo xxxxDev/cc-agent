@@ -299,6 +299,10 @@ const shellAudit=(req,c,action,n)=>{try{require('./services/audit').audit({sourc
 app.get('/api/conversations/:id/shells',(req,res,next)=>{try{const c=shellAgent(req);res.json({shells:agents.shells.list(c),max:agents.shells.MAX,folder:agents.shells.folder(c,agents.active(c))});}catch(e){next(e);}});
 app.post('/api/conversations/:id/shells',(req,res,next)=>{try{const c=shellAgent(req);const s=agents.shells.open(c,agents.active(c));shellAudit(req,c,'shell-open',s.n);res.json(s);}catch(e){next(e);}});
 app.delete('/api/conversations/:id/shells/:n',(req,res,next)=>{try{const c=shellAgent(req),n=Number(req.params.n);if(!agents.shells.close(c,n))throw agents.error('找不到這個終端機',404);shellAudit(req,c,'shell-close',n);res.json({ok:true});}catch(e){next(e);}});
+// This computer's terminal theme for the web terminal (server/terminalTheme.js); admin-only
+// as the terminal is (the /api/preferences guard above).
+const terminalTheme=require('./terminalTheme').create();
+app.get('/api/preferences/terminal-theme',(req,res,next)=>{terminalTheme().then(t=>res.json({theme:t})).catch(next);});
 app.post('/api/conversations/:id/:action',(req,res,next)=>{try{
  const c=agents.get(req.params.id,req.userId);
  // A member's Agent Profile is read-only: the admin who set the agent up owns its
