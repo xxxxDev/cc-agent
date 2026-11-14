@@ -1,5 +1,5 @@
 import tmuxSocketFor from './tmuxSocket.cjs';
-import {startupConsent} from './startupConsent.mjs';import platform from './platform.cjs';import agentEnv from './agentEnv.cjs';import runtimeTools from './runtimeTools.cjs';import {ownerPlugins} from './ownerPlugins.mjs';import {builtinPlugins,builtinSettings} from './builtinPlugins.mjs';import unsandboxedCommands from './unsandboxedCommands.cjs';
+import {consentWatcher} from './startupConsent.mjs';import platform from './platform.cjs';import agentEnv from './agentEnv.cjs';import runtimeTools from './runtimeTools.cjs';import {ownerPlugins} from './ownerPlugins.mjs';import {builtinPlugins,builtinSettings} from './builtinPlugins.mjs';import unsandboxedCommands from './unsandboxedCommands.cjs';
 import fs from 'node:fs';import path from 'node:path';import {spawn,execFileSync} from 'node:child_process';import readline from 'node:readline';import {bridge} from './client.mjs';import {versionedToolNames} from './versionedTools.mjs';
 import scopeHooks from '../server/scopeHooks.js';
 const configPath=process.argv[2],config=JSON.parse(fs.readFileSync(configPath,'utf8'));
@@ -481,21 +481,20 @@ child.on('exit',code=>{bridge(config,'error',{message:`Claude 程序已結束（
 
 // Accept only our generated workspace and
 // this exact locally-authored executive channel notice, never arbitrary prompts.
-let reportedPrompt='';
+// The channel notice comes again when Claude Code restarts itself in its terminal (/restart after
+// an update); unanswered, the session sat at it with no channel. After start-up it is answered
+// only in its own shape and while the channel has stopped polling (consentWatcher); the workspace
+// prompt only at start-up.
 const startupDeadline=Date.now()+90000;
-const startup=setInterval(()=>{
- if(Date.now()>startupDeadline){clearInterval(startup);return;}
- try {const pane=(platform.isWin&&config.tmux)||process.env.TMUX_PANE;if(!pane)return;
- const screen=execFileSync('tmux',['-L',tmuxSocket,'capture-pane',...platform.CAPTURE,pane],{encoding:'utf8',timeout:1000});
- const consent=startupConsent(screen,config.cwd);
- if(consent?.startsWith('workspace')&&reportedPrompt!=='workspace'){
-  if(consent==='workspace-no')execFileSync('tmux',['-L',tmuxSocket,'send-keys','-t',pane,'Down']);
-  execFileSync('tmux',['-L',tmuxSocket,'send-keys','-t',pane,'Enter']);reportedPrompt='workspace';bridge(config,'starting').catch(()=>{});
- }
- if(consent==='channel'&&reportedPrompt!=='channel'){
-  execFileSync('tmux',['-L',tmuxSocket,'send-keys','-t',pane,'Enter']);reportedPrompt='channel';bridge(config,'starting').catch(()=>{});
- }
- }catch{}
-},1000);
-const pulse=setInterval(()=>bridge(config,'heartbeat').catch(()=>{}),5000);
-for(const sig of ['SIGTERM','SIGINT','SIGHUP'])process.on(sig,()=>{clearInterval(pulse);child.kill('SIGTERM');});
+const paneOf=()=>(platform.isWin&&config.tmux)||process.env.TMUX_PANE;
+const tmuxAt=(...a)=>execFileSync('tmux',['-L',tmuxSocket,...a],{encoding:'utf8',timeout:1000});
+// The channel counts as gone after ten seconds without a poll, as the heartbeat reports it.
+let channelQuietMs=0;
+const watch=consentWatcher({cwd:config.cwd,startupUntil:startupDeadline,channelGone:()=>channelQuietMs>=10000,onStarting:()=>bridge(config,'starting').catch(()=>{}),
+ capture:()=>paneOf()?tmuxAt('capture-pane',...platform.CAPTURE,paneOf()):null,
+ keys:k=>tmuxAt('send-keys','-t',paneOf(),k)});
+const look=()=>{try{watch();}catch{}};
+const startup=setInterval(()=>{if(Date.now()>startupDeadline){clearInterval(startup);return;}look();},1000);
+const later=setInterval(()=>{if(Date.now()>startupDeadline)look();},3000);
+const pulse=setInterval(()=>bridge(config,'heartbeat').then(r=>{channelQuietMs=Number(r?.channelQuietMs)||0;}).catch(()=>{channelQuietMs=0;}),5000);
+for(const sig of ['SIGTERM','SIGINT','SIGHUP'])process.on(sig,()=>{clearInterval(pulse);clearInterval(later);child.kill('SIGTERM');});

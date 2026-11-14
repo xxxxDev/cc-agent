@@ -2449,7 +2449,9 @@ function bridge(c,action,data={}) {
   try{followSessionModel(c);}catch(e){console.error(`model follow for ${c.id}: ${e.message}`);}
   // Turns typed in the terminal, into the chat (mirrorTerminal); it writes only what is new.
   try{mirrorTerminal(c);}catch(e){console.error(`terminal mirror for ${c.id}: ${e.message}`);}
-  return {ok:true};
+  // How long the channel has not asked for messages: the runner answers the channel notice of a
+  // restart in the terminal only while the channel is really gone (consentWatcher).
+  return {ok:true,channelQuietMs:Math.max(0,Date.now()-(g.lastPoll||0))};
  }
  else throw error('Unknown bridge action',404);
  save(c);return {ok:true};
