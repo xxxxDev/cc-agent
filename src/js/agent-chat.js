@@ -2,6 +2,7 @@ import {agentIdFromUrl,agentUrl} from './agentUrl.js';
 import * as agentPreferences from './agentPreferences.js';
 import {askHandoff} from './handoffAsk.js';
 import {embedded} from './embed.js';
+import {PRODUCT} from './productConfig.js';
 import {openLiveConnection} from './live-connection.js';
 import {createNotificationOpener} from './notification-open.js';
 import {agentActivity} from './agentActivity.js';
@@ -157,6 +158,13 @@ async function saveRows(rows){let group=null;const next=[],groups={};for(const r
 
 function onChatsIn(){cancelHistoryPaging();if(selected.value){writeUrl(null);opening++;}selected.value=null;detail.value=null;terminalOpen.value=false;}
 const terminalOpen=ref(false);
+// On a computer each agent's terminal stays as it was left, open or shut, instead of being opened
+// again for each, and never opened on an agent whose terminal was not. Kept on the device: the
+// agents left with it open.
+const TERMINAL_KEY=PRODUCT.storageKeys.terminalOpen;
+const terminalsOpen=()=>{try{const v=JSON.parse(localStorage.getItem(TERMINAL_KEY)||'[]');return Array.isArray(v)?v.filter(x=>typeof x==='string'):[];}catch{return [];}};
+const terminalRemembered=id=>!!id&&terminalsOpen().includes(id);
+function toggleTerminal(){terminalOpen.value=!terminalOpen.value;const id=selected.value;if(wideScreen.value&&id)try{const rest=terminalsOpen().filter(x=>x!==id);localStorage.setItem(TERMINAL_KEY,JSON.stringify(terminalOpen.value?[...rest,id].slice(-200):rest));}catch{}}
 const conversations=ref([]),selected=ref(null),detail=ref(null),search=ref(''),draft=ref(''),scroll=ref(null);
 // Unread counts in the list and the menu: the server's,
 // except the agent open on screen, which is being read.
@@ -945,6 +953,7 @@ async function select(id,{direct=false}={}){
   selected.value=id;detail.value=d;draft.value=drafts.get(id)||'';
   // On the terminal when an admin set agents to open on it (the Admin page).
   if(agentPreferences.openView.value==='terminal'&&showTerminalSwitch.value)terminalOpen.value=true;
+  else if(wideScreen.value&&showTerminalSwitch.value&&terminalRemembered(id))terminalOpen.value=true;
   writeUrl(id);
   // Beside the list, the list narrows and the conversation comes in by CSS instead of
   // Framework7's slide (styles/listDetail.css); from then on it is the same page.
@@ -1240,6 +1249,6 @@ onMounted(()=>{
  poll=setInterval(tick,1200);});
 onUnmounted(()=>{boxWatch?.disconnect();document.removeEventListener('keydown',onEscape);document.removeEventListener('keydown',onFind);window.removeEventListener('popstate',restoreUrl);notifications.stop();document.removeEventListener('visibilitychange',onAppVisible);window.removeEventListener('focus',onAppFocus);unwatchWidth?.();disposed=true;cancelHistoryPaging();operations.value={};clearInterval(poll);live?.close();live=null;wakeRun++;});
 
-return {filesOpen,filesPanelVisible,filesPopupOpen,toggleFiles,showFile,markFileRemoved,resetTerminalWidth,isPinned,chosenPinned,togglePins,togglePin,pinBusy,editRowTap,handToAgent,replyDraft,startReply,cancelReply,unreadOf,unreadLabel,unreadTotal,markAllRead,markingAllRead,mixedList:computed(mixed),chosenByPresence,chooseByPresence,atStart,directOpening,toGroups,openingId,toList,cancelOpening,toggleGroupCollapse,openGroup,mention,pickMention,checklistOpen,checklistPanelVisible,checklistPopupOpen,toggleChecklist,usageOpen,usagePanelVisible,usagePopupOpen,toggleUsage,usageRefreshing,refreshUsage,openAutoCompactChoice,typingBubble,searchPanelVisible,searchPopupOpen,toggleSearch,enterConversation,searchOpen,searchText,foundMessage,searchMessages,showMessage,noteInBubble,pauseAgent,startAgent,allChosen,toggleAllChosen,slash,composerKeydown,chosenList,isChosen,toggleChosen,groupChosen,toggleGroupChosen,terminalSide,chatHidden,terminalWidthCss,startTerminalResize,moveGroups,listRows,sections,listGroups,listSources,listSource,chooseSource,addGroup,editingGroup,startGroupRename,cancelGroupRename,finishGroupRename,deleteGroup,uploadAvatar,resetAvatar,autoSort:agentPreferences.autoSort,backgroundProgress,agentAvatar,presence,embedded,recoverOrphanedConversation,activity,progressInBubble,progressInBar,showViewSwitch,showTerminalSwitch,showSubnavbar,olderBusy,pagingBack,atBottom,loadOlder,onMessagesScroll,onHistoryWheel,onHistoryTouchStart,onHistoryTouchMove,onHistoryTouchEnd,onHistoryTouchCancel,toLatest,
+return {toggleTerminal,filesOpen,filesPanelVisible,filesPopupOpen,toggleFiles,showFile,markFileRemoved,resetTerminalWidth,isPinned,chosenPinned,togglePins,togglePin,pinBusy,editRowTap,handToAgent,replyDraft,startReply,cancelReply,unreadOf,unreadLabel,unreadTotal,markAllRead,markingAllRead,mixedList:computed(mixed),chosenByPresence,chooseByPresence,atStart,directOpening,toGroups,openingId,toList,cancelOpening,toggleGroupCollapse,openGroup,mention,pickMention,checklistOpen,checklistPanelVisible,checklistPopupOpen,toggleChecklist,usageOpen,usagePanelVisible,usagePopupOpen,toggleUsage,usageRefreshing,refreshUsage,openAutoCompactChoice,typingBubble,searchPanelVisible,searchPopupOpen,toggleSearch,enterConversation,searchOpen,searchText,foundMessage,searchMessages,showMessage,noteInBubble,pauseAgent,startAgent,allChosen,toggleAllChosen,slash,composerKeydown,chosenList,isChosen,toggleChosen,groupChosen,toggleGroupChosen,terminalSide,chatHidden,terminalWidthCss,startTerminalResize,moveGroups,listRows,sections,listGroups,listSources,listSource,chooseSource,addGroup,editingGroup,startGroupRename,cancelGroupRename,finishGroupRename,deleteGroup,uploadAvatar,resetAvatar,autoSort:agentPreferences.autoSort,backgroundProgress,agentAvatar,presence,embedded,recoverOrphanedConversation,activity,progressInBubble,progressInBar,showViewSwitch,showTerminalSwitch,showSubnavbar,olderBusy,pagingBack,atBottom,loadOlder,onMessagesScroll,onHistoryWheel,onHistoryTouchStart,onHistoryTouchMove,onHistoryTouchEnd,onHistoryTouchCancel,toLatest,
  inspectorOpen,inspectorVisible,showInspectorButton,profilePanelOpen,profilePanelVisible,openProfile,wideScreen,inspectId,inspectData,inspectBusy,inspectError,inspect,toggleInspector,clearInspection,agentLocked,agentOperationTitle,agentOperationSteps,agentOperationPercent,agentOperationError,newProfile,profileDraft,profileSaving,saveProfile,profileDirty,closeProfile,guardOperation,syncProfileVersion,profileConflicts,files,fileInput,pickFiles,dropFiles,pasteFiles,removeFile,chooseFiles,previewDraft,sendStatus,ct,generation,user,busy,error,theme,menuConversation,menuPoint,preferenceThreshold,editMode,orderBusy,toggleEdit,bulkBusy,pauseEveryAgent,startEveryAgent,restartEveryAgent,reorderChats,onChatsIn,terminalOpen,conversations,selected,detail,search,draft,scroll,newOpen,infoOpen,newTitle,memoryDraft,filtered,statusLabel,awaitingReply,canSend,conversationMenu,renameConversation,deleteConversation,savePreferences,wakingId,waking,wakeError,closeNew,openNewChat,create,select,bottom,send,enterSend,action,interrupting,canInterrupt,interruptTurn,pause,restart,handoff,importHistory,saveMemory,time,renderMarkdown,renderTypedMarkdown};
 }

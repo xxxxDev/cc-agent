@@ -20,6 +20,7 @@ export const PRODUCT = Object.freeze({
     sidebarAuto: 'cc-agent-sidebar-auto', // sidebarState.js
     listDetail: 'cc-agent-list-detail', // listDetail.js
     listColumn: 'cc-agent-list-column', // listDetail.js: the column's width, dragged
+    terminalOpen: 'cc-agent-terminal-open', // agent-chat.js: the agents a computer left with the terminal open
     language: 'cc-agent-lang', // i18n.js
   }),
   // push.js: the kinds of notification a device has before it says otherwise.
