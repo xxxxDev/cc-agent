@@ -63,18 +63,19 @@ This is the full tour. The [README](../README.md) is the short version.
 ## Chat
 
 - **Messages and files both ways.** Send text and attachments (up to 10 files a message, 95 MB each) and get files back from the agent (up to 5 a reply, 25 MB each), with previews. On a computer, drag files onto the chat to attach them.
-- **Mentions, search and jump-to-latest.** Search one conversation's messages and jump to any result.
+- **Mentions, search and jump-to-latest.** Search one conversation's messages and jump to any result. A jump to an old message opens just the part of the chat around it, so it lands at once however far back it is; scroll down to load what follows, or tap the jump-to-latest button to go back to the newest.
+- **File list.** The folder button (in the ⋯ menu on a phone) lists every file sent in the conversation, yours, the agent's and the terminal's, newest first, with a small preview for pictures and videos. Tap a row to preview it, go to the message that carries it, or download it. An admin can delete a sent file for good; its messages then say it was deleted. Previews of videos (and a smaller picture for photos) need `ffmpeg` on the computer; without it a picture shows itself and a video its icon.
 - **Reply to a message.** With a mouse, the reply button beside copy under a bubble. On a phone, swipe a bubble to the left until the round reply icon lights up, or long-press it and tap reply. The message you are answering shows in a bar over the box: the agent's words with its small picture, your own with no name. Tap the bar to see that message again, scrolled to and highlighted; the X (or Escape) cancels. The agent is told which message you reply to, with its first words, and can read the whole of it.
 - **What a reply answers.** An agent's reply names the message it answers on a line above it, with its first words, when that helps: something else came between, or it answered several at once (a **+N more** chip opens the rest). The agent's words carry its small picture, an agent on another machine its name, and your own words no name at all. Your own replies always show the line. Tap it to jump to that message.
 - **Long-press menu.** On a phone, a long press lifts the bubble a little over a dimmed page, with round buttons under it: copy, select text and reply. **Select text** hands the words to the phone's own selection, all selected, so its handles can pick part of them. A tap elsewhere closes it. The dim, the lift and the buttons fade in and out together.
-- **Upload progress.** While a message with files goes, the send button turns into a spinner, and each file shows whether it is waiting, uploading with its percent, or done, with a line over the box such as **Uploading 2 of 3 (45%)…**. From 99% a file shows **Processing** until the server has it, since a phone's browser hands the whole file to the network at once. A file that fails is marked, and you can keep typing meanwhile.
+- **Upload progress.** While a message with files goes, the send button turns into a spinner, and each file shows whether it is waiting, uploading with its percent, or done. From 99% a file shows **Processing** until the server has it, since a phone's browser hands the whole file to the network at once. A file that fails is marked, and you can keep typing meanwhile.
 - **Pictures waiting to send.** Pictures in the box show above it as 68px thumbnails, each with an ✕ in its corner and, once you send, its own progress. A tap opens a preview that steps through the draft's pictures.
 - **The phone's file picker.** On an iPhone, the box lets go of the keyboard before the **+** file picker opens, so the keyboard no longer jumps up and away behind it. While the picker is open, a tap on the box only closes the picker; tap again to type.
 - **Messages between agents** show as dashed bubbles: what agents send one another in a group, or to and from another machine, stands apart from what they say to you.
 - **Slash commands.** Type `/` for Claude Code's own commands, such as `/compact`, `/context`, `/mcp`, `/usage`, `/status` and `/diff`. They run in the agent's terminal.
 - **Questions from the terminal.** When Claude Code stops to ask something in its terminal, such as a permission prompt or a choice, the chat shows it as a card you can answer.
 - **Stop this turn.** Interrupt a reply in progress without stopping the agent.
-- **To-dos.** An agent keeps steps, to-dos and things to verify in lists under **To-dos** beside the chat. Tap an item to move it on (to do, doing, done); long-press to mark it blocked, add a note, edit or delete it. You can add your own items too.
+- **To-dos.** An agent keeps steps, to-dos and things to verify in lists under **To-do list** beside the chat. Tap an item to move it on (to do, doing, done); long-press to mark it blocked, add a note, edit or delete it. You can add your own items too.
 - **Finished to-dos.** By default every list is kept. An admin can have a list whose every item is done deleted 1, 3, 7 or 30 days after its last change, with **Keep finished to-dos** in the Admin tab's Wrap-up group. A list with anything still to do, in progress or blocked is never deleted, and neither are a deleted agent's lists.
 - **Wrap-up check (optional).** It is off until an admin turns it on in the Admin tab. Then an agent that has finished a task and sat idle for 10 minutes (the admin can change the wait) is asked to make sure its work is saved and its notes are current. It is not asked after a turn that only read or answered, and it is not asked while the agent still has background commands or subagents running. The admin can change the text it sends, and an agent can be left out by turning off **Automatic wrap-up check** in its Agent Profile.
 
@@ -86,6 +87,11 @@ This is the full tour. The [README](../README.md) is the short version.
 <p align="center">
   <img src="../.github/assets/anim/swipe-reply-dark.svg" width="300" alt="Swiping a bubble to the left to reply: the reply icon lights up and the reply bar shows over the box">
   <img src="../.github/assets/anim/long-press-dark.svg" width="300" alt="A long press dims the page and lifts the bubble with copy, select text and reply under it; Select text selects its words">
+</p>
+
+<p align="center">
+  <img src="../.github/assets/anim/files-list-dark.svg" width="300" alt="The file list from the ⋯ menu: rows with picture previews; a tap opens a picture, the next one, and the one after, then the preview closes">
+  <img src="../.github/assets/anim/files-jump-dark.svg" width="300" alt="From the file list, Go to message on an old file: the list closes and the chat lands on that message far up, highlighted">
 </p>
 
 <p align="center">
@@ -174,15 +180,18 @@ Agents on two of your computers can talk to each other, for example a build agen
 ## Seeing what an agent does
 
 - **Live progress** in the chat: the tool the agent is using, which step it is on and how long it has worked, and whether it is still working in the background.
-- **Terminal view.** Switch to the agent's real Claude Code terminal, beside the chat on a computer. An admin turns the switch on in the Admin tab.
+- **Terminal view.** Switch to the agent's real Claude Code terminal, beside the chat on a computer. An admin turns the switch on in the Admin tab, and can have agents open on the terminal instead of the chat.
+- **Terminal tabs (admins).** Beside Claude's own terminal, **+** opens up to four shells of your own. They start in your home folder and run apart from the agent, which cannot see or type into them. A tab is named after its folder, or after the program running in it, and spins while that program writes. On a computer, show two tabs side by side or one above the other, pick each pane's tab with the switch at its top right, and double-click the divider to split it evenly again. Not on Windows.
+- **Terminal colours.** On a Mac the terminal uses your Terminal app's default profile colours; the Admin tab can switch it to CC Agent's own.
+- **Terminal keys on a phone.** Under the terminal, just above the keyboard: esc, tab, ⇧tab, the arrows and ^C, and on a second page home, end, page up and page down. A round button brings the keyboard up or puts it away, and the pencil swaps the terminal's typing for the chat's own box, attachments included, sending the line when you tap send.
 - **Terminal and chat in step.** With the terminal open beside the chat on a computer (admins):
   - **Where a file goes.** While you drag a file, the overlay shows two places, **Drop into the chat** and **Drop into the terminal**. A file let go on the terminal is saved where the agent can read it, and its path is typed at Claude's prompt without pressing Enter. If the agent cannot read that folder, the overlay says so and the file goes to the chat.
   - **What you type there shows in the chat.** What you type straight into the terminal, and the agent's answer to it, also show in the chat, marked **from the terminal**.
   - **/model and /effort.** A `/model` or `/effort` typed in the terminal updates Agent Profile. A model change Claude Code makes by itself is only shown, not saved.
 - **Transcript inspector.** Tap any message to see what that exchange sent to the model and got back, with tool calls, tokens and an estimated cost from API reference prices (not a bill), and the subagents the agent started. Admins only, turned on in the Admin tab.
-- **Context ring and usage view.** On a computer, a ring beside the To-dos button shows how full the agent's context is. It opens **Usage**: the context window (how much is used, where it auto-compacts, the model and effort), unfolding to each running subagent's context; your plan's 5-hour and weekly limits; the agent's auto-compact timing, which an admin can open in Agent Profile from there; and the agent's total tokens and estimated cost. A refresh button asks again. On a phone, **Usage** is in the ⋯ menu.
+- **Context ring and usage view.** On a computer, a ring beside the To-do list button shows how full the agent's context is. It opens **Usage stats**: the context window (how much is used, where it auto-compacts, the model and effort), unfolding to each running subagent's context; your plan's 5-hour and weekly limits; the agent's auto-compact timing, which an admin can open in Agent Profile from there; and the agent's total tokens and estimated cost. A refresh button asks again. On a phone, **Usage** is in the ⋯ menu.
 - **Where the numbers come from.** Claude Code reports them through its status line, which CC Agent sets for each agent. Your own status line is kept: for a full-access agent, CC Agent's command also runs the status line in your Claude Code user settings and shows what it prints in the terminal. If an agent's workspace settings already have a status line of their own, it is left alone, and the usage view says its usage can't be shown.
-- **Split view (experimental).** On a computer, an admin can show several conversations side by side and drag the columns and rows to size. Each cell's header holds the conversation's buttons as small icons: the context ring, To-dos, search and Agent Profile, with the terminal and Transcript where they are turned on. A cell too narrow for them has them in its ⋯ menu.
+- **Split view (experimental).** On a computer, an admin can show several conversations side by side and drag the columns and rows to size. Each cell's header holds the conversation's buttons as small icons: the context ring, To-do list, search and Agent Profile, with the terminal and Transcript where they are turned on. A cell too narrow for them has them in its ⋯ menu.
 - **Icon names.** On a computer, resting the mouse on a navbar or split-view icon shows its name under it.
 - **Claude usage.** On macOS and Windows, the sidebar shows how much of your Claude subscription's 5-hour and weekly windows is used, for admins.
 
@@ -193,6 +202,14 @@ Agents on two of your computers can talk to each other, for example a build agen
 
 <p align="center">
   <img src="../.github/assets/screens/desktop-terminal-dark.png" alt="A chat beside the agent's live terminal">
+</p>
+
+<p align="center">
+  <img src="../.github/assets/anim/terminal-tabs-dark.svg" width="640" alt="On a computer: + opens a shell tab named after its folder, a second one, then side by side and one above the other, and a pane's switch picks its tab">
+</p>
+
+<p align="center">
+  <img src="../.github/assets/anim/phone-terminal-keys-dark.svg" width="300" alt="On a phone: arrow keys choose in Claude's menu, esc closes it, the keys swipe to their second page, and the pencil opens the chat's box to type a line into the terminal">
 </p>
 
 <p align="center">
@@ -256,7 +273,7 @@ Agents on two of your computers can talk to each other, for example a build agen
 - **Updates** are noticed within seconds of a new build being served, and offered without reloading under you.
 - **Notices** (toasts) appear at the top centre, just below the navbar so they cover none of its buttons, as one rounded pill, on a phone and a computer alike.
 - **Restarts don't sign you out.** While the service restarts, the page keeps checking for up to 90 seconds instead of showing the sign-in screen.
-- **Sheets that pull down.** On a phone, every popup opens as an iOS-style pushed card: Agent Profile, To-dos, Usage, search, New agent, the group form, a group room's to-dos and search, a schedule, a security source's details and a user's agent access. The card stands almost full height with a grabber at its top and a round ✕ at the top left, and the page behind steps back and darkens. Pull one down or tap ✕ to close it, as on iOS. A form with unsaved changes (Agent Profile, the group form, a schedule, a user's agent access) asks Keep editing or Discard first, whether you pull it down, tap ✕ or tap outside it. The group room's terminal still opens full screen.
+- **Sheets that pull down.** On a phone, every popup opens as an iOS-style pushed card: Agent Profile, To-do list, Usage stats, search, New agent, the group form, a group room's to-dos and search, a schedule, a security source's details and a user's agent access. The card stands almost full height with a grabber at its top and a round ✕ at the top left, and the page behind steps back and darkens. Pull one down or tap ✕ to close it, as on iOS. A form with unsaved changes (Agent Profile, the group form, a schedule, a user's agent access) asks Keep editing or Discard first, whether you pull it down, tap ✕ or tap outside it. The group room's terminal still opens full screen.
 - **A phone layout like iOS 26.** On a phone, the navbar and the page sides match the iPhone's own apps: the buttons at the top, and lists, cards and titles 20px from the edges.
 - **Blue for highlights, orange for warnings.** Cards, the working dots, search matches and a message you jump to are blue. Orange is kept for what needs your attention: limits, signing in again, permission prompts and high usage.
 - **A sidebar that folds.** On a computer, fold the sidebar to a rail of icons with the handle on its edge, or keep **Auto-collapse the menu on a computer** on (the default; switch it off in Settings) so it opens only while the mouse is on it.
