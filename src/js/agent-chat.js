@@ -998,7 +998,7 @@ function closeNew(){wakeRun++;waking.value=false;newOpen.value=false;}
 const slash=useSlashMenu({draft,conversationId:selected});
 // "@" names another agent, for this one to reach across sessions.
 // Group chats too, first: the agent may then speak in the one named.
-const mention=useMentionMenu({draft,agents:computed(()=>user.value?.role!=='admin'?[]:[...chatGroups.value.map(g=>({id:g.id,title:g.name,group:true,section:ct('群聊')})),...inSections(conversations.value.filter(c=>c.id!==selected.value),listGroups.value).map(c=>({id:c.id,title:c.title,avatar:c.avatar,source:c.source,provider:c.provider,section:c.section})),...(detail.value?.peerLink?.targets||[]).map(t=>({id:'peer:'+t.pairId+':'+t.agentId,title:t.to,avatar:t.icon||undefined,section:ct('另一台電腦')}))])});
+const mention=useMentionMenu({draft,scope:selected,agents:computed(()=>user.value?.role!=='admin'?[]:[...chatGroups.value.map(g=>({id:g.id,title:g.name,group:true,section:ct('群聊')})),...inSections(conversations.value.filter(c=>c.id!==selected.value),listGroups.value).map(c=>({id:c.id,title:c.title,avatar:c.avatar,source:c.source,provider:c.provider,section:c.section})),...(detail.value?.peerLink?.targets||[]).map(t=>({id:'peer:'+t.pairId+':'+t.agentId,title:t.to,avatar:t.icon||undefined,section:ct('另一台電腦')}))])});
 const mentionCaret=()=>caretToEnd(scroll.value?.closest('.page'));
 function pickMention(item){mention.complete(item,mentionCaret);}
 async function runSlashCommand(id,text){

@@ -524,6 +524,8 @@ function onMarkdownClick(event){
 .relay-peer small{font-weight:400}
 :deep(.mention-tag) {display:inline-block;padding:0 6px;border-radius:8px;background:rgba(10,132,255,.22);color:#4da3ff;font-weight:600;text-decoration:none;}
 :deep(.message-sent .mention-tag) {background:rgba(255,255,255,.18);color:#fff;}
+/* A name is a tag, not a link to underline: the markdown's link rule is more specific. */
+.message-markdown :deep(a.mention-tag) {text-decoration:none;}
 </style>
 <style>
 /* A finger on a bubble (js/bubbleGestures.js); unscoped, as the swipe's icon is made there

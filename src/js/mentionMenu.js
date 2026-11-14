@@ -30,7 +30,7 @@ function placeCaret(editor, at) {
   return false;
 }
 
-export function useMentionMenu({draft, agents}) {
+export function useMentionMenu({draft, agents, scope = null}) {
   const dismissed = ref(null);
   // "@" anywhere, not only at the end: the menu
   // follows the caret in whichever composer holds this draft.
@@ -49,9 +49,13 @@ export function useMentionMenu({draft, agents}) {
   // has not yet come.
   const before = () => { readCaret(); const v = draft.value || ''; return caret.value === null || caret.value > v.length ? v : v.slice(0, caret.value); };
   // The agents picked from the menu, by id: the text alone could name the wrong one.
-  const picked = ref([]);
+  // Kept per conversation when the page shows one after another (scope: its id), so a draft
+  // left with a name in it still has it, blue, on coming back.
+  const pickedBy = ref({});
+  const key = () => (scope ? scope.value || '' : '');
+  const picked = computed({get: () => pickedBy.value[key()] || [], set: v => { pickedBy.value = {...pickedBy.value, [key()]: v}; }});
   const current = computed(() => picked.value.filter(m => (draft.value || '').includes('@' + m.title)));
-  watch(() => draft.value, v => { if (!v) picked.value = []; });
+  watch(() => draft.value, v => { if (!v && picked.value.length) picked.value = []; });
   const query = computed(() => { draft.value; caret.value; const m = /(?:^|\s)@([^\s@]*)$/.exec(before()); return m ? m[1].toLowerCase() : null; });
   const items = computed(() => {
     const q = query.value;
@@ -60,9 +64,9 @@ export function useMentionMenu({draft, agents}) {
     // Nothing typed yet: the list's own order and sections; typed, the best matches first.
     if (!q) return all.slice(0, 60);
     const starts = all.filter(a => a.title.toLowerCase().startsWith(q)), contains = all.filter(a => !starts.includes(a) && a.title.toLowerCase().includes(q));
-    const list = [...starts, ...contains];
-    // A name typed in full, and a space after it, is done.
-    return list.length === 1 && list[0].title.toLowerCase() === q ? [] : list.slice(0, 30);
+    // A name in full with the caret right after it still offers it, not only a letter back; a
+    // space after it ends the name, and the menu with it.
+    return [...starts, ...contains].slice(0, 30);
   });
   const active = ref(0);
   // Back to the top only when the choices change, not each time the list refreshes
@@ -70,13 +74,17 @@ export function useMentionMenu({draft, agents}) {
   watch(() => items.value.map(i => i.id).join('|'), () => { active.value = 0; });
   function complete(item, toEnd) {
     if (item.disabled) return;
-    const head = before().replace(/@([^\s@]*)$/, '@' + item.title + ' '), tail = (draft.value || '').slice(before().length);
+    // The rest of the word after the caret goes too, or picked a letter back that letter was left
+    // behind after the name; a space already there is used.
+    const rest = (draft.value || '').slice(before().length).replace(/^[^\s@]*/, '');
+    const head = before().replace(/@([^\s@]*)$/, '@' + item.title + (/^[ \t\u00a0]/.test(rest) ? '' : ' ')), tail = rest;
     draft.value = head + tail;
     if (!item.everyone && !picked.value.some(m => m.id === item.id)) picked.value = [...picked.value, {id: item.id, title: item.title}];
     dismissed.value = null;
     // Picked in the middle: the caret goes after the name, not to the end.
     const el = editorEl.value;
-    if (tail && el?.isConnected) { caret.value = head.length; nextTick(() => { el.focus(); placeCaret(el, head.length); }); }
+    const after = head.length + (/^[ \t\u00a0]/.test(tail) ? 1 : 0);
+    if (tail && el?.isConnected) { caret.value = after; nextTick(() => { el.focus(); placeCaret(el, after); }); }
     else { caret.value = head.length; toEnd?.(); }
   }
   function onKeydown(event, caret) {
