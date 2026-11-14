@@ -6,8 +6,9 @@
 // Which records are a prompt someone typed is decided by classify(), and it is conservative:
 // anything it is not sure of is left out. Claude Code (2.1.310 and later) marks a prompt
 // typed at its own input as origin {kind:'human'}, promptSource 'typed' (or 'queued' when
-// typed during a turn), not isMeta. Everything else it writes as a user record says what it
-// is: a web message arrives as a channel prompt (isMeta, origin channel, wrapped in
+// typed during a turn), not isMeta; one typed while the agent was busy is written as a
+// queued_command attachment with the same origin, and taken the same way. Everything else
+// it writes as a user record says what it is: a web message arrives as a channel prompt (isMeta, origin channel, wrapped in
 // <channel source="executive" ...>), another session's message as origin peer, a finished
 // background task as origin task-notification, its own notes (hook feedback, image sizes,
 // the no-visible-output nudge) as isMeta, a slash command as <command-name>/<local-command-*>
@@ -116,7 +117,18 @@ function track(state, record) {
   if (record.type === 'attachment') {
     // A message that arrived while the turn ran, queued by Claude Code: a web message (or
     // another session's) makes the turn's answer not the terminal's alone.
-    const queued = record.attachment && record.attachment.type === 'queued_command' && typeof record.attachment.prompt === 'string' ? record.attachment.prompt : '';
+    const att = record.attachment || {};
+    const queued = att.type === 'queued_command' && typeof att.prompt === 'string' ? att.prompt : '';
+    // One typed in the terminal while the agent was busy is a prompt as much as one typed at
+    // rest: a message and file sent from the terminal's box mid-turn reach the chat too. From
+    // it on, the turn is its own.
+    const typed = att.type === 'queued_command' ? classify({type: 'user', uuid: record.uuid, origin: att.origin, message: {content: att.prompt}}) : null;
+    if (typed) {
+      close(state);
+      state.open = {uuid: record.uuid, promptId: null, mixed: false, last: null};
+      push(state, {kind: 'prompt', uuid: record.uuid, at: record.timestamp || null, text: typed.text, pictures: typed.pictures, sources: []});
+      return;
+    }
     if (state.open && /^\s*(<channel\b|Another Claude session sent a message)/.test(queued)) state.open.mixed = true;
     return;
   }
