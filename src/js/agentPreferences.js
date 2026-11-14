@@ -13,6 +13,8 @@ export const subagents = ref({model: '', lock: false, effort: ''});
 export const autoCompact = ref(null);
 export const autoCompactPresets = ref([200000, 300000, 400000, 500000, 700000]);
 export const terminalSwitch = ref(false);
+// What an agent opens on: its conversation, or its terminal for those used to one.
+export const openView = ref('chat');
 // The Transcript column's button; off until an admin switches it on.
 export const transcriptSwitch = ref(false);
 // Days a deleted agent is kept before it is purged, or null for never (the default).
@@ -47,6 +49,7 @@ function absorb(preferences) {
   if (preferences.autoCompact === null || Number.isInteger(preferences.autoCompact)) autoCompact.value = preferences.autoCompact;
   if (Array.isArray(preferences.autoCompactPresets)) autoCompactPresets.value = preferences.autoCompactPresets;
   terminalSwitch.value = preferences.terminalSwitch === true;
+  openView.value = preferences.openView === 'terminal' ? 'terminal' : 'chat';
   transcriptSwitch.value = preferences.transcriptSwitch === true;
   if (preferences.wrapUp && typeof preferences.wrapUp === 'object') wrapUp.value = preferences.wrapUp;
   archiveRetentionDays.value = Number.isInteger(preferences.archiveRetentionDays) ? preferences.archiveRetentionDays : null;

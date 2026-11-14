@@ -890,6 +890,8 @@ async function select(id,{direct=false}={}){
   if(run!==opening||user.value?.id!==owner)return;
   const router=f7.views?.get('#view-chat')?.router;if(!router)return;
   selected.value=id;detail.value=d;draft.value=drafts.get(id)||'';
+  // On the terminal when an admin set agents to open on it (the Admin page).
+  if(agentPreferences.openView.value==='terminal'&&showTerminalSwitch.value)terminalOpen.value=true;
   writeUrl(id);
   // Beside the list, the list narrows and the conversation comes in by CSS instead of
   // Framework7's slide (styles/listDetail.css); from then on it is the same page.

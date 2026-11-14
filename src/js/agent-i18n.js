@@ -252,6 +252,8 @@ const english = {
 "接續既有 session":"Resume an existing session",
 "讀取 session 既有對話":"Load earlier turns from the session",
 "聊天室終端機切換":"Chat / terminal switch",
+"Agent 開啟畫面":"Agents open on",
+"開啟畫面必須是聊天室或終端機":"Agents open on the chat or the terminal",
 "終端機分頁":"Terminal tabs",
 "新增終端機":"New terminal",
 "排列方式":"Layout",
