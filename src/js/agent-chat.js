@@ -888,8 +888,19 @@ function toList(){
 async function toConversation(router,run,animate){
  if(router.currentRoute.url==='/conversation/')return true;
  // From the start page, the conversation takes its place; back then goes to the list.
- const fromStart=router.currentRoute.path==='/start/';
+ let fromStart=router.currentRoute.path==='/start/';
  if(fromStart)atStart.value=false;
+ // Beside the list (listDetail.js) the list must be the page under the conversation, or a
+ // reload on a conversation came back with no list column, the chat across the whole width:
+ // the list first, then the conversation over it.
+ if(fromStart&&listDetailActive.value){
+  for(let n=0;n<60&&router.currentRoute.path!=='/';n++){
+   if(router.allowPageChange!==false)router.navigate('/',{reloadAll:true,animate:false});
+   await new Promise(resolve=>setTimeout(resolve,50));
+   if(run!==opening)return false;
+  }
+  fromStart=false;animate=false;
+ }
  // Only the list below a conversation: back and the edge swipe then go there.
  else if(router.currentRoute.path!=='/'){
   router.back('/',{force:true,animate:false});
