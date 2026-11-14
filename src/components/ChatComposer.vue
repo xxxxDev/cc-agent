@@ -18,7 +18,7 @@
      role="textbox" aria-multiline="true" :aria-label="placeholder" :data-placeholder="placeholder"
      :data-empty="empty" dir="auto" autocomplete="off" inputmode="text" enterkeyhint="enter"
      autocorrect="on" autocapitalize="sentences" spellcheck="true"
-     @input="input" @compositionstart="compositionStart" @compositionend="compositionEnd"
+     @input="input" @compositionstart="compositionStart" @compositionend="compositionEnd" @blur="compositionLost"
      @keydown="keydown" @beforeinput="lineBreak"/>
    </div>
    <div class="toolbar-pane composer-end" @click.capture="guardComposition"><slot name="inner-end"/></div>
@@ -49,6 +49,11 @@ function input(){if(composing)return;const value=text();empty.value=!value;emit(
 // decides again when it ends (issue #7).
 function compositionStart(){composing=true;empty.value=false;}
 function compositionEnd(){composing=false;input();}
+// A composition whose end never came (an iPhone's Zhuyin keyboard when the ＋ picker took the
+// screen mid-word) left the box thinking it was still composing: no placeholder, its input
+// and the send button ignored, until some later composition ended. Leaving the box, or the
+// picker answering, ends it.
+function compositionLost(){if(!composing)return;composing=false;input();}
 function keydown(event){if(composing||event.isComposing||event.keyCode===229)return;if(event.key==='Escape'&&props.reply){event.preventDefault();emit('cancel-reply');return;}emit('keydown',event);}
 // A line break is put in here rather than left to the browser: on an iPhone, after the second
 // Enter the box grew a line but the caret stayed a line up, catching up only later. The break
@@ -170,8 +175,8 @@ function release(){
 }
 // Twice: Framework7 marks a press again as a late touchend arrives, and clears it a tick after.
 function releaseSoon(){release();clearTimeout(releaseLater);releaseLater=setTimeout(release,350);}
-function fileAnswered(event){if(event.target?.matches?.('input[type=file]'))releaseSoon();}
-function pageBack(){if(document.visibilityState!=='hidden')releaseSoon();}
+function fileAnswered(event){if(event.target?.matches?.('input[type=file]')){compositionLost();releaseSoon();}}
+function pageBack(){if(document.visibilityState!=='hidden'){if(document.activeElement!==editor.value)compositionLost();releaseSoon();}}
 function touchElsewhere(event){const root=box();if(!root)return;root.querySelectorAll('.active-state').forEach(e=>{if(!e.contains(event.target))e.classList.remove('active-state');});}
 const releaseEvents=[[document,'change',fileAnswered,true],[document,'cancel',fileAnswered,true],[document,'visibilitychange',pageBack,false],[window,'focus',pageBack,false],[window,'pageshow',pageBack,false],[document,'touchcancel',releaseSoon,true],[document,'touchstart',touchElsewhere,{capture:true,passive:true}]];
 onMounted(()=>releaseEvents.forEach(([t,n,f,o])=>t.addEventListener(n,f,o)));

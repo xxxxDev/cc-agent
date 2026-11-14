@@ -21,6 +21,7 @@ import {initTheme} from './theme.js';
 initTheme();
 import { startSwUpdateChecks } from './js/sw-update.js';
 import {startViewportRecovery} from './js/viewportRecovery.js';
+import {startTouchHighlightRelease} from './js/touchHighlightRelease.js';
 
 Framework7.use(Framework7Vue);
 import safeDialogs from './js/safeDialog.js';
@@ -42,3 +43,4 @@ bindTabbarViewport();
 import {showScrollbarsWhileScrolling} from './js/scrollbars.js';
 showScrollbarsWhileScrolling();
 startViewportRecovery();
+startTouchHighlightRelease();
