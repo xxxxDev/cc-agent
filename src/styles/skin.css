@@ -697,10 +697,15 @@ img[src$="/sources/anthropic-native.svg"] {
   box-shadow: none;
 }
 
+/* Each button on its own solid base: the glass fill laid over the page's colour, and no blur of
+   what is behind it. A blur reached whatever moved under the bar (the terminal's column while its
+   divider was dragged, a list scrolling) and the buttons flickered; the same look without it, on
+   every page. */
 .cc-app .navbar a.link {
-  background-color: var(--f7-list-bg-color);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
-  backdrop-filter: saturate(180%) blur(20px);
+  background-color: var(--f7-page-bg-color);
+  background-image: linear-gradient(var(--f7-list-bg-color), var(--f7-list-bg-color));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   box-shadow:
     var(--cc-glass-ring) 2px 2px 2px -2px inset,
     var(--cc-glass-ring) -2px -2px 2px -2px inset,
@@ -876,11 +881,6 @@ html .ios .toast.toast-bottom {bottom:var(--viewport-overflow,0px);}
     }
     .cc-app .toolbar-views-ui__segmented-toolbar {
       background-color: color-mix(in srgb, var(--cc-glass-dark-fill), var(--cc-color-bars) 85%);
-      -webkit-backdrop-filter: none;
-      backdrop-filter: none;
-    }
-    .cc-app .navbar a.link {
-      background-color: color-mix(in srgb, var(--f7-list-bg-color), var(--cc-color-panel) 85%);
       -webkit-backdrop-filter: none;
       backdrop-filter: none;
     }
