@@ -2,7 +2,9 @@
  <!-- One slim line: the state, and right after it a small icon to attach again at any
       time, such as when the screen looks stuck. A full-width button took a band of
       the screen, and the note under the terminal is gone too. -->
- <div class="terminal-bar"><span class="terminal-status" :class="{on:status==='終端已連線'}" role="status">{{ct(status)}}</span><f7-link class="terminal-reattach" icon-only icon-f7="arrow_clockwise" :aria-label="ct('重新附接')" :title="ct('重新附接')" @click="connect(true)"/></div>
+ <!-- In the terminal page's tabs (TerminalTabs.vue) the line names the tab and its folder,
+      and says the state only while the line is not up. -->
+ <div class="terminal-bar" :class="{focused}"><span class="terminal-status" :class="{on:status==='終端已連線'}" role="status"><template v-if="label"><b class="terminal-label">{{label}}</b><span class="terminal-path">{{status==='終端已連線'?path:ct(status)}}</span></template><template v-else>{{ct(status)}}</template></span><f7-link class="terminal-reattach" icon-only icon-f7="arrow_clockwise" :aria-label="ct('重新附接')" :title="ct('重新附接')" @click="connect(true)"/></div>
  <!-- Keys a phone keyboard does not have, for Claude Code's menus: Esc to back out,
        arrows to choose, Shift+Tab for the mode (a
        slash command opened the terminal and nothing could close its menu). They
@@ -15,7 +17,8 @@ import {bindTerminalTouch} from './js/terminalTouch.js';
 import {retryDelay,strikesAfterLoss,WEBGL_RETRY_MS} from './js/terminalRetry.js';
 import {ref,onMounted,onUnmounted} from 'vue';
 import {Terminal} from '@xterm/xterm';import {FitAddon} from '@xterm/addon-fit';import '@xterm/xterm/css/xterm.css';
-const props=defineProps({conversationId:String,acceptFiles:Boolean});
+// shell: one of the shells opened in the terminal page's tabs, by number; none is Claude's own.
+const props=defineProps({conversationId:String,acceptFiles:Boolean,shell:{type:Number,default:null},label:String,path:String,focused:Boolean,autofocus:{type:Boolean,default:true}});
 // A picture or file pasted here goes to the terminal as its path (the page
 // keeps it, ConversationPage.vue), not to the chat's message box. Text
 // copied from an office document also carries a picture of itself: there the text is meant,
@@ -25,7 +28,8 @@ function pasteFiles(e){if(!props.acceptFiles)return;const data=e.clipboardData,l
 // Text typed at Claude's prompt as a paste (bracketed when Claude asked for it, as a desktop
 // terminal pastes a dropped file's path), never with Enter. False when the line is not open.
 function paste(text){if(!term||ws?.readyState!==1||!text)return false;term.paste(text);return true;}
-defineExpose({paste});
+function focus(){term?.focus();}
+defineExpose({paste,focus});
 const KEYS=[{label:'Esc',name:'Esc',seq:'\x1b'},{label:'Tab',name:'Tab',seq:'\t'},{label:'⇧Tab',name:'Shift+Tab',seq:'\x1b[Z'},{label:'↑',name:'Up',seq:'\x1b[A'},{label:'↓',name:'Down',seq:'\x1b[B'},{label:'←',name:'Left',seq:'\x1b[D'},{label:'→',name:'Right',seq:'\x1b[C'},{label:'^C',name:'Ctrl+C',seq:'\x03'}];
 const touch=typeof matchMedia==='function'&&matchMedia('(pointer: coarse)').matches;
 function press(seq){if(ws?.readyState===1)ws.send(JSON.stringify({type:'input',data:seq}));}const host=ref(null),status=ref('正在附接終端…');let term,fit,ws,observer,cleanupTouch,disposed=false;
@@ -66,8 +70,10 @@ function checkLine(){if(!disposed&&!document.hidden&&ws?.readyState===1&&silent(
 // A phone put away lets go of its line: the screen kept streaming to a page nobody
 // sees. Back in front, the pane has no line and attaches again.
 function onVisible(){if(disposed)return;if(document.hidden){if(touch&&ws){const old=ws;ws=null;clearTimeout(retryTimer);retryTimer=0;old.close();}return;}if(!refused)retries=0;loadWebgl();if(!ws||ws.readyState>1||silent())connect();else term?.refresh(0,term.rows-1);}
-function connect(manual=false){if(disposed)return;if(manual)retries=0;const old=ws;ws=null;old?.close();clearTimeout(retryTimer);retryTimer=0;openedAt=0;term?.reset();status.value='正在附接終端…';lastHeard=Date.now();const socket=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/terminal/${props.conversationId}`);ws=socket;let failed=false;
- socket.onopen=()=>{if(ws!==socket)return;openedAt=Date.now();status.value='終端已連線';resize();if(manual)term.focus();};
+// focus: the keyboard goes here once the line is up; not for a pane opened beside the one
+// being typed in (TerminalTabs.vue).
+function connect(manual=false,focus=manual){if(disposed)return;if(manual)retries=0;const old=ws;ws=null;old?.close();clearTimeout(retryTimer);retryTimer=0;openedAt=0;term?.reset();status.value='正在附接終端…';lastHeard=Date.now();const socket=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/terminal/${props.conversationId}${props.shell?'/sh/'+props.shell:''}`);ws=socket;let failed=false;
+ socket.onopen=()=>{if(ws!==socket)return;openedAt=Date.now();status.value='終端已連線';resize();if(focus)term.focus();};
  socket.onmessage=e=>{if(ws!==socket)return;lastHeard=Date.now();const msg=JSON.parse(e.data);if(msg.type==='data')term.write(msg.data);else if(msg.type==='error')status.value=msg.message;};
  socket.onclose=()=>{if(ws!==socket)return;refused=!openedAt;if(openedAt&&Date.now()-openedAt>STEADY_MS)retries=0;scheduleRetry(failed?'附接失敗，請確認登入與 Claude 狀態':'終端已離線');};socket.onerror=()=>{if(ws===socket)failed=true;};
 }
@@ -94,7 +100,7 @@ onMounted(()=>{term=new Terminal({cursorBlink:true,fontSize:13,fontFamily:'Menlo
  // Shift+Enter is a new line in Claude Code: xterm sends a bare Enter for both, so it goes as
  // Esc+Enter (what Option+Enter sends), which Claude Code reads as a line break. Not while an input
  // method is composing.
- term.attachCustomKeyEventHandler(e=>{if(e.key!=='Enter'||!e.shiftKey||e.ctrlKey||e.altKey||e.metaKey||e.isComposing)return true;if(e.type==='keydown'&&ws?.readyState===1)ws.send(JSON.stringify({type:'input',data:'\x1b\r'}));return false;});observer=new ResizeObserver(resize);observer.observe(host.value);connect(true);
+ term.attachCustomKeyEventHandler(e=>{if(props.shell||e.key!=='Enter'||!e.shiftKey||e.ctrlKey||e.altKey||e.metaKey||e.isComposing)return true;if(e.type==='keydown'&&ws?.readyState===1)ws.send(JSON.stringify({type:'input',data:'\x1b\r'}));return false;});observer=new ResizeObserver(resize);observer.observe(host.value);connect(true,props.autofocus);
  watchdog=setInterval(checkLine,5000);document.addEventListener('visibilitychange',onVisible);window.addEventListener('focus',onVisible);});
 onUnmounted(()=>{disposed=true;host.value?.removeEventListener('paste',pasteFiles,true);clearTimeout(resizeTimer);clearTimeout(retryTimer);clearTimeout(webglRetry);clearInterval(watchdog);document.removeEventListener('visibilitychange',onVisible);window.removeEventListener('focus',onVisible);cleanupTouch?.();observer?.disconnect();ws?.close();try{webgl?.dispose();}catch{}webgl=null;term?.dispose();});
 </script>
@@ -112,6 +118,9 @@ onUnmounted(()=>{disposed=true;host.value?.removeEventListener('paste',pasteFile
 .terminal-keys::-webkit-scrollbar {display:none;}
 .terminal-key {flex:0 0 auto;width:auto;margin:0;display:inline-flex;align-items:center;justify-content:center;line-height:1;text-transform:none;min-width:34px;height:30px;padding:0 7px;border:1px solid rgba(255,255,255,.18);border-radius:7px;background:rgba(255,255,255,.08);color:#ececec;font:13px Menlo,monospace;touch-action:manipulation;-webkit-user-select:none;user-select:none;}
 .terminal-key:active {background:rgba(255,255,255,.25);}
+.terminal-label {flex:0 0 auto;font-weight:600;color:rgba(255,255,255,.85);}
+.terminal-path {min-width:0;overflow:hidden;text-overflow:ellipsis;font-family:Menlo,monospace;font-size:12px;}
+.terminal-bar.focused .terminal-label {color:#fff;}
 .terminal-reattach {flex:0 0 auto;width:auto;min-width:0;height:auto;padding:0;color:inherit;}
 .terminal-reattach :deep(.icon) {font-size:14px;}
 /* The rows fill the height in whole lines; what is left under the last one takes

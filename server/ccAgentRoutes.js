@@ -292,6 +292,13 @@ app.post('/api/conversations/:id/avatar',adminOnly,own,express.raw({type:()=>tru
 app.delete('/api/conversations/:id/avatar',adminOnly,own,(req,res,next)=>{try{agents.clearAvatar(req.conversation);res.json(agents.publicView(req.conversation,true));}catch(e){next(e);}});
 app.post('/api/conversations/:id/messages',(req,res,next)=>{try{const c=agents.get(req.params.id,req.userId);const mentions=agents.mentionsFor(req.userId,req.body.mentions,req.body.text,c);const sent=agents.send(c,req.body.text,req.body.requestId,req.body.attachmentIds,{...(mentions.length?{mentions}:{}),...(req.body.replyTo!==undefined?{replyTo:req.body.replyTo}:{})});
  res.json(sent);}catch(e){next(e);}});
+// The terminal page's shell tabs (server/terminalShells.js): an admin's, for an agent of
+// their own, as the Claude terminal is. Each open and close is audited.
+const shellAgent=req=>{if(req.role!=='admin')throw agents.error('Admin only',403);const c=agents.get(req.params.id,req.userId);if(c.archived)throw agents.error('找不到這個 Agent',404);if(c.mode!=='claude')throw agents.error('只有 Claude agent 有終端機',409);return c;};
+const shellAudit=(req,c,action,n)=>{try{require('./services/audit').audit({source:'terminal',action,by:req.userId,agent:c.id,shell:n});}catch(e){console.error('shell audit:',e.message);}};
+app.get('/api/conversations/:id/shells',(req,res,next)=>{try{const c=shellAgent(req);res.json({shells:agents.shells.list(c),max:agents.shells.MAX,folder:agents.shells.folder(c,agents.active(c))});}catch(e){next(e);}});
+app.post('/api/conversations/:id/shells',(req,res,next)=>{try{const c=shellAgent(req);const s=agents.shells.open(c,agents.active(c));shellAudit(req,c,'shell-open',s.n);res.json(s);}catch(e){next(e);}});
+app.delete('/api/conversations/:id/shells/:n',(req,res,next)=>{try{const c=shellAgent(req),n=Number(req.params.n);if(!agents.shells.close(c,n))throw agents.error('找不到這個終端機',404);shellAudit(req,c,'shell-close',n);res.json({ok:true});}catch(e){next(e);}});
 app.post('/api/conversations/:id/:action',(req,res,next)=>{try{
  const c=agents.get(req.params.id,req.userId);
  // A member's Agent Profile is read-only: the admin who set the agent up owns its
@@ -315,7 +322,7 @@ app.post('/api/conversations/:id/:action',(req,res,next)=>{try{
  case 'wrap-up':{if(req.role!=='admin')throw agents.error('Admin only',403);agents.setWrapUp(c,req.body.wrapUp);break;}
  case 'threshold':{if(req.role!=='admin')throw agents.error('Admin only',403);agents.setThreshold(c,req.body.threshold===null?null:req.body.threshold);break;}
  case 'rename':if(typeof req.body.title!=='string'||!req.body.title.trim()||req.body.title.trim().length>80)throw agents.error('主題需為 1–80 字');c.title=req.body.title.trim();c.profileVersion=(c.profileVersion||0)+1;c.updatedAt=new Date().toISOString();agents.save();break;
- case 'archive':if(req.role!=='admin')throw agents.error('Agent 由管理員刪除。',403);agents.stop(c);c.archived=true;c.archivedAt=new Date().toISOString();agents.save(c);break;
+ case 'archive':if(req.role!=='admin')throw agents.error('Agent 由管理員刪除。',403);agents.stop(c);try{agents.shells.closeAll(c);}catch(e){console.error('shells at archive:',e.message);}c.archived=true;c.archivedAt=new Date().toISOString();agents.save(c);break;
  case 'interrupt':agents.interrupt(c);break;
  // The owner's own changes to the agent's checklists; the agent sees who made them.
  case 'checklist':agents.updateChecklist(c,req.body,'owner');break;

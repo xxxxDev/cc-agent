@@ -248,5 +248,7 @@ app.get('*', (req, res) => {
 });
 
 // A code given with the error (agentStore's CATCHING) goes with it, for the page to read.
-app.use((err,req,res,next)=>{res.status(err.status||500).json({message:err.status?err.message:'伺服器發生錯誤',...(err.status&&typeof err.code==='string'?{code:err.code}:{})});if(!err.status)console.error(err);});
+// Only an HTTP error status is answered as one: a child process's exit code also comes as
+// err.status, and a 1 there threw inside this handler and left the request unanswered.
+app.use((err,req,res,next)=>{const status=Number.isInteger(err.status)&&err.status>=400&&err.status<600?err.status:0;res.status(status||500).json({message:status?err.message:'伺服器發生錯誤',...(status&&typeof err.code==='string'?{code:err.code}:{})});if(!status)console.error(err);});
 module.exports={app};

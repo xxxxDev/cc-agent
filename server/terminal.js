@@ -25,11 +25,13 @@ const {execFileSync}=require('node:child_process');
 // terminal on it ("open terminal failed: not a terminal", seen with a 3.5a server and a
 // 3.8 client), while starting sessions still works. Any other
 // answer (no server, its program gone, not named tmux) leaves the one on PATH.
+// A tmux server by name (-L) or, a path, by its socket file (-S: the shell tabs' one).
+const socketArgs=socket=>String(socket).startsWith('/')?['-S',socket]:['-L',socket];
 function serverTmux(socket){
  if(platform.isWin)return runtimeTools.resolveOnPath('tmux')?.path||'tmux.exe';
  try{
   socket=socket||require('./agentStore').tmuxSocket;
-  const pid=execFileSync('tmux',['-L',socket,'list-sessions','-F','#{pid}'],{encoding:'utf8',timeout:2000,stdio:['ignore','pipe','ignore']}).trim().split('\n')[0];
+  const pid=execFileSync('tmux',[...socketArgs(socket),'list-sessions','-F','#{pid}'],{encoding:'utf8',timeout:2000,stdio:['ignore','pipe','ignore']}).trim().split('\n')[0];
   if(!/^\d+$/.test(pid))return 'tmux';
   const bin=execFileSync('ps',['-o','comm=','-p',pid],{encoding:'utf8',timeout:2000,stdio:['ignore','pipe','ignore']}).trim();
   const p=require('node:path'),fs=require('node:fs');
@@ -37,7 +39,7 @@ function serverTmux(socket){
  }catch{return 'tmux';}
 }
 function sessionAlive(session){if(!session)return false;try{execFileSync('tmux',['-L',require('./agentStore').tmuxSocket,'has-session','-t',String(session).split(':')[0]],{stdio:'ignore',timeout:2000});return true;}catch{return false;}}
-const attachArgs=(session,socket=require('./agentStore').tmuxSocket)=>['-L',socket,
+const attachArgs=(session,socket=require('./agentStore').tmuxSocket)=>[...socketArgs(socket),
  'set-option','-t',session,'mouse','on',';',
  'set-option','-t',session,'prefix','None',';','set-option','-t',session,'prefix2','None',';',
  'set-option','-t',session,'key-table',LOCKED,';','set-option','-t',session,'status','off',';',
@@ -45,7 +47,7 @@ const attachArgs=(session,socket=require('./agentStore').tmuxSocket)=>['-L',sock
  'bind-key','-T',LOCKED,'MouseDrag1Pane','if-shell','-F','#{||:#{pane_in_mode},#{mouse_any_flag}}','send-keys -M','copy-mode -M',';',
  'bind-key','-T',LOCKED,'WheelUpPane','if-shell','-F','#{||:#{alternate_on},#{pane_in_mode},#{mouse_any_flag}}','send-keys -M','copy-mode -e',';',
  'attach-session','-t',session];
-function installTerminal(server,{tmuxClient=serverTmux,ptyModule=require('node-pty'),tickMs=3000,sessionAlive:alive=sessionAlive}={}){
+function installTerminal(server,{tmuxClient=serverTmux,ptyModule=require('node-pty'),tickMs=3000,sessionAlive:alive=sessionAlive,shells=agents.shells}={}){
  const wss=new WebSocketServer({noServer:true,maxPayload:65536});
  // A connection refused before anyone is known takes no sign-in to make: at most
  // thirty lines a minute of those in the audit log.
@@ -58,7 +60,9 @@ function installTerminal(server,{tmuxClient=serverTmux,ptyModule=require('node-p
   const reject=(socket,status)=>{if(who||mayAudit())audit({source:'terminal',path:req.url,status,username:who?.username,role:who?.role});socket.end(`HTTP/1.1 ${status} Rejected\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);};
   try{
    if(!require('./siteConfig').isAllowedSocket(req))return reject(socket,403);
-   const match=/^\/terminal\/([a-f0-9-]{36})$/.exec(req.url||'');if(!match)return reject(socket,404);
+   // /terminal/<agent> is its Claude session; /terminal/<agent>/sh/<n> one of the shells its
+   // terminal page opened in tabs (server/terminalShells.js).
+   const match=/^\/terminal\/([a-f0-9-]{36})(?:\/sh\/([1-9]))?$/.exec(req.url||'');if(!match)return reject(socket,404);const shellN=match[2]?Number(match[2]):null;
    const cookies=Object.fromEntries((req.headers.cookie||'').split(';').map(x=>x.trim().split('=')));const token=cookies.session_id;
    if(!token)return reject(socket,401);
    let decoded;try{decoded=jwt.verify(token,process.env.JWT_SECRET);}catch{return reject(socket,401);}
@@ -68,14 +72,19 @@ function installTerminal(server,{tmuxClient=serverTmux,ptyModule=require('node-p
    // An agent marked failed may still be running in its tmux session, a start that
    // never finished its handshake for one: its terminal is what shows why, so it can
    // be attached while that session lives.
-   if(c.mode!=='claude'||g.phase==='stopped'||g.phase==='error'&&!alive(g.tmux))return reject(socket,409);
-   if([...wss.clients].filter(ws=>ws.conversationId===c.id).length>=2)return reject(socket,429);
+   // A shell lives on whatever the agent does; its own session has to be there.
+   if(shellN!==null){if(c.mode!=='claude')return reject(socket,409);if(!shells.alive(c,shellN))return reject(socket,404);}
+   else if(c.mode!=='claude'||g.phase==='stopped'||g.phase==='error'&&!alive(g.tmux))return reject(socket,409);
+   const target=shellN===null?c.id:c.id+'/sh/'+shellN;
+   if([...wss.clients].filter(ws=>ws.target===target).length>=2)return reject(socket,429);
    const generationToken=g.token;
    if(socket.destroyed)return;
    wss.handleUpgrade(req,socket,head,ws=>{
-    ws.conversationId=c.id;
+    ws.conversationId=c.id;ws.target=target;
     let terminal,timer,closed=false;
-    const valid=()=>agents.active(c)===g&&g.token===generationToken&&g.phase!=='stopped';
+    // A shell is let go when it is closed or its agent deleted (its session ends, and the
+    // attachment with it), not when the agent stops or starts a new session.
+    const valid=()=>shellN!==null?!c.archived:agents.active(c)===g&&g.token===generationToken&&g.phase!=='stopped';
     // A tmux redraw burst is dozens of PTY chunks a second, each paying stringify
     // + a ws frame + a client parse when sent alone. Concatenated here and flushed
     // as one frame: on a 12 ms timer (xterm's write parser yields at the same
@@ -98,7 +107,7 @@ function installTerminal(server,{tmuxClient=serverTmux,ptyModule=require('node-p
     let ticks=0;
     // From where, too: the same address the sign-in records keep.
     audit({source:'terminal',path:req.url,status:101,username:principal.username,role:principal.role,conversation:c.id,ip:resolveClientIp(req)});
-    try{terminal=ptyModule.spawn(tmuxClient(),attachArgs(g.tmux),{name:'xterm-256color',cols:100,rows:30,cwd:agents.stateRoot,env:{...agentEnv(),TERM:'xterm-256color'}});}catch{send({type:'error',message:'無法附接終端，請確認此對話仍在執行。'});return close();}
+    try{terminal=ptyModule.spawn(shellN===null?tmuxClient():tmuxClient(shells.socket),shellN===null?attachArgs(g.tmux):attachArgs(shells.nameOf(c,shellN),shells.socket),{name:'xterm-256color',cols:100,rows:30,cwd:agents.stateRoot,env:{...agentEnv(),TERM:'xterm-256color'}});}catch{send({type:'error',message:'無法附接終端，請確認此對話仍在執行。'});return close();}
     terminal.onData(data=>{if(!valid())return close();outBuf+=data;if(outBuf.length>=65536)flushData();else if(outTimer===null)outTimer=setTimeout(flushData,12);});
     terminal.onExit(()=>{send({type:'closed'});close();});
     let windowStart=Date.now(),bytes=0;
@@ -115,7 +124,7 @@ function installTerminal(server,{tmuxClient=serverTmux,ptyModule=require('node-p
     let checking=false;timer=setInterval(async()=>{
      if(++ticks%5===0){if(!ws.isAlive)return close(true);ws.isAlive=false;try{ws.ping();}catch{}send({type:'ping'});}
      if(checking)return;checking=true;try{const current=await resolveLivePrincipal(token,principal.id);if(!valid()||current?.role!=='admin')close();}catch{close();}finally{checking=false;}},tickMs);
-    send({type:'connected',sessionId:g.sessionId});
+    send(shellN===null?{type:'connected',sessionId:g.sessionId}:{type:'connected',shell:shellN});
    });
   }catch(e){reject(socket,e.status||500);}
  });
