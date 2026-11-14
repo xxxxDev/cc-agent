@@ -40,6 +40,11 @@ export const PHONE_KEYS = ['terminal', 'checklist', 'usage', 'search', 'files', 
 export const phoneNavOrder = ref([...PHONE_KEYS]);
 const takePhoneOrder = (v) => { if (!Array.isArray(v)) return; const next = [...new Set([...v.filter((k) => PHONE_KEYS.includes(k)), ...PHONE_KEYS])]; if (JSON.stringify(next) !== JSON.stringify(phoneNavOrder.value)) phoneNavOrder.value = next; };
 const takePhoneCount = (v) => { if ([1, 2, 3].includes(v) && v !== phoneNavCount.value) phoneNavCount.value = v; };
+// Buttons an admin hid with the eyes on 對話頁按鈕, phone and computer alike; the terminal's and
+// the Transcript's are terminalSwitch and transcriptSwitch as well.
+export const navHidden = ref([]);
+const takeNavHidden = (v) => { if (!Array.isArray(v)) return; const next = NAV_KEYS.filter((k) => v.includes(k)); if (JSON.stringify(next) !== JSON.stringify(navHidden.value)) navHidden.value = next; };
+export const navShown = (key) => (key === 'terminal' ? terminalSwitch.value : key === 'transcript' ? transcriptSwitch.value : !navHidden.value.includes(key));
 export const preferencesLoaded = ref(false);
 export const scopedAgents = ref(null);
 
@@ -57,6 +62,7 @@ function absorb(preferences) {
   if (preferences.wrapUp && typeof preferences.wrapUp === 'object') wrapUp.value = preferences.wrapUp;
   archiveRetentionDays.value = Number.isInteger(preferences.archiveRetentionDays) ? preferences.archiveRetentionDays : null;
   checklistRetentionDays.value = Number.isInteger(preferences.checklistRetentionDays) ? preferences.checklistRetentionDays : null;
+  takeNavHidden(preferences.navHidden);
   scopedAgents.value = typeof preferences.scopedAgents === 'boolean' ? preferences.scopedAgents : null;
   preferencesLoaded.value = true;
   return preferences;
@@ -80,6 +86,7 @@ export const listPins = ref([]);
 export function absorbList(preferences) {
   autoSort.value = preferences?.autoSort === true;
   takeNavOrder(preferences?.navOrder);
+  takeNavHidden(preferences?.navHidden);
   takePhoneCount(preferences?.phoneNavCount);
   takePhoneOrder(preferences?.phoneNavOrder);
   const nextPins = Array.isArray(preferences?.pins) ? preferences.pins.filter((id) => typeof id === 'string') : [];

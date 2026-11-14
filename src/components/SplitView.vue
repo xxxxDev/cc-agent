@@ -37,16 +37,16 @@
           icons. A cell too narrow for them has them in its 「⋯」 menu instead; the terminal
           switch stays out. -->
      <template v-if="id&&!compact(index,id)">
-      <button v-if="context[id]" type="button" class="split-cell-icon split-cell-ring" :style="{order:navPlace('usage')}" :class="{on:panels[index]==='usage'}" :aria-pressed="String(panels[index]==='usage')" :aria-label="ringLabel(id)" v-tip="ct('用量統計')" @click="togglePanel(index,'usage')"><UsageRing class="split-ring" :percent="context[id].main?.percent??null" :class="{stale:context[id].main?.stale}"><span class="split-ring-text" aria-hidden="true">{{context[id].main?.percent??''}}</span></UsageRing></button>
-      <button type="button" class="split-cell-icon split-cell-checklist" :style="{order:navPlace('checklist')}" :class="{on:panels[index]==='checklist'}" :aria-pressed="String(panels[index]==='checklist')" :aria-label="ct('待辦事項')" v-tip="ct('待辦事項')" @click="togglePanel(index,'checklist')"><i class="icon f7-icons">checkmark_square</i></button>
-      <button type="button" class="split-cell-icon split-cell-search" :style="{order:navPlace('search')}" :class="{on:panels[index]==='search'}" :aria-pressed="String(panels[index]==='search')" :aria-label="ct('搜尋對話')" v-tip="ct('搜尋對話')" @click="togglePanel(index,'search')"><i class="icon f7-icons">search</i></button>
+      <button v-if="context[id]&&navShown('usage')" type="button" class="split-cell-icon split-cell-ring" :style="{order:navPlace('usage')}" :class="{on:panels[index]==='usage'}" :aria-pressed="String(panels[index]==='usage')" :aria-label="ringLabel(id)" v-tip="ct('用量統計')" @click="togglePanel(index,'usage')"><UsageRing class="split-ring" :percent="context[id].main?.percent??null" :class="{stale:context[id].main?.stale}"><span class="split-ring-text" aria-hidden="true">{{context[id].main?.percent??''}}</span></UsageRing></button>
+      <button v-if="navShown('checklist')" type="button" class="split-cell-icon split-cell-checklist" :style="{order:navPlace('checklist')}" :class="{on:panels[index]==='checklist'}" :aria-pressed="String(panels[index]==='checklist')" :aria-label="ct('待辦事項')" v-tip="ct('待辦事項')" @click="togglePanel(index,'checklist')"><i class="icon f7-icons">checkmark_square</i></button>
+      <button v-if="navShown('search')" type="button" class="split-cell-icon split-cell-search" :style="{order:navPlace('search')}" :class="{on:panels[index]==='search'}" :aria-pressed="String(panels[index]==='search')" :aria-label="ct('搜尋對話')" v-tip="ct('搜尋對話')" @click="togglePanel(index,'search')"><i class="icon f7-icons">search</i></button>
      </template>
      <!-- The cell's terminal, as on the conversation page, when an admin has the
           chat/terminal switch on on the Admin tab. -->
      <button v-if="id&&terminalSwitch" type="button" class="split-cell-icon split-cell-terminal" :style="{order:navPlace('terminal')}" :class="{on:terminalCells.has(index)}" :aria-pressed="String(terminalCells.has(index))" v-tip="terminalCells.has(index)?ct('回到聊天室'):ct('開啟 Claude 終端機')" :aria-label="terminalCells.has(index)?ct('回到聊天室'):ct('開啟 Claude 終端機')" @click="toggleTerminal(index)"><i class="icon f7-icons">chevron_left_slash_chevron_right</i></button>
      <template v-if="id&&!compact(index,id)">
       <button v-if="inspectorFor(id)" type="button" class="split-cell-icon split-cell-inspector" :style="{order:navPlace('transcript')}" :class="{on:panels[index]==='inspector'}" :aria-pressed="String(panels[index]==='inspector')" :aria-label="ct('Transcript 檢視')" v-tip="ct('Transcript 檢視')" @click="togglePanel(index,'inspector')"><i class="icon f7-icons">ant</i></button>
-      <button type="button" class="split-cell-icon split-cell-profile" :style="{order:navPlace('profile')}" :class="{on:panels[index]==='profile'}" :aria-pressed="String(panels[index]==='profile')" aria-label="Agent Profile" v-tip="'Agent Profile'" @click="togglePanel(index,'profile')"><i class="icon f7-icons">info</i></button>
+      <button v-if="navShown('profile')" type="button" class="split-cell-icon split-cell-profile" :style="{order:navPlace('profile')}" :class="{on:panels[index]==='profile'}" :aria-pressed="String(panels[index]==='profile')" aria-label="Agent Profile" v-tip="'Agent Profile'" @click="togglePanel(index,'profile')"><i class="icon f7-icons">info</i></button>
      </template>
      <!-- What the conversation's navbar holds besides, in a narrow cell. -->
      <button v-else-if="id" type="button" class="split-cell-icon split-cell-more" :class="{on:!!panels[index]}" :aria-label="ct('更多')" v-tip="ct('更多')" @click="openMore(index,$event)"><i class="icon f7-icons">ellipsis</i></button>
@@ -74,7 +74,7 @@ import {api} from '../js/api.js';
 import SplitCell from './SplitCell.vue';
 import GlassDropdown from './GlassDropdown.vue';
 import UsageRing from './UsageRing.vue';
-import {terminalSwitch,transcriptSwitch,loadAgentPreferences,loadListPreferences,listGroups,navPlace} from '../js/agentPreferences.js';
+import {terminalSwitch,transcriptSwitch,loadAgentPreferences,loadListPreferences,listGroups,navPlace,navShown} from '../js/agentPreferences.js';
 import {agentSections} from '../js/agentSections.js';
 import {ct} from '../js/agent-i18n.js';
 import {currentUser} from '../js/auth.js';
@@ -136,7 +136,7 @@ async function togglePanel(index,value,open=false){const next=!open&&panels.valu
 // 374px; with the terminal and the Transcript too, 446px.
 const BUTTON=36,HEADER_REST=230;
 const widths=reactive({}),cellEls={};
-const buttonsFor=id=>3+(context.value[id]?1:0)+(terminalSwitch.value?1:0)+(inspectorFor(id)?1:0);
+const buttonsFor=id=>['checklist','search','profile'].filter(navShown).length+(context.value[id]&&navShown('usage')?1:0)+(terminalSwitch.value?1:0)+(inspectorFor(id)?1:0);
 const compact=(index,id)=>!!id&&widths[index]!==undefined&&widths[index]<HEADER_REST+BUTTON*buttonsFor(id);
 // A cell's section is replaced when it is given another agent: only the one on screen counts.
 const cellSize=typeof ResizeObserver==='function'?new ResizeObserver(entries=>{for(const e of entries){if(!e.target.isConnected)continue;const i=Object.keys(cellEls).find(k=>cellEls[k]===e.target);if(i!==undefined)widths[i]=e.contentRect.width;}}):null;

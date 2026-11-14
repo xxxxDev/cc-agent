@@ -353,8 +353,13 @@ function navOrder(){const saved=Array.isArray(state.agentSettings?.navOrder)?sta
 // Transcript there; the terminal first by default, as a phone showed it before.
 const PHONE_KEYS=['terminal','checklist','usage','search','files','profile'];
 function phoneNavOrder(){const saved=Array.isArray(state.agentSettings?.phoneNavOrder)?state.agentSettings.phoneNavOrder.filter(k=>PHONE_KEYS.includes(k)):[];return [...new Set([...saved,...PHONE_KEYS])];}
+// Buttons an admin hid from the conversation page, phone and computer alike, with an eye on each
+// row of 對話頁按鈕. The terminal's and the Transcript's are their switches of before
+// (terminalSwitch, transcriptSwitch, off by default), so a setting saved earlier reads the same;
+// the others are kept as navHidden.
+function navHidden(){const kept=Array.isArray(state.agentSettings?.navHidden)?state.agentSettings.navHidden.filter(k=>NAV_KEYS.includes(k)&&k!=='terminal'&&k!=='transcript'):[];return NAV_KEYS.filter(k=>k==='terminal'?state.agentSettings?.terminalSwitch!==true:k==='transcript'?state.agentSettings?.transcriptSwitch!==true:kept.includes(k));}
 const phoneNavCount=()=>[1,2,3].includes(state.agentSettings?.phoneNavCount)?state.agentSettings.phoneNavCount:2;
-function listPreferences(owner){return {autoSort:autoSort(owner),groups:listGroups(owner),pins:listPins(owner),navOrder:navOrder(),phoneNavOrder:phoneNavOrder(),phoneNavCount:phoneNavCount()};}
+function listPreferences(owner){return {autoSort:autoSort(owner),groups:listGroups(owner),pins:listPins(owner),navOrder:navOrder(),phoneNavOrder:phoneNavOrder(),phoneNavCount:phoneNavCount(),navHidden:navHidden()};}
 function setListPreferences(owner,{autoSort:on,groups,pins}={}){
  if(on===undefined&&groups===undefined&&pins===undefined)throw error('沒有要更新的設定');
  if(on!==undefined&&typeof on!=='boolean')throw error('自動排序設定必須是開或關');
@@ -3303,11 +3308,11 @@ function reviveSilentChannels({now=Date.now(),relaunch=(c)=>{stop(c);launch(c);}
  }
 }
 setInterval(()=>{try{reviveSilentChannels();}catch(e){console.error('channel revive: '+e.message);}},60_000).unref();
-function getPreferences(owner){return {...(platform.isWin?{scopedAgents:false}:{}),wrapUp:wrapUpSettings(ownerLanguage(owner)),archiveRetentionDays:archiveRetentionDays(),checklistRetentionDays:checklistRetentionDays(),navOrder:navOrder(),phoneNavOrder:phoneNavOrder(),phoneNavCount:phoneNavCount(),compactThreshold:state.agentSettings?.compactThreshold??5,handoff:handoffSetting(),subagents:subagentDefault(),autoCompact:autoCompactDefault(),autoCompactPresets:AUTO_COMPACT_PRESETS,terminalSwitch:state.agentSettings?.terminalSwitch===true,openView:state.agentSettings?.openView==='terminal'?'terminal':'chat',terminalTheme:state.agentSettings?.terminalTheme==='cc-agent'?'cc-agent':'computer',transcriptSwitch:state.agentSettings?.transcriptSwitch===true};}
-function setPreferences(owner,{compactThreshold,handoff,subagents,autoCompact,terminalSwitch,openView,terminalTheme,transcriptSwitch,archiveRetentionDays:retention,checklistRetentionDays:listRetention,wrapUp,navOrder:nav,phoneNavOrder:phoneNav,phoneNavCount:phoneCount,...rest}={}){
+function getPreferences(owner){return {...(platform.isWin?{scopedAgents:false}:{}),wrapUp:wrapUpSettings(ownerLanguage(owner)),archiveRetentionDays:archiveRetentionDays(),checklistRetentionDays:checklistRetentionDays(),navOrder:navOrder(),navHidden:navHidden(),phoneNavOrder:phoneNavOrder(),phoneNavCount:phoneNavCount(),compactThreshold:state.agentSettings?.compactThreshold??5,handoff:handoffSetting(),subagents:subagentDefault(),autoCompact:autoCompactDefault(),autoCompactPresets:AUTO_COMPACT_PRESETS,terminalSwitch:state.agentSettings?.terminalSwitch===true,openView:state.agentSettings?.openView==='terminal'?'terminal':'chat',terminalTheme:state.agentSettings?.terminalTheme==='cc-agent'?'cc-agent':'computer',transcriptSwitch:state.agentSettings?.transcriptSwitch===true};}
+function setPreferences(owner,{compactThreshold,handoff,subagents,autoCompact,terminalSwitch,openView,terminalTheme,transcriptSwitch,archiveRetentionDays:retention,checklistRetentionDays:listRetention,wrapUp,navOrder:nav,phoneNavOrder:phoneNav,phoneNavCount:phoneCount,navHidden:hidden,...rest}={}){
  // Unsupported settings are refused, never ignored.
  if(Object.keys(rest).length)throw error('不支援的設定：'+Object.keys(rest).join(', '));
- if(listRetention===undefined&&nav===undefined&&phoneNav===undefined&&phoneCount===undefined&&compactThreshold===undefined&&handoff===undefined&&subagents===undefined&&autoCompact===undefined&&terminalSwitch===undefined&&openView===undefined&&terminalTheme===undefined&&transcriptSwitch===undefined&&retention===undefined&&wrapUp===undefined)throw error('沒有要更新的設定');
+ if(hidden===undefined&&listRetention===undefined&&nav===undefined&&phoneNav===undefined&&phoneCount===undefined&&compactThreshold===undefined&&handoff===undefined&&subagents===undefined&&autoCompact===undefined&&terminalSwitch===undefined&&openView===undefined&&terminalTheme===undefined&&transcriptSwitch===undefined&&retention===undefined&&wrapUp===undefined)throw error('沒有要更新的設定');
  // Every field is checked before any is saved: a request refused over one field leaves
  // all the others as they were, in memory and on disk.
  // The wrap-up check: on or off, the minutes an agent sits idle first, and its words
@@ -3323,6 +3328,7 @@ function setPreferences(owner,{compactThreshold,handoff,subagents,autoCompact,te
  if(retention!==undefined&&retention!==null&&(!Number.isInteger(retention)||retention<1||retention>RETENTION_MAX_DAYS))throw error(`保留天數必須是 1–${RETENTION_MAX_DAYS} 天，或不刪除`);
  if(phoneNav!==undefined&&phoneNav!==null&&(!Array.isArray(phoneNav)||phoneNav.length>PHONE_KEYS.length||phoneNav.some(k=>!PHONE_KEYS.includes(k))||new Set(phoneNav).size!==phoneNav.length))throw error('手機版按鈕順序必須是 '+PHONE_KEYS.join('、')+' 的排列');
  if(phoneCount!==undefined&&![1,2,3].includes(phoneCount))throw error('手機右上按鈕數量必須是 1、2 或 3');
+ if(hidden!==undefined&&(!Array.isArray(hidden)||hidden.some(k=>!NAV_KEYS.includes(k))||new Set(hidden).size!==hidden.length))throw error('隱藏的按鈕必須是 '+NAV_KEYS.join('、')+' 其中幾個');
  if(nav!==undefined&&nav!==null&&(!Array.isArray(nav)||nav.length>NAV_KEYS.length||nav.some(k=>!NAV_KEYS.includes(k))||new Set(nav).size!==nav.length))throw error('按鈕順序必須是 '+NAV_KEYS.join('、')+' 的排列');
  if(listRetention!==undefined&&listRetention!==null&&!CHECKLIST_RETENTION_CHOICES.includes(listRetention))throw error('已完成待辦事項的保留天數必須是 '+CHECKLIST_RETENTION_CHOICES.join('、')+' 天，或不刪除');
  // The chat/terminal switch is off unless an admin asks for it: the conversation page is the normal way in, and the
@@ -3344,7 +3350,14 @@ function setPreferences(owner,{compactThreshold,handoff,subagents,autoCompact,te
  }
  // 0 means never hand off automatically; the manual handoff stays.
  if(compactThreshold!==undefined&&(!Number.isInteger(compactThreshold)||compactThreshold<0||compactThreshold>10))throw error('Compact 門檻必須為 0–10 次（0 為不自動換代）');
- // All checked: saved together.
+ // All checked: saved together. The eyes' list sets the two switches as well.
+ if(hidden!==undefined){
+  if(terminalSwitch===undefined)terminalSwitch=!hidden.includes('terminal');
+  if(transcriptSwitch===undefined)transcriptSwitch=!hidden.includes('transcript');
+  const settings={...state.agentSettings},others=hidden.filter(k=>k!=='terminal'&&k!=='transcript');
+  if(others.length)settings.navHidden=others;else delete settings.navHidden;state.agentSettings=settings;
+  try{require('./services/audit').audit({action:'nav-hidden',by:owner,to:hidden});}catch{}
+ }
  if(terminalSwitch!==undefined)state.agentSettings={...state.agentSettings,terminalSwitch};
  if(openView!==undefined)state.agentSettings={...state.agentSettings,openView};
  if(terminalTheme!==undefined)state.agentSettings={...state.agentSettings,terminalTheme};

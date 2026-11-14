@@ -45,16 +45,14 @@
     <f7-block-title>{{ t('sectionSystem') }}</f7-block-title>
     <f7-list inset class="cc-settings-list">
       <f7-list-item v-if="terminalSwitch" link no-chevron class="open-view" :title="ct('Agent 開啟畫面')" :after="openViewLabel(openView)" @click.prevent="openDropdown('openView',$event)"><template #media><f7-icon f7="rectangle_on_rectangle"/></template></f7-list-item>
-      <f7-list-item :title="ct('聊天室終端機切換')"><template #media><f7-icon f7="chevron_left_slash_chevron_right"/></template><template #after><label class="toggle"><input type="checkbox" :aria-label="ct('聊天室終端機切換')" :checked="terminalSwitch" @change="saveTerminalSwitch($event.target.checked)"/><span class="toggle-icon"></span></label></template></f7-list-item>
       <f7-list-item v-if="terminalSwitch" link no-chevron class="terminal-theme" :title="ct('終端機配色')" :after="terminalThemeLabel(terminalTheme)" @click.prevent="openDropdown('terminalTheme',$event)"><template #media><f7-icon f7="paintbrush"/></template></f7-list-item>
-      <f7-list-item class="transcript-switch" :title="ct('Transcript 檢視')"><template #media><f7-icon f7="ant" class="ant-icon"/></template><template #after><label class="toggle"><input type="checkbox" :aria-label="ct('顯示 Transcript 檢視按鈕')" :checked="transcriptSwitch" @change="saveTranscriptSwitch($event.target.checked)"/><span class="toggle-icon"></span></label></template></f7-list-item>
       <!-- The peer link: pairing with another machine. -->
       <f7-list-item link class="peer-link-row" :title="ct('跨機連線')" @click.prevent="goPeerLink"><template #media><f7-icon f7="link"/></template></f7-list-item>
       <f7-list-item link :title="ct('範圍報告單')" :badge="openReports||null" badge-color="orange" @click.prevent="goReports"><template #media><f7-icon f7="lock_shield"/></template></f7-list-item>
       <!-- What people sent from Agent Profile's 「回報診斷」. -->
       <f7-list-item link class="diagnostic-reports-row" :title="ct('診斷回報')" :badge="openDiagnostics||null" badge-color="orange" @click.prevent="goDiagnostics"><template #media><f7-icon f7="doc_text_search"/></template></f7-list-item>
       <!-- The conversation's buttons, a phone's and a computer's order apart. -->
-      <f7-list-item link class="nav-buttons-row" :title="ct('對話頁按鈕')" :footer="ct('手機版和電腦版的按鈕順序，手機右上要顯示幾個')" @click.prevent="goNavButtons"><template #media><f7-icon f7="rectangle_3_offgrid"/></template></f7-list-item>
+      <f7-list-item link class="nav-buttons-row" :title="ct('對話頁按鈕')" :footer="ct('按鈕的順序、要不要顯示，手機右上要顯示幾個')" @click.prevent="goNavButtons"><template #media><f7-icon f7="rectangle_3_offgrid"/></template></f7-list-item>
     </f7-list>
 
     <f7-block-title>{{ t('sectionAccount') }}</f7-block-title>
@@ -90,7 +88,7 @@ import {editSubagents,subagentLabel} from '../js/subagentDialog.js';
 import UsageMeters from '../components/UsageMeters.vue';
 async function pullRefresh(done) { try { await Promise.all([loadUsage({fresh: true}), loadOpenReports(), loadAgentPreferences().catch(() => {})]); } finally { done(); } }
 import { usageGroups, watchUsage, loadUsage } from '../js/usage.js';
-import {subagents,autoCompact,autoCompactPresets,handoff,wrapUp,archiveRetentionDays,checklistRetentionDays,compactThreshold,terminalSwitch,openView,terminalTheme,transcriptSwitch,loadAgentPreferences,saveAgentPreferences} from '../js/agentPreferences.js';
+import {subagents,autoCompact,autoCompactPresets,handoff,wrapUp,archiveRetentionDays,checklistRetentionDays,compactThreshold,terminalSwitch,openView,terminalTheme,loadAgentPreferences,saveAgentPreferences} from '../js/agentPreferences.js';
 
 const isAdmin = computed(() => currentUser.value?.role === 'admin');
 const toast = (text) => f7.toast.create({ text, closeTimeout: 1800 }).open();
@@ -106,24 +104,11 @@ const openReports=ref(0);
 const openDiagnostics=ref(0);
 async function loadOpenReports(){if(!isAdmin.value)return;try{openReports.value=((await api('/access-reports')).reports||[]).filter(r=>r.status==='open').length;}catch{}try{openDiagnostics.value=((await api('/diagnostic-reports')).reports||[]).filter(r=>r.status==='open').length;}catch{}}
 async function loadCompactPolicy(){if(!isAdmin.value)return;try{await loadAgentPreferences();}catch{}}
-// Off unless asked for: the switch only appears in a conversation once this is on.
-async function saveTranscriptSwitch(on){
-  const previous=transcriptSwitch.value;
-  transcriptSwitch.value=on;
-  try{await saveAgentPreferences({transcriptSwitch:on});toast(t('settingsSaved'));}
-  catch(e){transcriptSwitch.value=previous;f7.dialog.alert(e.message||t('settingsFailed'));}
-}
 // What an agent opens on: its conversation, or its terminal for those used to one.
-// Offered while the terminal switch is on.
+// Offered while the terminal's button is shown (its eye on 對話頁按鈕).
 // The web terminal's colours: this computer's terminal theme or CC Agent's own.
 const terminalThemeLabel=v=>v==='cc-agent'?ct('CC Agent 配色'):ct('跟隨電腦');
 const openViewLabel=v=>v==='terminal'?ct('終端機'):ct('聊天室');
-async function saveTerminalSwitch(on){
-  const previous=terminalSwitch.value;
-  terminalSwitch.value=on;
-  try{await saveAgentPreferences({terminalSwitch:on});toast(t('settingsSaved'));}
-  catch(e){terminalSwitch.value=previous;f7.dialog.alert(e.message||t('settingsFailed'));}
-}
 // The wrap-up check: its switch, its wait, and its words in a dialog with room for
 // several lines (empty goes back to the built-in ones).
 const WRAP_UP_MINUTES=[5,10,15,30,60];
