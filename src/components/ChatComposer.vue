@@ -1,8 +1,8 @@
 <template>
  <div class="toolbar messagebar">
-  <!-- How far a message being sent has got: 傳送中…, or
-       the attachment going up and its percent. -->
-  <div v-if="status" class="composer-status" role="status" aria-live="polite">{{status}}</div>
+  <!-- How far a message being sent has got is no longer a line over the box: the send button
+       turns, and each attachment shows its own percent. It is still said to a screen reader. -->
+  <span v-if="status" class="composer-status-said" role="status" aria-live="polite">{{status}}</span>
   <slot name="before-inner"/>
   <!-- The message being replied to: who wrote it and its first words on one line, an X
        or Escape to stop replying. -->
@@ -19,7 +19,7 @@
      :data-empty="empty" dir="auto" autocomplete="off" inputmode="text" enterkeyhint="enter"
      autocorrect="on" autocapitalize="sentences" spellcheck="true"
      @input="input" @compositionstart="compositionStart" @compositionend="compositionEnd"
-     @keydown="keydown"/>
+     @keydown="keydown" @beforeinput="lineBreak"/>
    </div>
    <div class="toolbar-pane composer-end" @click.capture="guardComposition"><slot name="inner-end"/></div>
   </div>
@@ -43,13 +43,53 @@ let composing=false;
 // Deleting the last character leaves the browser's placeholder BR, which innerText
 // reads as "\n": an editor with no text of its own is empty, so the placeholder returns.
 function text(){const e=editor.value;return e?.textContent?e.innerText.replace(/\r\n?/g,'\n'):'';}
-function input(){if(composing)return;const value=text();empty.value=!value;emit('update:value',value);mark();}
+function input(){if(composing)return;const value=text();empty.value=!value;emit('update:value',value);mark();settleCaret();}
 // Text an input method is still composing is not counted by input() until it commits,
 // so the placeholder would sit over it: it goes as composition starts, and input()
 // decides again when it ends (issue #7).
 function compositionStart(){composing=true;empty.value=false;}
 function compositionEnd(){composing=false;input();}
 function keydown(event){if(composing||event.isComposing||event.keyCode===229)return;if(event.key==='Escape'&&props.reply){event.preventDefault();emit('cancel-reply');return;}emit('keydown',event);}
+// A line break is put in here rather than left to the browser: on an iPhone, after the second
+// Enter the box grew a line but the caret stayed a line up, catching up only later. The break
+// goes in at the caret; at the end of the text a second break holds the new empty line open
+// (as the browser does itself), and the caret is set
+// after the first in so many words, which an iPhone draws where it is.
+function lineBreak(event){
+ if(composing||event.isComposing||(event.inputType!=='insertLineBreak'&&event.inputType!=='insertParagraph'))return;
+ const e=editor.value,sel=window.getSelection();
+ if(!e||!sel||!sel.rangeCount||!e.contains(sel.getRangeAt(0).startContainer))return;
+ event.preventDefault();
+ const range=sel.getRangeAt(0);range.deleteContents();
+ const br=document.createTextNode('\n');range.insertNode(br);
+ const after=document.createRange();after.setStartAfter(br);after.collapse(true);
+ // The caret's place as a count of characters, kept across normalize(), which merges nodes.
+ const at=textOffset(e,after);
+ // Nothing after the caret but an end the browser does not draw: the empty line needs one more.
+ if(e.textContent.length===at)e.appendChild(document.createTextNode('\n'));
+ e.normalize();
+ sel.removeAllRanges();sel.addRange(rangeAt(e,at));
+ input();
+}
+// The box grows or shrinks a line after a break or a deletion; an iPhone kept drawing the caret
+// where it was before until something else moved it.
+// Put back where it is once the new height is laid out, and once more a moment later.
+function settleCaret(){
+ const e=editor.value,sel=window.getSelection();
+ if(!e||composing||!sel?.rangeCount||!sel.getRangeAt(0).collapsed||!e.contains(sel.getRangeAt(0).startContainer))return;
+ const at=textOffset(e,sel.getRangeAt(0));
+ // Put back on the same spot changed nothing an iPhone noticed, with any keyboard: the caret
+ // is taken away for a frame and given back, a real change of selection, which makes it draw
+ // the caret anew.
+ const again=()=>{if(document.activeElement!==e||composing)return;const s2=window.getSelection();if(!s2?.rangeCount)return;const r=s2.getRangeAt(0);if(!r.collapsed||textOffset(e,r)!==at)return;s2.removeAllRanges();requestAnimationFrame(()=>{if(document.activeElement!==e||composing)return;const s3=window.getSelection();if(s3.rangeCount)return;s3.addRange(rangeAt(e,at));});};
+ requestAnimationFrame(()=>requestAnimationFrame(again));
+}
+function textOffset(root,range){const r=document.createRange();r.setStart(root,0);try{r.setEnd(range.startContainer,range.startOffset);}catch{return root.textContent.length;}return r.toString().length;}
+function rangeAt(root,offset){
+ const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let left=offset;
+ for(let n=walker.nextNode();n;n=walker.nextNode()){if(left<=n.data.length){const r=document.createRange();r.setStart(n,left);r.collapse(true);return r;}left-=n.data.length;}
+ const r=document.createRange();r.selectNodeContents(root);r.collapse(false);return r;
+}
 function guardComposition(event){if(composing){event.preventDefault();event.stopPropagation();}}
 function sync(value){
  if(!editor.value||composing)return;
@@ -169,8 +209,7 @@ onBeforeUnmount(()=>{clearTimeout(releaseLater);releaseEvents.forEach(([t,n,f,o]
 .reply-draft-cancel .icon {font-size:16px;}
 @media (hover:hover) and (pointer:fine) {.reply-draft-cancel:hover {background:color-mix(in srgb,currentColor 14%,transparent);}}
 @media (min-width:768px) {.reply-draft {margin:0 calc(16px + var(--f7-safe-area-right,0px)) 8px calc(16px + var(--f7-safe-area-left,0px));}}
-.composer-status {position:relative;z-index:2;display:block;width:fit-content;box-sizing:border-box;max-width:calc(100% - 24px - var(--f7-safe-area-left,0px) - var(--f7-safe-area-right,0px));margin:0 calc(12px + var(--f7-safe-area-right,0px)) 6px calc(12px + var(--f7-safe-area-left,0px));padding:2px 10px;border-radius:999px;background:var(--f7-glass-bg-color,var(--cc-glass-fill-subtle));box-shadow:var(--f7-glass-shadow,none);backdrop-filter:saturate(180%) blur(16px);-webkit-backdrop-filter:saturate(180%) blur(16px);color:var(--cc-color-text-secondary);font-size:13px;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums;}
-@media (min-width:768px) {.composer-status {margin:0 calc(16px + var(--f7-safe-area-right,0px)) 6px calc(16px + var(--f7-safe-area-left,0px));}}
+.composer-status-said {position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;}
 .chat-editor[data-empty="true"]::before {content:attr(data-placeholder);color:var(--f7-messagebar-textarea-placeholder-color);pointer-events:none;position:absolute;}
 </style>
 <style>
