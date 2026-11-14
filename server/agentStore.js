@@ -3236,11 +3236,11 @@ function reviveSilentChannels({now=Date.now(),relaunch=(c)=>{stop(c);launch(c);}
  }
 }
 setInterval(()=>{try{reviveSilentChannels();}catch(e){console.error('channel revive: '+e.message);}},60_000).unref();
-function getPreferences(owner){return {...(platform.isWin?{scopedAgents:false}:{}),wrapUp:wrapUpSettings(ownerLanguage(owner)),archiveRetentionDays:archiveRetentionDays(),checklistRetentionDays:checklistRetentionDays(),navOrder:navOrder(),phoneNavOrder:phoneNavOrder(),phoneNavCount:phoneNavCount(),compactThreshold:state.agentSettings?.compactThreshold??5,handoff:handoffSetting(),subagents:subagentDefault(),autoCompact:autoCompactDefault(),autoCompactPresets:AUTO_COMPACT_PRESETS,terminalSwitch:state.agentSettings?.terminalSwitch===true,openView:state.agentSettings?.openView==='terminal'?'terminal':'chat',transcriptSwitch:state.agentSettings?.transcriptSwitch===true};}
-function setPreferences(owner,{compactThreshold,handoff,subagents,autoCompact,terminalSwitch,openView,transcriptSwitch,archiveRetentionDays:retention,checklistRetentionDays:listRetention,wrapUp,navOrder:nav,phoneNavOrder:phoneNav,phoneNavCount:phoneCount,...rest}={}){
+function getPreferences(owner){return {...(platform.isWin?{scopedAgents:false}:{}),wrapUp:wrapUpSettings(ownerLanguage(owner)),archiveRetentionDays:archiveRetentionDays(),checklistRetentionDays:checklistRetentionDays(),navOrder:navOrder(),phoneNavOrder:phoneNavOrder(),phoneNavCount:phoneNavCount(),compactThreshold:state.agentSettings?.compactThreshold??5,handoff:handoffSetting(),subagents:subagentDefault(),autoCompact:autoCompactDefault(),autoCompactPresets:AUTO_COMPACT_PRESETS,terminalSwitch:state.agentSettings?.terminalSwitch===true,openView:state.agentSettings?.openView==='terminal'?'terminal':'chat',terminalTheme:state.agentSettings?.terminalTheme==='cc-agent'?'cc-agent':'computer',transcriptSwitch:state.agentSettings?.transcriptSwitch===true};}
+function setPreferences(owner,{compactThreshold,handoff,subagents,autoCompact,terminalSwitch,openView,terminalTheme,transcriptSwitch,archiveRetentionDays:retention,checklistRetentionDays:listRetention,wrapUp,navOrder:nav,phoneNavOrder:phoneNav,phoneNavCount:phoneCount,...rest}={}){
  // Unsupported settings are refused, never ignored.
  if(Object.keys(rest).length)throw error('不支援的設定：'+Object.keys(rest).join(', '));
- if(listRetention===undefined&&nav===undefined&&phoneNav===undefined&&phoneCount===undefined&&compactThreshold===undefined&&handoff===undefined&&subagents===undefined&&autoCompact===undefined&&terminalSwitch===undefined&&openView===undefined&&transcriptSwitch===undefined&&retention===undefined&&wrapUp===undefined)throw error('沒有要更新的設定');
+ if(listRetention===undefined&&nav===undefined&&phoneNav===undefined&&phoneCount===undefined&&compactThreshold===undefined&&handoff===undefined&&subagents===undefined&&autoCompact===undefined&&terminalSwitch===undefined&&openView===undefined&&terminalTheme===undefined&&transcriptSwitch===undefined&&retention===undefined&&wrapUp===undefined)throw error('沒有要更新的設定');
  // Every field is checked before any is saved: a request refused over one field leaves
  // all the others as they were, in memory and on disk.
  // The wrap-up check: on or off, the minutes an agent sits idle first, and its words
@@ -3263,6 +3263,8 @@ function setPreferences(owner,{compactThreshold,handoff,subagents,autoCompact,te
  if(terminalSwitch!==undefined&&typeof terminalSwitch!=='boolean')throw error('終端機切換設定必須是開或關');
  // What an agent opens on, its conversation or its terminal.
  if(openView!==undefined&&!['chat','terminal'].includes(openView))throw error('開啟畫面必須是聊天室或終端機');
+ // The web terminal's colours: this computer's terminal theme or CC Agent's own.
+ if(terminalTheme!==undefined&&!['computer','cc-agent'].includes(terminalTheme))throw error('終端機配色必須是跟隨電腦或 CC Agent');
  // Whether the conversation's navbar offers the Transcript column; off until an admin switches it on. Its routes stay admin-only either way.
  if(transcriptSwitch!==undefined&&typeof transcriptSwitch!=='boolean')throw error('Transcript 檢視設定必須是開或關');
  const checkedSubagents=subagents!==undefined?subagentCheck(subagents):undefined;
@@ -3278,6 +3280,7 @@ function setPreferences(owner,{compactThreshold,handoff,subagents,autoCompact,te
  // All checked: saved together.
  if(terminalSwitch!==undefined)state.agentSettings={...state.agentSettings,terminalSwitch};
  if(openView!==undefined)state.agentSettings={...state.agentSettings,openView};
+ if(terminalTheme!==undefined)state.agentSettings={...state.agentSettings,terminalTheme};
  if(transcriptSwitch!==undefined)state.agentSettings={...state.agentSettings,transcriptSwitch};
  if(compactThreshold!==undefined){state.agentSettings={...state.agentSettings,compactThreshold};for(const c of state.conversations)if(!c.archived&&!c.thresholdOwn){c.threshold=compactThreshold;if(compactThreshold===0)c.pendingRotation=false;}}
  if(checkedSubagents)state.agentSettings={...state.agentSettings,subagents:checkedSubagents};
@@ -3296,7 +3299,7 @@ function setPreferences(owner,{compactThreshold,handoff,subagents,autoCompact,te
   if(wrapUp.text!==undefined){if(wrapUp.text.trim()&&![WRAP_UP_TEXT,WRAP_UP_TEXT_EN].includes(wrapUp.text.trim()))next.text=wrapUp.text.trim();else delete next.text;}
   state.agentSettings={...state.agentSettings,wrapUp:next};
  }
- if(terminalSwitch!==undefined||openView!==undefined||transcriptSwitch!==undefined||compactThreshold!==undefined)save();
+ if(terminalSwitch!==undefined||openView!==undefined||terminalTheme!==undefined||transcriptSwitch!==undefined||compactThreshold!==undefined)save();
  saveSettings();
  // After a change to the subagents' setting, the running agents it does not reach until they start again.
  const listed=c=>({id:c.id,title:c.title,busy:active(c).phase!=='ready'||busyElsewhere(c,active(c))});

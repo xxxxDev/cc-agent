@@ -46,6 +46,7 @@
     <f7-list inset class="cc-settings-list">
       <f7-list-item v-if="terminalSwitch" link no-chevron class="open-view" :title="ct('Agent 開啟畫面')" :after="openViewLabel(openView)" @click.prevent="openDropdown('openView',$event)"><template #media><f7-icon f7="rectangle_on_rectangle"/></template></f7-list-item>
       <f7-list-item :title="ct('聊天室終端機切換')"><template #media><f7-icon f7="chevron_left_slash_chevron_right"/></template><template #after><label class="toggle"><input type="checkbox" :aria-label="ct('聊天室終端機切換')" :checked="terminalSwitch" @change="saveTerminalSwitch($event.target.checked)"/><span class="toggle-icon"></span></label></template></f7-list-item>
+      <f7-list-item v-if="terminalSwitch" link no-chevron class="terminal-theme" :title="ct('終端機配色')" :after="terminalThemeLabel(terminalTheme)" @click.prevent="openDropdown('terminalTheme',$event)"><template #media><f7-icon f7="paintbrush"/></template></f7-list-item>
       <f7-list-item class="transcript-switch" :title="ct('Transcript 檢視')"><template #media><f7-icon f7="ant" class="ant-icon"/></template><template #after><label class="toggle"><input type="checkbox" :aria-label="ct('顯示 Transcript 檢視按鈕')" :checked="transcriptSwitch" @change="saveTranscriptSwitch($event.target.checked)"/><span class="toggle-icon"></span></label></template></f7-list-item>
       <!-- The peer link: pairing with another machine. -->
       <f7-list-item link class="peer-link-row" :title="ct('跨機連線')" @click.prevent="goPeerLink"><template #media><f7-icon f7="link"/></template></f7-list-item>
@@ -89,7 +90,7 @@ import {editSubagents,subagentLabel} from '../js/subagentDialog.js';
 import UsageMeters from '../components/UsageMeters.vue';
 async function pullRefresh(done) { try { await Promise.all([loadUsage({fresh: true}), loadOpenReports(), loadAgentPreferences().catch(() => {})]); } finally { done(); } }
 import { usageGroups, watchUsage, loadUsage } from '../js/usage.js';
-import {subagents,autoCompact,autoCompactPresets,handoff,wrapUp,archiveRetentionDays,checklistRetentionDays,compactThreshold,terminalSwitch,openView,transcriptSwitch,loadAgentPreferences,saveAgentPreferences} from '../js/agentPreferences.js';
+import {subagents,autoCompact,autoCompactPresets,handoff,wrapUp,archiveRetentionDays,checklistRetentionDays,compactThreshold,terminalSwitch,openView,terminalTheme,transcriptSwitch,loadAgentPreferences,saveAgentPreferences} from '../js/agentPreferences.js';
 
 const isAdmin = computed(() => currentUser.value?.role === 'admin');
 const toast = (text) => f7.toast.create({ text, closeTimeout: 1800 }).open();
@@ -114,6 +115,8 @@ async function saveTranscriptSwitch(on){
 }
 // What an agent opens on: its conversation, or its terminal for those used to one.
 // Offered while the terminal switch is on.
+// The web terminal's colours: this computer's terminal theme or CC Agent's own.
+const terminalThemeLabel=v=>v==='cc-agent'?ct('CC Agent 配色'):ct('跟隨電腦');
 const openViewLabel=v=>v==='terminal'?ct('終端機'):ct('聊天室');
 async function saveTerminalSwitch(on){
   const previous=terminalSwitch.value;
@@ -187,6 +190,7 @@ const dropdownItems = computed(() => {
   if(dropdownKind.value==='wrapUp')return [...new Set([...WRAP_UP_MINUTES,wrapUp.value.minutes])].sort((a,b)=>a-b).map(n=>({value:String(n),label:n+' '+ct('分鐘')}));
   if(dropdownKind.value==='lazy')return [{value:'now',label:ct('立即啟動')},{value:'lazy',label:ct('等第一則訊息')}];
   if(dropdownKind.value==='openView')return ['chat','terminal'].map(v=>({value:v,label:openViewLabel(v)}));
+  if(dropdownKind.value==='terminalTheme')return ['computer','cc-agent'].map(v=>({value:v,label:terminalThemeLabel(v)}));
   if(dropdownKind.value==='autoCompact')return [{value:'default',label:autoCompactLabel(null)},...autoCompactPresets.value.map(n=>({value:String(n),label:autoCompactLabel(n)}))];
   if(dropdownKind.value==='retention')return [{value:'never',label:retentionLabel(null)},...RETENTION_CHOICES.map(d=>({value:String(d),label:retentionLabel(d)}))];
   if(dropdownKind.value==='checklistRetention')return [{value:'never',label:checklistRetentionLabel(null)},...CHECKLIST_RETENTION_CHOICES.map(d=>({value:String(d),label:checklistRetentionLabel(d)}))];
@@ -196,6 +200,7 @@ const dropdownSelected = computed(() => {
   if(dropdownKind.value==='wrapUp')return String(wrapUp.value.minutes);
   if(dropdownKind.value==='lazy')return handoff.value.lazy?'lazy':'now';
   if(dropdownKind.value==='openView')return openView.value;
+  if(dropdownKind.value==='terminalTheme')return terminalTheme.value;
   if(dropdownKind.value==='autoCompact')return autoCompact.value?String(autoCompact.value):'default';
   if(dropdownKind.value==='retention')return archiveRetentionDays.value===null?'never':String(archiveRetentionDays.value);
   if(dropdownKind.value==='checklistRetention')return checklistRetentionDays.value===null?'never':String(checklistRetentionDays.value);
@@ -240,6 +245,7 @@ async function onDropdownSelect(value) {
   if(dropdownKind.value==='retention'){await saveRetention(value);return;}
   if(dropdownKind.value==='checklistRetention'){await saveChecklistRetention(value);return;}
   if(dropdownKind.value==='lazy'){await saveHandoff({lazy:value==='lazy'});return;}
+  if(dropdownKind.value==='terminalTheme'){if(value===terminalTheme.value)return;const was=terminalTheme.value;terminalTheme.value=value;try{await saveAgentPreferences({terminalTheme:value});toast(t('settingsSaved'));}catch(e){terminalTheme.value=was;f7.dialog.alert(e.message||t('settingsFailed'));}return;}
   if(dropdownKind.value==='openView'){if(value===openView.value)return;const was=openView.value;openView.value=value;try{await saveAgentPreferences({openView:value});toast(t('settingsSaved'));}catch(e){openView.value=was;f7.dialog.alert(e.message||t('settingsFailed'));}return;}
   if(dropdownKind.value==='autoCompact'){await saveAutoCompact(value);return;}
   try{await saveAgentPreferences({compactThreshold:Number(value)});toast(t('settingsSaved'));}catch(e){f7.dialog.alert(e.message);}

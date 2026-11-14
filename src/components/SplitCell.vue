@@ -40,7 +40,7 @@
      </div>
      </template></div>
     </div></template>
-    <template #inner-end><f7-link v-if="sendStatus" icon-only class="split-send disabled composer-sending" aria-disabled="true" :aria-label="sendStatus"><f7-preloader :size="18"/></f7-link><f7-link v-else icon-only icon-f7="arrow_up" class="split-send" :class="{disabled:!canSend}" :aria-disabled="!canSend" :aria-label="ct('送出訊息')" @click="send"/></template>
+    <template #inner-end><f7-link v-if="sendStatus" icon-only class="split-send disabled composer-sending" aria-disabled="true" :aria-label="sendStatus"><SpinnerIcon/></f7-link><f7-link v-else icon-only icon-f7="arrow_up" class="split-send" :class="{disabled:!canSend}" :aria-disabled="!canSend" :aria-label="ct('送出訊息')" @click="send"/></template>
    </ChatComposer>
   </div>
   <SlashMenu v-if="detail&&!locked&&slash.items.value.length" :items="slash.items.value" :active="slash.active.value" @hover="slash.active.value=$event" @pick="slash.complete"/>
@@ -95,6 +95,7 @@ import {secondClock} from '../js/secondClock.js';
 import MessageList from './MessageList.vue';
 import TerminalPromptCard from './TerminalPromptCard.vue';
 import TerminalPane from '../TerminalPane.vue';
+import SpinnerIcon from './SpinnerIcon.vue';
 import AttachmentPreview from './AttachmentPreview.vue';
 import DraftPictures from './DraftPictures.vue';
 import {isDraftPicture} from '../js/pictureFiles.js';

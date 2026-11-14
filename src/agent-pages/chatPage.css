@@ -173,6 +173,8 @@
 /* Keep the history slide out of the composer's reserved area. */
 .chat-page > .messages-content:not(.terminal-content) {clip-path:inset(0 0 calc(var(--conversation-composer-height,var(--f7-messagebar-height)) + 8px) 0);}
 .chat-page > .terminal-content {display:flex;flex-direction:column;overflow:hidden;padding-bottom:var(--f7-safe-area-bottom,0px) !important;}
+/* A phone's terminal keys take the home indicator's band themselves (TerminalPane.vue). */
+.chat-page > .terminal-content:has(.terminal-keys) {padding-bottom:0 !important;}
 .chat-page > :deep(.messagebar) {bottom:var(--conversation-composer-lift,0px);}
 
 .chat-page.conversation-keyboard {--f7-safe-area-bottom:0px;overflow:clip;}
