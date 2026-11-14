@@ -24,7 +24,8 @@ const MAX = 4;
 const prefix = (c) => 'sh-' + c.id + '-';
 const nameOf = (c, n) => prefix(c) + n;
 // Paths are shown under the home folder as ~, as a shell's prompt shows them.
-const HOME = os.homedir();
+// The account's own home, as a shell opens in (open below), not $HOME, which a test or a service may set elsewhere.
+const HOME = os.userInfo().homedir;
 const tilde = (p) => (p === HOME ? '~' : p.startsWith(HOME + '/') ? '~' + p.slice(HOME.length) : p);
 // A shell waiting at its prompt shows its own name as the pane's command; anything else
 // is a program running in it.
