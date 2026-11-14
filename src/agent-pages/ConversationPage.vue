@@ -28,12 +28,13 @@
        starting. -->
   <FileDropOverlay :show="fileDragging" :name="detail?.title" :count="fileDragCount" :split="terminalSplit" :over="fileDragTarget" :terminal-ok="terminalTakes"/>
   <div v-if="agentLocked&&(!terminalOpen||terminalSide&&!chatHidden)" class="agent-operation-overlay" role="status" aria-live="polite" aria-busy="true">
-   <div class="dialog dialog-preloader agent-operation-card"><div class="dialog-inner">
-    <div class="dialog-title">{{agentOperationTitle}}</div>
-    <div v-if="agentOperationSteps.length" class="dialog-text"><p v-for="step in agentOperationSteps" :key="step">{{step}}</p></div>
+   <!-- Spinner or bar first, then what is happening and for how long, all centred, so the
+        spinner no longer sits low between the lines. -->
+   <div class="dialog agent-operation-card"><div class="dialog-inner">
     <div v-if="agentOperationPercent!==null" class="operation-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="agentOperationPercent"><div class="operation-progress-track"><div class="operation-progress-fill" :style="{width:agentOperationPercent+'%'}"/></div><span>{{agentOperationPercent}}%</span></div>
-    <f7-preloader v-else/>
-    <div class="dialog-text">{{ct('可以返回 Agents 清單，其他 Agent 仍可使用。')}}</div>
+    <f7-preloader v-else class="operation-spinner" :size="32"/>
+    <div class="dialog-title">{{agentOperationTitle}}</div>
+    <div v-if="agentOperationSteps.length" class="dialog-text operation-steps" :class="{list:agentOperationSteps.length>1}"><p v-for="step in agentOperationSteps" :key="step">{{step}}</p></div>
    </div></div>
   </div>
   <TranscriptInspector v-if="inspectorVisible" :data="inspectData" :busy="inspectBusy" :error="inspectError" :agent="detail" @close="toggleInspector" @back="clearInspection"/>

@@ -699,7 +699,6 @@ const english = {
   "確認連線": "Confirm the connection",
   
   "Agent 正在處理": "Agent maintenance in progress",
-  "可以返回 Agents 清單，其他 Agent 仍可使用。": "You can return to Agents and use another agent.",
   "操作等待逾時，請查看此 Agent 狀態後再操作。": "Operation wait timed out. Check this agent before trying again.",
   
   

@@ -57,7 +57,7 @@
      <!-- Folded, its agents' names as small tags:
           one working spins, and a tap opens that agent. -->
      <div v-if="row.collapsed&&!editMode" class="agent-group-tags">
-      <button v-for="a in row.members" :key="a.id" type="button" class="agent-group-tag" :class="{thinking:thinking(a)}" :data-id="a.id" @click="select(a.id)"><f7-preloader v-if="thinking(a)" class="agent-group-busy" :size="10"/><span v-else class="tag-dot" :class="{online:a.connected&&!activity(a),working:!!activity(a)}" role="img" :aria-label="ct(presenceLabel(a))" :title="ct(presenceLabel(a))"></span>{{a.title}}</button>
+      <button v-for="a in row.members" :key="a.id" type="button" class="agent-group-tag" :class="{thinking:thinking(a)}" :data-id="a.id" @click="select(a.id)"><f7-preloader v-if="thinking(a)||activity(a)" class="agent-group-busy" :class="{working:!!activity(a)}" :size="10"/><span v-else class="tag-dot" :class="{online:a.connected&&!activity(a),working:!!activity(a)}" role="img" :aria-label="ct(presenceLabel(a))" :title="ct(presenceLabel(a))"></span>{{a.title}}</button>
      </div>
      <div v-if="editMode&&listSource!=='recent'" class="sortable-handler agent-group-handle" :aria-label="ct('拖曳整個群組')" @touchstart.stop @mousedown.stop @pointerdown.stop="startGroupDrag($event,moveGroups)"/>
     </li>
@@ -68,7 +68,7 @@
          drag handle. -->
     <template v-if="editMode" #content-start><f7-button class="agent-select" :icon-f7="isChosen(row.agent.id)?'checkmark_circle_fill':'circle'" role="checkbox" :aria-checked="String(isChosen(row.agent.id))" :aria-label="ct('選取')+' '+row.agent.title" @click.stop="toggleChosen(row.agent.id)"/></template>
     <template v-if="editMode&&user?.role==='admin'" #content-end><f7-button class="agent-delete" color="red" icon-f7="minus_circle_fill" :aria-label="ct('刪除')+' '+row.agent.title" @click.stop="deleteConversation(row.agent)"/></template>
-    <template #media><div class="agent-avatar"><img v-if="row.agent.avatar" :src="row.agent.avatar" :class="'agent-avatar-'+avatarShape(row.agent.avatar)" alt="" width="45" height="45"/><img v-else :src="defaultAvatar(row.agent)" class="agent-avatar-icon" alt=""/><span class="presence-dot" :class="{online:row.agent.connected&&!activity(row.agent),working:!!activity(row.agent),thinking:thinking(row.agent)}" role="img" :aria-label="ct(presenceLabel(row.agent))" :title="ct(presenceLabel(row.agent))"><f7-preloader v-if="thinking(row.agent)" :size="14"/></span></div></template>
+    <template #media><div class="agent-avatar"><img v-if="row.agent.avatar" :src="row.agent.avatar" :class="'agent-avatar-'+avatarShape(row.agent.avatar)" alt="" width="45" height="45"/><img v-else :src="defaultAvatar(row.agent)" class="agent-avatar-icon" alt=""/><span class="presence-dot" :class="{online:row.agent.connected&&!activity(row.agent),working:!!activity(row.agent),thinking:thinking(row.agent)}" role="img" :aria-label="ct(presenceLabel(row.agent))" :title="ct(presenceLabel(row.agent))"><f7-preloader v-if="thinking(row.agent)||activity(row.agent)" :size="14"/></span></div></template>
     <!-- Swiped left outside Edit mode, a row offers round buttons: pause or start,
          whichever its state calls for, and, for an admin, delete. -->
     <f7-swipeout-actions v-if="!editMode" right class="agent-swipe">
@@ -206,6 +206,7 @@ import {inject,ref,computed,nextTick} from "vue";import {listIsColumn} from "../
 .agent-group-fold {display:flex;align-items:center;gap:8px;flex:1;min-width:0;width:auto;margin:0;padding:0;border:0;background:none;font:inherit;color:inherit;text-align:left;cursor:pointer;}
 .agent-group-count {flex:0 0 auto;font-size:13px;font-weight:500;color:var(--cc-color-text-secondary);}
 .agent-group-busy {flex:0 0 auto;--f7-preloader-color:#34c759;}
+.agent-group-busy.working {--f7-preloader-color:#ff9500;}
 .agent-group-tags {display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
 .agent-group-tag {display:inline-flex;align-items:center;gap:5px;width:auto;max-width:100%;margin:0;padding:3px 10px;border:0;border-radius:11px;background:color-mix(in srgb,currentColor 12%,transparent);color:var(--cc-color-text-secondary);font:inherit;font-size:12px;font-weight:500;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
 /* The tapped agent while its conversation loads: the tap took, it is on its way
@@ -317,6 +318,7 @@ import {inject,ref,computed,nextTick} from "vue";import {listIsColumn} from "../
 .presence-dot.online {
   background: #34c759; /* green = agent Channel heartbeat and ready */
 }
-.presence-dot.working {background:#ff9500;}
-.presence-dot.thinking {display:flex;align-items:center;justify-content:center;width:20px;height:20px;right:-6px;bottom:-6px;box-shadow:none;background:var(--cc-color-page,#121212);--f7-preloader-color:#34c759;}
+/* Compacting, starting or handing off spins too, in its own colour, instead of a still dot. */
+.presence-dot.thinking, .presence-dot.working {display:flex;align-items:center;justify-content:center;width:20px;height:20px;right:-6px;bottom:-6px;box-shadow:none;background:var(--cc-color-page,#121212);--f7-preloader-color:#34c759;}
+.presence-dot.working {--f7-preloader-color:#ff9500;}
 </style>

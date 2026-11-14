@@ -9,7 +9,8 @@
 .schedule-card:not(.login-card):not(.card-warn) .schedule-card-head {color:var(--cc-accent-blue) !important;}
 
 /* "Working" dots (ChatListPage.vue, chatPage.css, SplitView.vue). */
-.presence-dot.working, .tag-dot.working, .nav-presence.working, .split-presence.working {background:var(--cc-accent-blue) !important;}
+.tag-dot.working, .nav-presence.working, .split-presence.working {background:var(--cc-accent-blue) !important;}
+.presence-dot.working, .agent-group-busy.working {--f7-preloader-color:var(--cc-accent-blue) !important;}
 
 /* Search snippet marks (MessageSearchResults.vue). */
 .message-search-snippet mark {background:color-mix(in srgb,var(--cc-accent-blue) 35%,transparent) !important;}
