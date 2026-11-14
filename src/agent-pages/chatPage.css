@@ -185,3 +185,13 @@
 
 /* The bubbles' own look (sizes, markdown, attachments, the typing bubbles) is in
    components/MessageList.vue, shared with the split view's cells. */
+
+/* The side column comes in from the right, as the list column does beside the chat
+   (styles/listDetail.css), when it opens with none open before. */
+.chat-page[data-chat~="side-in"] > .profile-panel,
+.chat-page[data-chat~="side-in"] > :deep(.transcript-inspector) {animation:side-panel-in .28s cubic-bezier(.2,.8,.2,1);}
+@keyframes side-panel-in {from {opacity:0;transform:translate3d(48px,0,0);} to {opacity:1;transform:none;}}
+@media (prefers-reduced-motion: reduce) {
+ .chat-page[data-chat~="side-in"] > .profile-panel,
+ .chat-page[data-chat~="side-in"] > :deep(.transcript-inspector) {animation:none;}
+}
