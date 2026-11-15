@@ -3161,14 +3161,20 @@ function removeSentFile(c,fileId){
 }
 // Words without the paths of the files shown as attachments, as a terminal typed them (quoted
 // or with backslash escapes); everything else as it was.
+// A backslash is taken only as an escape (\\.), never by the other alternative too, so a slash
+// followed by many backslashes cannot backtrack for seconds, and a path is only tried from the
+// start of a word.
+const WITHOUT_PATHS_MAX=20000;
 function withoutPaths(text,files){
  const ids=new Set((files||[]).map(f=>f.id));if(!ids.size||!text)return text||'';
+ // A very long prompt is left as typed: these patterns run on the event loop.
+ if(String(text).length>WITHOUT_PATHS_MAX)return String(text);
  const END='\\/([-a-f0-9]{36})(?:\\.data)?(?:\\.[A-Za-z0-9]{1,16})?';
  const drop=(all,id)=>ids.has(id)?'':all;
  const out=String(text)
-  .replace(new RegExp(`'\\/[^'\\n]*?${END}'(?=\\s|$)`,'g'),drop)
-  .replace(new RegExp(`"\\/[^"\\n]*?${END}"(?=\\s|$)`,'g'),drop)
-  .replace(new RegExp(`\\/(?:\\\\.|[^\\s'"])*?${END}(?=\\s|$)`,'g'),drop);
+  .replace(new RegExp(`(?<!\\S)'\\/[^'\\n]*?${END}'(?=\\s|$)`,'g'),drop)
+  .replace(new RegExp(`(?<!\\S)"\\/[^"\\n]*?${END}"(?=\\s|$)`,'g'),drop)
+  .replace(new RegExp(`(?<!\\S)\\/(?:\\\\.|[^\\s'"\\\\])*?${END}(?=\\s|$)`,'g'),drop);
  return out.replace(/[ \t]{2,}/g,' ').replace(/[ \t]+\n/g,'\n').trim();
 }
 function terminalTurnFiles(c,e){
@@ -3189,7 +3195,8 @@ function terminalTurnFiles(c,e){
  });
  // A path as a terminal types it: backslash escapes and quotes taken off first.
  const plain=String(e.text||'').replace(/\\(.)/g,'$1').replace(/['"]/g,' ');
- for(const m of plain.matchAll(/(\/[^\s]*?\/[-a-f0-9]{36}(?:\.data)?(?:\.[A-Za-z0-9]{1,16})?)(?=\s|$)/g)){
+ // Only from the start of a word, so a run of slashes is not tried from each one.
+ for(const m of plain.matchAll(/(?<!\S)(\/[^\s]*?\/[-a-f0-9]{36}(?:\.data)?(?:\.[A-Za-z0-9]{1,16})?)(?=\s|$)/g)){
   if(out.length>=attachments.MAX_FILES)break;
   const f=own(m[1]);if(f)out.push(f);
  }
