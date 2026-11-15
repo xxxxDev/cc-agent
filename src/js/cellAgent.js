@@ -17,7 +17,8 @@ import {afterProfileSave,askDiscard,guardOperation as guardProfile,staleProfile,
 export function useCellAgent({workspace, conversationId, detail, refresh, profileOpen, returnFromProfile}) {
  const error=ref(''),operation=ref(null),operationError=ref('');
  const activity=computed(()=>agentActivity(detail.value,operation.value));
- const locked=computed(()=>!!activity.value&&!operationError.value);
+ const wakeDone=agentOperation.useWakeDone(()=>detail.value,()=>activity.value);
+ const locked=computed(()=>(!!activity.value||wakeDone.value)&&!operationError.value);
  let disposed=false;
  async function attempt(fn){error.value='';try{return await fn();}catch(e){error.value=e.message;return null;}}
  // Start, compact and hand over wait until the agent is back, under the cell's own
@@ -97,7 +98,7 @@ export function useCellAgent({workspace, conversationId, detail, refresh, profil
  };
  return {cell,activity,locked,operationError,error,action,
   operationTitle:computed(()=>agentOperation.operationTitle(activity.value)),
-  operationSteps:computed(()=>detail.value?agentOperation.operationSteps(detail.value,activity.value,operation.value):[]),
+  operationSteps:computed(()=>wakeDone.value&&!activity.value?agentOperation.wakeDoneSteps():detail.value?agentOperation.operationSteps(detail.value,activity.value,operation.value):[]),
   operationPercent:computed(()=>agentOperation.operationPercent(detail.value,activity.value)),
   mayCloseProfile,
   dispose:()=>{disposed=true;}};

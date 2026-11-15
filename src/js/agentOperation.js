@@ -5,6 +5,7 @@
 import {ct,duration} from './agent-i18n.js';
 import {estimatedCost} from './usageCost.js';
 import {api} from './api.js';
+import {ref,watch} from 'vue';
 
 export function statusLabel(d) {
  return ({'awaiting-workspace':ct("等待工作目錄確認"),'awaiting-confirmation':ct("等待本機 Channel 確認"),starting:ct("Claude agent 喚醒中"),ready:d?.mode==='demo'?ct("模擬助手已就緒"):d?.connected?ct("Claude 已連線"):ct("正在確認連線…"),busy:ct("正在思考與處理…"),stopped:d?.dormant?ct("已接續，等第一則訊息再啟動"):ct("已暫停"),error:ct("需要重新連線"),'handing-off':ct("正在交接…")}[d?.phase]||ct("準備中"));
@@ -37,6 +38,21 @@ export function operationSteps(d, kind, op) {
  if(kind!=='rotate'&&!(op&&d?.generation>op.generation))return [];
  const started=op?d?.generation>op.generation:d?.phase==='starting';
  return [(started?'✓ ':'⋯ ')+ct('整理並保存交接資料'),(started?'✓ ':'○ ')+ct('啟動新的 session'),(started?'⋯ ':'○ ')+ct('載入交接內容並確認連線')];
+}
+// A wake's second step was never seen ticked: the shield closed the moment it was done.
+// When the same agent goes from waking to connected, both steps
+// show ticked for half a second before the shield goes; not when it stopped or failed instead.
+export const WAKE_HOLD_MS=500;
+export const wakeDoneSteps=()=>['✓ '+ct('啟動 Claude session'),'✓ '+ct('確認連線')];
+export function useWakeDone(agent,kind,ms=WAKE_HOLD_MS){
+ const done=ref(false);let timer;
+ watch(()=>[agent()?.id,kind()],([id,now],[was,before]=[])=>{
+  if(id===was&&now===before)return;
+  clearTimeout(timer);done.value=false;
+  const d=agent();
+  if(id&&id===was&&before==='start'&&!now&&d?.connected&&['ready','busy'].includes(d.phase)){done.value=true;timer=setTimeout(()=>{done.value=false;},ms);}
+ });
+ return done;
 }
 // A compaction's progress as Claude Code draws it in its terminal, read off that
 // screen by the server; null until it shows.

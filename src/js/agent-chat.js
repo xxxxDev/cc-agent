@@ -224,7 +224,8 @@ const wakingId=ref(null),waking=ref(false),wakeError=ref('');let wakeRun=0,dispo
 const newOpen=ref(false),infoOpen=ref(false),newTitle=ref(''),memoryDraft=ref('');
 const operations=ref({}),operationErrors=ref({});
 function activity(c){return agentActivity(c,operations.value[c?.id]);}
-const agentLocked=computed(()=>!!activity(detail.value)&&!operationErrors.value[selected.value]);
+const wakeDone=agentOperation.useWakeDone(()=>detail.value,()=>activity(detail.value));
+const agentLocked=computed(()=>(!!activity(detail.value)||wakeDone.value)&&!operationErrors.value[selected.value]);
 const agentOperationError=computed(()=>operationErrors.value[selected.value]||'');
 // The typing bubbles' lines come from js/conversationStatus.js, shared with the
 // split view's cells.
@@ -353,7 +354,7 @@ async function openAutoCompactChoice(){
  }
 }
 const agentOperationTitle=computed(()=>agentOperation.operationTitle(activity(detail.value)));
-const agentOperationSteps=computed(()=>{secondClock.value;const d=detail.value;return d?agentOperation.operationSteps(d,activity(d),operations.value[selected.value]):[];});
+const agentOperationSteps=computed(()=>{secondClock.value;const d=detail.value;if(wakeDone.value&&!activity(d))return agentOperation.wakeDoneSteps();return d?agentOperation.operationSteps(d,activity(d),operations.value[selected.value]):[];});
 const agentOperationPercent=computed(()=>agentOperation.operationPercent(detail.value,activity(detail.value)));
 function updateAgent(d){conversations.value=conversations.value.map(c=>c.id===d.id?{...c,...d}:c);if(selected.value===d.id)detail.value=d;}
 async function runAgentOperation(id,kind,body={}){
