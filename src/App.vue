@@ -555,7 +555,7 @@ const f7params = {
   // and its caret away from where they are, and could stay on after the keyboard
   // opened. The rest keep it.
   touch: {
-    touchHighlightElements: '.toolbar-pane, .navbar .left, .navbar .right, .actions-group:not(.actions-grid .actions-group), .searchbar-input-wrap, .searchbar-disable-button, .subnavbar, .searchbar-input-wrap .autocomplete-dropdown, .notification, .toast, .fab > a',
+    touchHighlightElements: '.toolbar-pane, .navbar .left .link, .navbar .right .link, .actions-group:not(.actions-grid .actions-group), .searchbar-input-wrap, .searchbar-disable-button, .subnavbar, .searchbar-input-wrap .autocomplete-dropdown, .notification, .toast, .fab > a',
   },
 };
 </script>
