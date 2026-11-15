@@ -283,7 +283,6 @@ const english = {
 "拖曳調整大小":"Drag to resize",
 "可使用":"Ready",
 "裡面正在執行的程式會一起結束。":"The program running in it ends with it.",
-"最多 4 個終端機分頁":"Up to 4 terminal tabs",
 "找不到這個終端機":"This terminal is gone",
 "只有 Claude agent 有終端機":"Only a Claude agent has a terminal",
 "Windows 不支援終端機分頁":"Terminal tabs are not available on Windows",

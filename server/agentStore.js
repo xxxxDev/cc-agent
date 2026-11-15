@@ -3188,7 +3188,7 @@ function removeSentFile(c,fileId){
  const already=holders.every(m=>m.attachments.find(f=>f.id===fileId).removed===true);
  const removedAt=first.removedAt||new Date().toISOString();
  const mark=f=>f.id===fileId&&f.removed!==true?{id:f.id,name:f.name,size:f.size,removed:true,removedAt}:f;
- // Marked and saved first, the bytes taken after (independent review): a save that
+ // Marked and saved first, the bytes taken after: a save that
  // fails leaves the file and its messages as they were; bytes that fail to go leave messages
  // saying removed, and the same delete again takes them.
  const before=holders.map(m=>m.attachments);
