@@ -734,12 +734,23 @@ function locateNow(cwd, sessionId) {
 }
 // Where the session's transcript stands now: its session id and size, noted when a web message
 // is handed to Claude, so a later restart can look for that message from there on.
+const crypto = require('node:crypto');
+function tailHash(file, at) {
+  const n = Math.min(at, 4096);
+  if (!n) return '';
+  const fd = fs.openSync(file, 'r');
+  try { const buf = Buffer.alloc(n); fs.readSync(fd, buf, 0, n, at - n); return crypto.createHash('sha256').update(buf).digest('hex').slice(0, 32); }
+  finally { fs.closeSync(fd); }
+}
 function transcriptMark(stateRoot, conversation) {
   const run = (conversation?.runs || []).at(-1);
   if (conversation?.mode !== 'claude' || !run) return null;
   const file = locateNow(path.join(stateRoot, 'workspaces', conversation.id, 'g' + run.number), run.sessionId);
   if (!file) return null;
-  try { return {session: run.sessionId, at: fs.statSync(file).size, t: Date.now()}; } catch { return null; }
+  // Its inode too: Claude Code can rewrite a transcript in place (its local clean-up), and an offset
+  // into the old file says nothing about the new one.
+  // And the last bytes before the mark, so a rewrite that keeps the inode is caught as well.
+  try { const st = fs.statSync(file); return {session: run.sessionId, at: st.size, ino: st.ino, tail: tailHash(file, st.size), t: Date.now()}; } catch { return null; }
 }
 // Which handed-over messages certainly never reached Claude (a
 // restart left one that never reached Claude marked interrupted). Each is {id, mark} with the
@@ -759,8 +770,8 @@ function unreceived(stateRoot, conversation, handed) {
   let text = '', size = 0;
   const from = Math.min(...known.map(h => h.mark.at));
   // Another session file in the same folder written since the first of them was handed over: a
-  // /clear, /resume or /branch in the terminal moved Claude to it, where these may have arrived.
-  // Not knowing, so nothing goes back in line.
+  // /clear, /resume or /branch in the terminal moved Claude to it, where these may have arrived
+  // (another folder's session is looked for below). Not knowing, so nothing goes back in line.
   const since = Math.min(...known.map(h => Number.isFinite(h.mark.t) ? h.mark.t : 0));
   try {
     const dir = path.dirname(file);
@@ -772,14 +783,84 @@ function unreceived(stateRoot, conversation, handed) {
   try {
     const fd = fs.openSync(file, 'r');
     try {
-      size = fs.fstatSync(fd).size;
+      const st = fs.fstatSync(fd); size = st.size;
+      // Rewritten since a hand-over (another inode): not knowing.
+      if (known.some(h => h.mark.ino !== undefined && h.mark.ino !== st.ino)) return out;
       if (size < from || size - from > UNRECEIVED_MAX) return out;
+      // Or rewritten in place: what stood before a mark is no longer there.
+      if (known.some(h => typeof h.mark.tail === 'string' && h.mark.at <= size && tailHash(file, h.mark.at) !== h.mark.tail)) return out;
       const buf = Buffer.alloc(size - from); fs.readSync(fd, buf, 0, buf.length, from); text = buf.toString('utf8');
     } finally { fs.closeSync(fd); }
   } catch { return out; }
   // A message id is a UUID: read from the earliest mark on, it is found only where it arrived.
-  for (const h of known) if (!text.includes(h.id)) out.add(h.id);
+  const missing = known.filter(h => !text.includes(h.id)).map(h => h.id);
+  if (!missing.length) return out;
+  // Claude may have moved to another folder's session: /resume takes up in place any session of
+  // a folder in the same git repository (agent workspaces sit inside one), and writes there from
+  // then on. Every other transcript written since the hand-over is
+  // read back to that moment; an id found anywhere arrived, and one that cannot be read is not
+  // knowing.
+  const elsewhere = writtenSince(since, file);
+  if (elsewhere === null) return out;
+  for (const id of missing) if (!elsewhere.some(t => t.includes(id))) out.add(id);
   return out;
+}
+// The part of every transcript other than `own` written since `since` (ms), read back from its end
+// record by record until one is older; null when that cannot be known (a file that cannot be read,
+// records without a time, or more than UNRECEIVED_MAX in all).
+function writtenSince(since, own) {
+  const out = [];
+  let total = 0;
+  try {
+    for (const entry of fs.readdirSync(PROJECTS, {withFileTypes: true})) {
+      if (!entry.isDirectory()) continue;
+      const dir = path.join(PROJECTS, entry.name);
+      for (const name of fs.readdirSync(dir)) {
+        if (!name.endsWith('.jsonl')) continue;
+        const f = path.join(dir, name);
+        if (f === own) continue;
+        const st = fs.statSync(f);
+        if (st.mtimeMs < since) continue;
+        const part = tailSince(f, st.size, since, UNRECEIVED_MAX - total);
+        if (part === null) return null;
+        total += Buffer.byteLength(part);
+        out.push(part);
+      }
+    }
+  } catch { return null; }
+  return out;
+}
+const TAIL_CHUNK = 1024 * 1024;
+// Records are not written strictly in time order (a queued prompt's own time can be minutes behind
+// the record before it), so reading stops only at one older than the hand-over by a margin.
+const TAIL_MARGIN_MS = 15 * 60 * 1000;
+function tailSince(file, size, since, budget) {
+  const fd = fs.openSync(file, 'r');
+  try {
+    let pos = size;
+    const parts = [];
+    while (pos > 0) {
+      const n = Math.min(TAIL_CHUNK, pos);
+      if (size - pos + n > budget) return null;
+      pos -= n;
+      const buf = Buffer.alloc(n); fs.readSync(fd, buf, 0, n, pos);
+      const chunk = buf.toString('latin1');
+      parts.unshift(chunk);
+      // The first whole record in this chunk: older than the hand-over (less the margin) means
+      // everything after it has been read.
+      const lines = chunk.split('\n');
+      let older = false;
+      for (let i = pos > 0 ? 1 : 0; i < lines.length; i++) {
+        const t = /^\{"[^\n]*?"timestamp"\s*:\s*"([^"]+)"/.exec(lines[i]);
+        if (!t) continue;
+        const at = Date.parse(t[1]);
+        older = Number.isFinite(at) && at < since - TAIL_MARGIN_MS;
+        break;
+      }
+      if (older) break;
+    }
+    return parts.join('');
+  } finally { fs.closeSync(fd); }
 }
 
 // Whether the session has finished a turn since `since` (ms) and is not in one now: a
