@@ -98,7 +98,7 @@ export function useCellAgent({workspace, conversationId, detail, refresh, profil
  };
  return {cell,activity,locked,operationError,error,action,
   operationTitle:computed(()=>agentOperation.operationTitle(activity.value)),
-  operationSteps:computed(()=>wakeDone.value&&!activity.value?agentOperation.wakeDoneSteps():detail.value?agentOperation.operationSteps(detail.value,activity.value,operation.value):[]),
+  operationSteps:computed(()=>wakeDone.value&&!activity.value?agentOperation.wakeDoneSteps(wakeDone.value):detail.value?agentOperation.operationSteps(detail.value,activity.value,operation.value):[]),
   operationPercent:computed(()=>agentOperation.operationPercent(detail.value,activity.value)),
   mayCloseProfile,
   dispose:()=>{disposed=true;}};

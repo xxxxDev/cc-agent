@@ -354,7 +354,7 @@ async function openAutoCompactChoice(){
  }
 }
 const agentOperationTitle=computed(()=>agentOperation.operationTitle(activity(detail.value)));
-const agentOperationSteps=computed(()=>{secondClock.value;const d=detail.value;if(wakeDone.value&&!activity(d))return agentOperation.wakeDoneSteps();return d?agentOperation.operationSteps(d,activity(d),operations.value[selected.value]):[];});
+const agentOperationSteps=computed(()=>{secondClock.value;const d=detail.value;if(wakeDone.value&&!activity(d))return agentOperation.wakeDoneSteps(wakeDone.value);return d?agentOperation.operationSteps(d,activity(d),operations.value[selected.value]):[];});
 const agentOperationPercent=computed(()=>agentOperation.operationPercent(detail.value,activity(detail.value)));
 function updateAgent(d){conversations.value=conversations.value.map(c=>c.id===d.id?{...c,...d}:c);if(selected.value===d.id)detail.value=d;}
 async function runAgentOperation(id,kind,body={}){

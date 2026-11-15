@@ -39,20 +39,26 @@ export function operationSteps(d, kind, op) {
  const started=op?d?.generation>op.generation:d?.phase==='starting';
  return [(started?'✓ ':'⋯ ')+ct('整理並保存交接資料'),(started?'✓ ':'○ ')+ct('啟動新的 session'),(started?'⋯ ':'○ ')+ct('載入交接內容並確認連線')];
 }
-// A wake's second step was never seen ticked: the shield closed the moment it was done.
-// When the same agent goes from waking to connected, both steps
-// show ticked for half a second before the shield goes; not when it stopped or failed instead.
-export const WAKE_HOLD_MS=500;
-export const wakeDoneSteps=()=>['✓ '+ct('啟動 Claude session'),'✓ '+ct('確認連線')];
-export function useWakeDone(agent,kind,ms=WAKE_HOLD_MS){
- const done=ref(false);let timer;
- watch(()=>[agent()?.id,kind()],([id,now],[was,before]=[])=>{
-  if(id===was&&now===before)return;
-  clearTimeout(timer);done.value=false;
-  const d=agent();
-  if(id&&id===was&&before==='start'&&!now&&d?.connected&&['ready','busy'].includes(d.phase)){done.value=true;timer=setTimeout(()=>{done.value=false;},ms);}
+// A wake's second step was never seen ticked: the shield closed the moment it was done. When the same agent goes from waking to connected, the steps
+// tick one after the other before the shield goes: the first alone for a moment when the
+// session and the connection came at once, then both for
+// half a second. Not when it stopped or failed instead. The ref is 0 (nothing to show), 1 (the
+// first ticked) or 2 (both).
+export const WAKE_HOLD_MS=500,WAKE_FIRST_MS=450;
+export const wakeDoneSteps=(stage=2)=>['✓ '+ct('啟動 Claude session'),(stage>=2?'✓ ':'⋯ ')+ct('確認連線')];
+export function useWakeDone(agent,kind,{first=WAKE_FIRST_MS,hold=WAKE_HOLD_MS}={}){
+ const stage=ref(0);let timer,ticked=false;
+ watch(()=>[agent()?.id,kind(),agent()?.phase],([id,now,phase],[was,before]=[])=>{
+  if(id!==was){clearTimeout(timer);stage.value=0;ticked=false;}
+  if(now==='start'){if(before!=='start'){clearTimeout(timer);stage.value=0;ticked=false;}if(phase==='ready')ticked=true;return;}
+  if(id!==was||before!=='start')return;
+  clearTimeout(timer);stage.value=0;
+  const d=agent(),shown=ticked;ticked=false;
+  if(now||!d?.connected||!['ready','busy'].includes(d.phase))return;
+  const both=()=>{stage.value=2;timer=setTimeout(()=>{stage.value=0;},hold);};
+  if(shown)both();else{stage.value=1;timer=setTimeout(both,first);}
  });
- return done;
+ return stage;
 }
 // A compaction's progress as Claude Code draws it in its terminal, read off that
 // screen by the server; null until it shows.
