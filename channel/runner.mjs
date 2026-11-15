@@ -491,6 +491,7 @@ const tmuxAt=(...a)=>execFileSync('tmux',['-L',tmuxSocket,...a],{encoding:'utf8'
 // The channel counts as gone after ten seconds without a poll, as the heartbeat reports it.
 let channelQuietMs=0;
 const watch=consentWatcher({cwd:config.cwd,startupUntil:startupDeadline,channelGone:()=>channelQuietMs>=10000,onStarting:()=>bridge(config,'starting').catch(()=>{}),
+ onStuck:()=>bridge(config,'error',{message:'Claude Code 的開發頻道確認畫面跟預期的樣子不同，沒有自動按下。請打開這個 agent 的終端機看一下，確認是這個畫面就按 Enter，或按重新連線。'}).catch(()=>{}),
  capture:()=>paneOf()?tmuxAt('capture-pane',...platform.CAPTURE,paneOf()):null,
  keys:k=>tmuxAt('send-keys','-t',paneOf(),k)});
 const look=()=>{try{watch();}catch{}};
