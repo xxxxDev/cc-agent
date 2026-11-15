@@ -14,14 +14,14 @@
     <!-- Grouped as Usage, Agent, System and Account. -->
     <!-- Agent, handoff and wrap-up each a group of their own, the handoff settings one row each. -->
     <f7-block-title>{{ t('sectionAgent') }}</f7-block-title>
-    <f7-list inset class="fs-settings-list">
+    <f7-list inset class="cc-settings-list">
       <!-- The subagents' model and effort for every full-access Claude agent. -->
       <f7-list-item link no-chevron class="subagent-row" :title="ct('子代理模型與 Effort')" :after="subagentLabel(subagents)" @click.prevent="editSubagentDefault"><template #media><f7-icon f7="person_2"/></template></f7-list-item>
       <f7-list-item link no-chevron class="archive-retention" :title="ct('Agent 刪除')" :after="retentionLabel(archiveRetentionDays)" @click.prevent="openDropdown('retention',$event)"><template #media><f7-icon f7="trash"/></template></f7-list-item>
     </f7-list>
 
     <f7-block-title>{{ t('sectionHandoff') }}</f7-block-title>
-    <f7-list inset class="fs-settings-list handoff-list">
+    <f7-list inset class="cc-settings-list handoff-list">
       <!-- When each agent's Claude Code compacts (issue #12). -->
       <f7-list-item link no-chevron class="auto-compact-row" :title="ct('自動壓縮時機')" :after="autoCompactLabel(autoCompact)" :footer="ct('用到這個量就先壓縮，超過模型上限不起作用。太低會一直壓縮。只影響 CC Agent 的 agent。')" @click.prevent="openDropdown('autoCompact',$event)"><template #media><f7-icon f7="rectangle_compress_vertical"/></template></f7-list-item>
       <f7-list-item link no-chevron class="handoff-threshold-row" :title="ct('Compact 自動接續')" :after="compactPolicy(compactThreshold)" @click.prevent="openDropdown('compact',$event)"><template #media><f7-icon f7="arrow_2_circlepath"/></template></f7-list-item>
@@ -33,7 +33,7 @@
     </f7-list>
 
     <f7-block-title>{{ t('sectionWrapUp') }}</f7-block-title>
-    <f7-list inset class="fs-settings-list">
+    <f7-list inset class="cc-settings-list">
       <f7-list-item class="wrap-up-toggle" :title="ct('自動收尾檢查')" :footer="ct('預設關閉。開啟後，Agent 完成任務並閒置一段時間，會自動請它確認工作已保存、筆記是最新的；只讀資料或回答問題不會送。')"><template #media><f7-icon f7="checkmark_seal"/></template><template #after><label class="toggle"><input type="checkbox" :aria-label="ct('自動收尾檢查')" :checked="wrapUp.enabled" @change="saveWrapUp({enabled:$event.target.checked})"/><span class="toggle-icon"></span></label></template></f7-list-item>
       <f7-list-item v-if="wrapUp.enabled" link no-chevron class="wrap-up-minutes" :title="ct('收尾檢查等待時間')" :after="wrapUp.minutes+' '+ct('分鐘')" @click.prevent="openDropdown('wrapUp',$event)"><template #media><f7-icon f7="timer"/></template></f7-list-item>
       <f7-list-item v-if="wrapUp.enabled" link no-chevron class="wrap-up-text" :title="ct('收尾檢查內容')" :after="wrapUp.custom?ct('自訂'):ct('內建')" @click.prevent="editWrapUpText"><template #media><f7-icon f7="text_alignleft"/></template></f7-list-item>

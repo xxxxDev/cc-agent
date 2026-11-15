@@ -19,11 +19,11 @@
 
     <template v-if="view === 'phone'">
       <!-- A row with its value, choosing from a menu as the Admin page's other choices do. -->
-      <f7-list inset class="fs-settings-list">
+      <f7-list inset class="cc-settings-list">
         <f7-list-item link no-chevron class="phone-nav-count" :title="ct('右上按鈕數量')" :after="String(phoneNavCount)" :footer="ct('含「⋯」。')" @click.prevent="openCount"><template #media><f7-icon f7="device_phone_portrait"/></template></f7-list-item>
       </f7-list>
       <f7-block-title>{{ ct('順序') }}</f7-block-title>
-      <f7-list inset sortable sortable-enabled :sortable-move-elements="false" class="fs-settings-list nav-order-list phone-order" @sortable:sort="(e) => sort('phone', e)">
+      <f7-list inset sortable sortable-enabled :sortable-move-elements="false" class="cc-settings-list nav-order-list phone-order" @sortable:sort="(e) => sort('phone', e)">
         <f7-list-item v-for="key in phoneNavOrder" :key="key" :data-nav="key" :title="label(key)" :class="{ 'nav-in-menu': !hidden(key) && place(key) >= shownCount, 'nav-hidden': hidden(key) }">
           <template #media><f7-icon :f7="icon(key)"/></template>
           <template #after><span class="nav-where" :class="hidden(key) ? 'off' : place(key) < shownCount ? 'top' : 'menu'">{{ hidden(key) ? ct('已隱藏') : place(key) < shownCount ? ct('右上') : ct('「⋯」選單') }}</span><button type="button" class="nav-eye" :class="{ off: hidden(key) }" :aria-pressed="String(!hidden(key))" :aria-label="(hidden(key) ? ct('顯示') : ct('隱藏')) + ' ' + label(key)" @click.stop.prevent="toggle(key)"><f7-icon :f7="hidden(key) ? 'eye_slash' : 'eye'"/></button></template>
@@ -34,7 +34,7 @@
 
     <template v-else>
       <f7-block-title>{{ ct('順序') }}</f7-block-title>
-      <f7-list inset sortable sortable-enabled :sortable-move-elements="false" class="fs-settings-list nav-order-list desktop-order" @sortable:sort="(e) => sort('desktop', e)">
+      <f7-list inset sortable sortable-enabled :sortable-move-elements="false" class="cc-settings-list nav-order-list desktop-order" @sortable:sort="(e) => sort('desktop', e)">
         <f7-list-item v-for="key in navOrder" :key="key" :data-nav="key" :title="label(key)" :class="{ 'nav-hidden': hidden(key) }"><template #media><f7-icon :f7="icon(key)"/></template><template #after><button type="button" class="nav-eye" :class="{ off: hidden(key) }" :aria-pressed="String(!hidden(key))" :aria-label="(hidden(key) ? ct('顯示') : ct('隱藏')) + ' ' + label(key)" @click.stop.prevent="toggle(key)"><f7-icon :f7="hidden(key) ? 'eye_slash' : 'eye'"/></button></template></f7-list-item>
       </f7-list>
       <f7-block-footer>{{ ct('對話頁上方和分割畫面每一格的按鈕都照這個順序。按眼睛隱藏按鈕，手機和電腦一起。沒開啟的功能不會出現。') }}</f7-block-footer>

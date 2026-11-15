@@ -54,7 +54,7 @@
    <f7-list-item v-if="peerDirty" link no-chevron class="agent-peer-save" :title="ct('保存跨機傳訊設定')" @click.prevent="savePeer"><template #media><f7-icon f7="checkmark_circle"/></template></f7-list-item>
   </f7-list>
   <!-- This agent's scope reports, for an admin to see what it keeps running into. -->
-  <f7-list v-if="user?.role==='admin'&&detail.mode!=='command'" inset class="fs-settings-list agent-reports-link"><f7-list-item link :title="ct('這個 Agent 的報告單')" @click.prevent="openReports"><template #media><f7-icon f7="lock_shield"/></template></f7-list-item></f7-list>
+  <f7-list v-if="user?.role==='admin'&&detail.mode!=='command'" inset class="cc-settings-list agent-reports-link"><f7-list-item link :title="ct('這個 Agent 的報告單')" @click.prevent="openReports"><template #media><f7-icon f7="lock_shield"/></template></f7-list-item></f7-list>
   <AgentDiagnostics @trace-start="$emit('trace-start')" :detail="detail" :status="statusLabel"/>
 
   <!-- Fields changed elsewhere while being edited here: the values typed here are kept in
