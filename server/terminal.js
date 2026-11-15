@@ -62,7 +62,7 @@ function installTerminal(server,{tmuxClient=serverTmux,ptyModule=require('node-p
    if(!require('./siteConfig').isAllowedSocket(req))return reject(socket,403);
    // /terminal/<agent> is its Claude session; /terminal/<agent>/sh/<n> one of the shells its
    // terminal page opened in tabs (server/terminalShells.js).
-   const match=/^\/terminal\/([a-f0-9-]{36})(?:\/sh\/([1-9]))?$/.exec(req.url||'');if(!match)return reject(socket,404);const shellN=match[2]?Number(match[2]):null;
+   const match=/^\/terminal\/([a-f0-9-]{36})(?:\/sh\/([1-9]\d{0,5}))?$/.exec(req.url||'');if(!match)return reject(socket,404);const shellN=match[2]?Number(match[2]):null;
    const cookies=Object.fromEntries((req.headers.cookie||'').split(';').map(x=>x.trim().split('=')));const token=cookies.session_id;
    if(!token)return reject(socket,401);
    let decoded;try{decoded=jwt.verify(token,process.env.JWT_SECRET);}catch{return reject(socket,401);}

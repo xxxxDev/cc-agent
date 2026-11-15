@@ -65,7 +65,7 @@ const folderName=cwd=>cwd==='~'?'~':String(cwd||'').split('/').filter(Boolean).p
 // Which shell a pane attaches to comes from its key, not the list: a pane remembered from
 // before is put back before the list has come, and attached to Claude's terminal under a
 // shell's tab.
-const shellOf=key=>/^sh[1-9]$/.test(key)?Number(key.slice(2)):null;
+const shellOf=key=>/^sh[1-9]\d{0,5}$/.test(key)?Number(key.slice(2)):null;
 const tabOf=key=>tabs.value.find(t=>t.key===key);
 
 // What each pane shows, and which one typing goes to; kept per agent in this browser.
