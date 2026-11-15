@@ -44,6 +44,8 @@
     <!-- Sign-in protection sits with the account settings. -->
     <f7-block-title>{{ t('sectionSystem') }}</f7-block-title>
     <f7-list inset class="cc-settings-list">
+      <!-- The conversation's buttons, a phone's and a computer's order apart. -->
+      <f7-list-item link class="nav-buttons-row" :title="ct('對話頁按鈕')" :footer="ct('按鈕的順序、要不要顯示，手機右上要顯示幾個')" @click.prevent="goNavButtons"><template #media><f7-icon f7="rectangle_3_offgrid"/></template></f7-list-item>
       <f7-list-item v-if="terminalSwitch" link no-chevron class="open-view" :title="ct('Agent 開啟畫面')" :after="openViewLabel(openView)" @click.prevent="openDropdown('openView',$event)"><template #media><f7-icon f7="rectangle_on_rectangle"/></template></f7-list-item>
       <f7-list-item v-if="terminalSwitch" link no-chevron class="terminal-theme" :title="ct('終端機配色')" :after="terminalThemeLabel(terminalTheme)" @click.prevent="openDropdown('terminalTheme',$event)"><template #media><f7-icon f7="paintbrush"/></template></f7-list-item>
       <!-- The peer link: pairing with another machine. -->
@@ -51,8 +53,6 @@
       <f7-list-item link :title="ct('範圍報告單')" :badge="openReports||null" badge-color="orange" @click.prevent="goReports"><template #media><f7-icon f7="lock_shield"/></template></f7-list-item>
       <!-- What people sent from Agent Profile's 「回報診斷」. -->
       <f7-list-item link class="diagnostic-reports-row" :title="ct('診斷回報')" :badge="openDiagnostics||null" badge-color="orange" @click.prevent="goDiagnostics"><template #media><f7-icon f7="doc_text_search"/></template></f7-list-item>
-      <!-- The conversation's buttons, a phone's and a computer's order apart. -->
-      <f7-list-item link class="nav-buttons-row" :title="ct('對話頁按鈕')" :footer="ct('按鈕的順序、要不要顯示，手機右上要顯示幾個')" @click.prevent="goNavButtons"><template #media><f7-icon f7="rectangle_3_offgrid"/></template></f7-list-item>
     </f7-list>
 
     <f7-block-title>{{ t('sectionAccount') }}</f7-block-title>
