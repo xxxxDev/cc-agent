@@ -2633,6 +2633,7 @@ function removeConversationFiles(c){
  }
  try{fs.rmSync(path.join(stateRoot,'workspaces',c.id),{recursive:true,force:true});}catch{}
  try{fs.rmSync(path.join(stateRoot,'users',c.owner,'attachments',c.id),{recursive:true,force:true});}catch{}
+ try{fs.rmSync(attachments.thumbsDirectory(stateRoot,c),{recursive:true,force:true});}catch{}
  try{fs.rmSync(avatarFile(c),{force:true});}catch{}
 }
 
@@ -2752,6 +2753,12 @@ function sweepRetention({now=Date.now()}={}){
     try{fs.rmSync(path.join(dir,id,data.file),{force:true});fs.rmSync(meta,{force:true});files+=1;}catch{}
    }
   }
+ }
+ // Stills of a conversation that is gone (attachments.thumbsDirectory).
+ for(const owner of fs.existsSync(usersDir)?fs.readdirSync(usersDir):[]){
+  const dir=path.join(usersDir,owner,'thumbs');
+  let ids=[];try{ids=fs.readdirSync(dir);}catch{continue;}
+  for(const id of ids)if(!state.conversations.some(x=>x.id===id))try{fs.rmSync(path.join(dir,id),{recursive:true,force:true});}catch{}
  }
  return {conversations:removed.length,attachments:files,workspaces,checklists:finishedLists};
 }
@@ -4223,6 +4230,11 @@ function reconcileGrants(){
  }
 }
 try{reconcileGrants();}catch(e){console.error('granted reports:',e.message);}
+// Stills made by an earlier build sat in a thumbs folder inside the attachments folder, which
+// shut a scoped agent out of every attachment. They are made again, in
+// attachments.thumbsDirectory, the next time the file list shows them.
+function dropOldThumbs(){for(const c of state.conversations){try{const old=path.join(attachments.directory(stateRoot,c),'thumbs');if(fs.lstatSync(old).isDirectory())fs.rmSync(old,{recursive:true,force:true});}catch{}}}
+try{dropOldThumbs();}catch(e){console.error('old stills:',e.message);}
 module.exports={conversationFiles,removeSentFile,withoutPaths,shells,TERMINAL_KEEP_DAYS,attachTerminalFile,terminalFileAccess,mirrorTerminal,followSessionModel,diagnosticReports:diagnostics,pendingDiagnosticNotifications:()=>diagnostics.pending(),markDiagnosticsNotified:ids=>{diagnostics.markNotified(ids);},CHECKLIST_RETENTION_CHOICES,checklistRetentionDays,loginShutdown:signal=>claudeLogin.shutdown(signal),loginView:()=>claudeLogin.view(),loginStart:()=>claudeLogin.start(),loginCode:text=>claudeLogin.code(text),loginCancel,loginResend,loginFailed,loginProven,reviveSilentChannels,peerLinkDigest,peerExchange,peerKey,peerLink,peerConfig,peerWidens,setPeerConfig,peerDraft,peerView,relaunchMarked,tmuxSocket,subagentList,runLimitResumes,runWrapUps,setWrapUp,mentionsFor,commandInGroup,groupList,reorderGroups,groupFor,groupView,createGroup,updateGroup,removeGroup,updateGroupChecklist,sendToGroup,searchGroup,deliverGroups,chooseTerminalOption,updateChecklist:(c,data,by)=>{const r=checklists.apply(c,data,by);save(c);return r;},syncAllRelays,scopeSettled,syncRelays,scheduleCheckList,schedulesFor,addSchedule,approveSchedule,updateSchedule,removeSchedule,rejectSchedule,runSchedules,runScheduleNow,testSchedule,SCHEDULE_WAIT_MS,pendingScheduleNotifications,markScheduleNotified,searchMessages,runCommand,commandsFor,setThreshold,setSubagents,applyAgentSubagents,applySubagentDefault,subagentEnv,setAutoCompact,applyAgentAutoCompact,profileRestartNeeds,applyAgentRestart,applyAutoCompactDefault,autoCompactEnv,AUTO_COMPACT_PRESETS,listPreferences,setListPreferences,setAvatar,clearAvatar,avatarLocation,AVATAR_MAX_BYTES,clearFullAccessFor,pendingReportNotifications,markReportsNotified,markReportsQueuing,markReportsDelivered,archiveFor,setAccessFor,accessReports:()=>reports.list().map(reportView),accessReport:id=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(r);},resolvedFolder,decideReport,grantFromReport,dismissNotNeeded,dismissFormerlySelfResolved,grantAccess,reconcile,reconnect,purgeOwner,sweepRetention,stopAgentsOf,bridgeActions:()=>[...BRIDGE_ACTIONS],archivedList,restoreArchived,keepArchived,purgeArchived,archiveRetentionDays,RETENTION_MAX_DAYS,UNSENT_ATTACHMENT_HOURS,STALE_MS,STARTUP_SLOW_MS,STARTUP_LIMIT_MS,messageTranscript,importHistory,interrupt,markViewing,markAllRead,isViewing,attachableFolders,MESSAGE_PAGE,updateProfile,reorder,pendingNotifications,getPreferences,setPreferences,decidePermission,confirmWorkspace,confirmChannel,compact,stateRoot,create,get,list,publicView,launch,stop,send,rotate,bridge,byToken,active,save,error};
 
 // Account deletion checks the agents an account actually has running.

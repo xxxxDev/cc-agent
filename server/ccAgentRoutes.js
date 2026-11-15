@@ -272,9 +272,9 @@ app.get('/api/conversations/:id/attachments/:fileId/thumb',own,async(req,res,nex
  const c=req.conversation,fileId=req.params.fileId;
  if(!c.messages.some(m=>(m.attachments||[]).some(a=>a.id===fileId&&a.removed!==true)))throw agents.error('Attachment not found',404);
  const file=attachments.location(agents.stateRoot,c,fileId);
- const out=await fileThumbs.still({dir:attachments.directory(agents.stateRoot,c),id:fileId,name:file.meta.name,source:file.path});
+ const out=await fileThumbs.still({dir:attachments.directory(agents.stateRoot,c),folder:attachments.thumbsDirectory(agents.stateRoot,c),id:fileId,name:file.meta.name,source:file.path});
  if(!out)throw agents.error('No preview',404);
- res.set('Cache-Control','private, max-age=604800');res.set('X-Content-Type-Options','nosniff');
+ res.set('Cache-Control','private, no-store');res.set('X-Content-Type-Options','nosniff');
  res.sendFile(out,{headers:{'Content-Type':'image/jpeg'}});
 }catch(e){next(e);}});
 // An .html attachment shown as the page it is, inside the preview's frame (one self-contained file). The page is

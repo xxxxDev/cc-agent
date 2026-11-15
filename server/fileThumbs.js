@@ -71,16 +71,18 @@ function create({ffmpeg = findFfmpeg(), run = execFile} = {}) {
     } finally {try {fs.rmSync(tmp, {force: true});} catch {}}
   }
   // The still's path, or null when there is none to give.
-  async function still({dir, id, name, source}) {
-    if (!ffmpeg || !KINDS.test(String(name || '')) || !/^[-a-f0-9]{36}$/.test(String(id))) return null;
-    const folder = path.join(dir, 'thumbs'), out = path.join(folder, id + '.jpg'), none = path.join(folder, id + '.none');
+  // dir: the conversation's attachments folder, which must still be there; folder: where its
+  // stills go, outside that folder (attachments.thumbsDirectory).
+  async function still({dir, folder, id, name, source}) {
+    if (!ffmpeg || !folder || !KINDS.test(String(name || '')) || !/^[-a-f0-9]{36}$/.test(String(id))) return null;
+    const out = path.join(folder, id + '.jpg'), none = path.join(folder, id + '.none');
     if (fs.existsSync(out)) return out;
     if (fs.existsSync(none)) return null;
     if (pending.has(out)) return pending.get(out);
     const job = limited(async () => {
       // The file's own folder must still be there; it is never made again here.
       if (!fs.existsSync(source) || !fs.existsSync(dir)) return null;
-      try {fs.mkdirSync(folder, {mode: 0o700});} catch (e) {if (e.code !== 'EEXIST') return null;}
+      try {fs.mkdirSync(folder, {recursive: true, mode: 0o700});} catch {return null;}
       const r = await make(source, out, VIDEO.test(name), name);
       if (r === 'ok') return out;
       if (r === 'failed' && fs.existsSync(source)) try {fs.writeFileSync(none, '', {mode: 0o600});} catch {}
