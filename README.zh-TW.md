@@ -48,11 +48,11 @@ CC Agent 跑在你自己的 Mac 上。你建立的每個 agent，都是 tmux 裡
 </tr>
 <tr>
 <td align="center"><img src=".github/assets/sticker-work-dark.svg" width="120" alt=""></td>
-<td><b>完整權限，或圈好的範圍。</b>信任的 agent 可以給整台電腦的權限；其他的只能讀寫你允許的資料夾、只載入你勾選的本機 MCP。限定範圍的 agent 跑在 Claude Code 的沙盒與 auto mode 裡，讀取網頁只能連到你列的網站、只能用你勾選的 MCP；被擋下的動作會寫成報告讓你審。有幾個限制：shell 指令照沙盒的網站清單、不檢查私有位址，網頁搜尋不受限，同一網站的轉址、DNS rebinding 與檢查逾時都擋不到（<a href="docs/FEATURES.zh-TW.md">詳細</a>）。</td>
+<td><b>完整權限，或圈好的範圍。</b>信任的 agent 可以給整台電腦的權限；其他的只能寫入你允許的資料夾，家目錄裡也只讀得到這些、只載入你勾選的本機 MCP。限定範圍的 agent 跑在 Claude Code 的沙盒與 auto mode 裡，讀取網頁只能連到你列的網站、只能用你勾選的 MCP；被擋下的動作會寫成報告讓你審。有幾個限制：shell 指令照沙盒的網站清單、不檢查私有位址，網頁搜尋不受限，同一網站的轉址、DNS rebinding 與檢查逾時都擋不到（<a href="docs/FEATURES.zh-TW.md">詳細</a>）。</td>
 </tr>
 <tr>
 <td align="center"><img src=".github/assets/sticker-done-dark.svg" width="120" alt=""></td>
-<td><b>重要的事會通知你。</b>agent 回覆或排程完成時，推播會送到你的手機。你也能即時看到 agent 正在做什麼、它的 context 用了多少、它的終端機、它開的子代理、token 用量和費用。</td>
+<td><b>重要的事會通知你。</b>agent 回覆或排程完成時，推播會送到你的手機。你也能即時看到 agent 正在做什麼、它的 context 用了多少、它的終端機（管理員先把按鈕顯示出來）、它開的子代理、token 用量和費用。</td>
 </tr>
 </table>
 
@@ -82,12 +82,12 @@ CC Agent 跑在你自己的 Mac 上。你建立的每個 agent，都是 tmux 裡
 - **熟悉的聊天介面。**圓角輸入框會隨內容長高，附件有預覽和上傳進度，支援提及、回覆單一則訊息（回覆上方標出它回答哪一則）、訊息搜尋和回到最新。
 - **在手機上順手。**把泡泡往左滑就能回覆，長按會在變暗的頁面上叫出複製、選取文字和回覆。標題列和頁面兩側跟 iOS 26 一樣，面板像推出的卡片，往下拉就關。
 - **即時，不輪詢。**一條小小的連線通知頁面「有變動」；收起來的頁面不再發請求；所有分頁一起登入、一起登出。
-- **安靜的預設。**淺色與深色主題，版面乾淨，介面有中文和英文。
+- **安靜的預設。**淺色與深色主題，版面乾淨，介面有英文和繁體中文。
 - **認真做好的登入。**密碼加兩步驟驗證、通行密鑰（Face ID、Touch ID、Windows Hello）、用手機掃碼登入、可以立刻登出任何裝置的裝置清單，以及防止重複猜密碼的保護。
 
 ## 看得到 agent 在做什麼
 
-打開 agent 的 Profile，設定它的用途、記憶、模型和能碰的範圍。切到終端機，看真正的 Claude Code session 在跑什麼；或打開 transcript，看每一輪用了哪些工具、多少 token 和費用。
+打開 agent 的 Profile，設定它的用途、記憶、模型和能碰的範圍。切到終端機，看真正的 Claude Code session 在跑什麼；或打開 transcript，看每一輪用了哪些工具、多少 token 和費用；這兩顆按鈕要先由管理員在管理頁「對話頁按鈕」顯示出來。
 
 <p align="center">
   <img src=".github/assets/screens/desktop-profile-dark.png" alt="Agent 的 Profile 面板">
@@ -109,7 +109,7 @@ CC Agent 跑在你自己的 Mac 上。你建立的每個 agent，都是 tmux 裡
 
 | 需要 | 用途 |
 | --- | --- |
-| [Claude Code](https://code.claude.com/docs/en/overview) 最新版（測試過 2.1.322；2.1.293 以上可執行 agent，範圍報告單需要 2.1.322 以上），且已登入 | 每個 agent 都是一個 Claude Code session，CC Agent 用它的 channels 與 hooks |
+| [Claude Code](https://code.claude.com/docs/en/overview) 最新版（測試過 2.1.325；2.1.293 以上可執行 agent，範圍報告單需要 2.1.322 以上），且已登入 | 每個 agent 都是一個 Claude Code session，CC Agent 用它的 channels 與 hooks |
 | [Node.js](https://nodejs.org) 24 LTS 最新版（測試過 24.22.1；22.12 以上可用）與 npm | 執行伺服器、建置網頁 |
 | [tmux](https://github.com/tmux/tmux) 最新版（測試過 3.8；3.5 以上可用） | 讓每個 agent 的 session 在背景持續執行 |
 | Xcode Command Line Tools（macOS） | 選用，排程背景腳本用 Python 時提供 python3 |
