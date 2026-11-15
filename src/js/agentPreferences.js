@@ -17,6 +17,8 @@ export const terminalSwitch = ref(false);
 export const openView = ref('chat');
 // The web terminal's colours: this computer's terminal theme (the default) or CC Agent's own.
 export const terminalTheme = ref('computer');
+// Shell tabs on the terminal page, for every admin (server: shellTabsOn).
+export const shellTabs = ref(true);
 // The Transcript column's button; off until an admin switches it on.
 export const transcriptSwitch = ref(false);
 // Days a deleted agent is kept before it is purged, or null for never (the default).
@@ -58,6 +60,7 @@ function absorb(preferences) {
   terminalSwitch.value = preferences.terminalSwitch === true;
   openView.value = preferences.openView === 'terminal' ? 'terminal' : 'chat';
   terminalTheme.value = preferences.terminalTheme === 'cc-agent' ? 'cc-agent' : 'computer';
+  shellTabs.value = preferences.shellTabs !== false;
   transcriptSwitch.value = preferences.transcriptSwitch === true;
   if (preferences.wrapUp && typeof preferences.wrapUp === 'object') wrapUp.value = preferences.wrapUp;
   archiveRetentionDays.value = Number.isInteger(preferences.archiveRetentionDays) ? preferences.archiveRetentionDays : null;

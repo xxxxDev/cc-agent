@@ -73,7 +73,7 @@ function installTerminal(server,{tmuxClient=serverTmux,ptyModule=require('node-p
    // never finished its handshake for one: its terminal is what shows why, so it can
    // be attached while that session lives.
    // A shell lives on whatever the agent does; its own session has to be there.
-   if(shellN!==null){if(c.mode!=='claude')return reject(socket,409);if(!shells.alive(c,shellN))return reject(socket,404);}
+   if(shellN!==null){if(!agents.shellTabsOn())return reject(socket,403);if(c.mode!=='claude')return reject(socket,409);if(!shells.alive(c,shellN))return reject(socket,404);}
    else if(c.mode!=='claude'||g.phase==='stopped'||g.phase==='error'&&!alive(g.tmux))return reject(socket,409);
    const target=shellN===null?c.id:c.id+'/sh/'+shellN;
    if([...wss.clients].filter(ws=>ws.target===target).length>=2)return reject(socket,429);
@@ -84,7 +84,7 @@ function installTerminal(server,{tmuxClient=serverTmux,ptyModule=require('node-p
     let terminal,timer,closed=false;
     // A shell is let go when it is closed or its agent deleted (its session ends, and the
     // attachment with it), not when the agent stops or starts a new session.
-    const valid=()=>shellN!==null?!c.archived:agents.active(c)===g&&g.token===generationToken&&g.phase!=='stopped';
+    const valid=()=>shellN!==null?!c.archived&&agents.shellTabsOn():agents.active(c)===g&&g.token===generationToken&&g.phase!=='stopped';
     // A tmux redraw burst is dozens of PTY chunks a second, each paying stringify
     // + a ws frame + a client parse when sent alone. Concatenated here and flushed
     // as one frame: on a 12 ms timer (xterm's write parser yields at the same

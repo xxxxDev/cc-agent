@@ -2637,6 +2637,8 @@ const DAY=86400000;
 // or null to keep it (the default, as before). An admin's setting for every agent; one with
 // anything to do, doing or blocked is kept.
 const CHECKLIST_RETENTION_CHOICES=[1,3,7,14,30];
+// Shell tabs on the terminal page: on unless an admin switched them off (setPreferences).
+function shellTabsOn(){return state.agentSettings?.shellTabs!==false;}
 function checklistRetentionDays(){const d=state.agentSettings?.checklistRetentionDays;return CHECKLIST_RETENTION_CHOICES.includes(d)?d:null;}
 const checklistFinished=(l,now,days)=>Array.isArray(l?.items)&&l.items.length>0&&l.items.every(i=>i?.status==='done')&&now-Date.parse(l.updatedAt)>days*DAY;
 // Archived agents are left as they were deleted. Each list removed is in the audit log;
@@ -3380,11 +3382,11 @@ function reviveSilentChannels({now=Date.now(),relaunch=(c)=>{stop(c);launch(c);}
  }
 }
 setInterval(()=>{try{reviveSilentChannels();}catch(e){console.error('channel revive: '+e.message);}},60_000).unref();
-function getPreferences(owner){return {...(platform.isWin?{scopedAgents:false}:{}),wrapUp:wrapUpSettings(ownerLanguage(owner)),archiveRetentionDays:archiveRetentionDays(),checklistRetentionDays:checklistRetentionDays(),navOrder:navOrder(),navHidden:navHidden(),phoneNavOrder:phoneNavOrder(),phoneNavCount:phoneNavCount(),compactThreshold:state.agentSettings?.compactThreshold??5,handoff:handoffSetting(),subagents:subagentDefault(),autoCompact:autoCompactDefault(),autoCompactPresets:AUTO_COMPACT_PRESETS,terminalSwitch:state.agentSettings?.terminalSwitch===true,openView:state.agentSettings?.openView==='terminal'?'terminal':'chat',terminalTheme:state.agentSettings?.terminalTheme==='cc-agent'?'cc-agent':'computer',transcriptSwitch:state.agentSettings?.transcriptSwitch===true};}
-function setPreferences(owner,{compactThreshold,handoff,subagents,autoCompact,terminalSwitch,openView,terminalTheme,transcriptSwitch,archiveRetentionDays:retention,checklistRetentionDays:listRetention,wrapUp,navOrder:nav,phoneNavOrder:phoneNav,phoneNavCount:phoneCount,navHidden:hidden,...rest}={}){
+function getPreferences(owner){return {...(platform.isWin?{scopedAgents:false}:{}),wrapUp:wrapUpSettings(ownerLanguage(owner)),archiveRetentionDays:archiveRetentionDays(),checklistRetentionDays:checklistRetentionDays(),navOrder:navOrder(),navHidden:navHidden(),phoneNavOrder:phoneNavOrder(),phoneNavCount:phoneNavCount(),compactThreshold:state.agentSettings?.compactThreshold??5,handoff:handoffSetting(),subagents:subagentDefault(),autoCompact:autoCompactDefault(),autoCompactPresets:AUTO_COMPACT_PRESETS,terminalSwitch:state.agentSettings?.terminalSwitch===true,openView:state.agentSettings?.openView==='terminal'?'terminal':'chat',terminalTheme:state.agentSettings?.terminalTheme==='cc-agent'?'cc-agent':'computer',shellTabs:shellTabsOn(),transcriptSwitch:state.agentSettings?.transcriptSwitch===true};}
+function setPreferences(owner,{shellTabs,compactThreshold,handoff,subagents,autoCompact,terminalSwitch,openView,terminalTheme,transcriptSwitch,archiveRetentionDays:retention,checklistRetentionDays:listRetention,wrapUp,navOrder:nav,phoneNavOrder:phoneNav,phoneNavCount:phoneCount,navHidden:hidden,...rest}={}){let shellTabsWarning='';
  // Unsupported settings are refused, never ignored.
  if(Object.keys(rest).length)throw error('不支援的設定：'+Object.keys(rest).join(', '));
- if(hidden===undefined&&listRetention===undefined&&nav===undefined&&phoneNav===undefined&&phoneCount===undefined&&compactThreshold===undefined&&handoff===undefined&&subagents===undefined&&autoCompact===undefined&&terminalSwitch===undefined&&openView===undefined&&terminalTheme===undefined&&transcriptSwitch===undefined&&retention===undefined&&wrapUp===undefined)throw error('沒有要更新的設定');
+ if(shellTabs===undefined&&hidden===undefined&&listRetention===undefined&&nav===undefined&&phoneNav===undefined&&phoneCount===undefined&&compactThreshold===undefined&&handoff===undefined&&subagents===undefined&&autoCompact===undefined&&terminalSwitch===undefined&&openView===undefined&&terminalTheme===undefined&&transcriptSwitch===undefined&&retention===undefined&&wrapUp===undefined)throw error('沒有要更新的設定');
  // Every field is checked before any is saved: a request refused over one field leaves
  // all the others as they were, in memory and on disk.
  // The wrap-up check: on or off, the minutes an agent sits idle first, and its words
@@ -3406,6 +3408,7 @@ function setPreferences(owner,{compactThreshold,handoff,subagents,autoCompact,te
  // The chat/terminal switch is off unless an admin asks for it: the conversation page is the normal way in, and the
  // terminal is for looking at what an agent is doing.
  if(terminalSwitch!==undefined&&typeof terminalSwitch!=='boolean')throw error('終端機切換設定必須是開或關');
+ if(shellTabs!==undefined&&typeof shellTabs!=='boolean')throw error('終端機分頁設定必須是開或關');
  // What an agent opens on, its conversation or its terminal.
  if(openView!==undefined&&!['chat','terminal'].includes(openView))throw error('開啟畫面必須是聊天室或終端機');
  // The web terminal's colours: this computer's terminal theme or CC Agent's own.
@@ -3431,6 +3434,24 @@ function setPreferences(owner,{compactThreshold,handoff,subagents,autoCompact,te
   try{require('./services/audit').audit({action:'nav-hidden',by:owner,to:hidden});}catch{}
  }
  if(terminalSwitch!==undefined)state.agentSettings={...state.agentSettings,terminalSwitch};
+ // Terminal shell tabs for every admin on this computer: the
+ // eye on 對話頁按鈕 only hides a button. Off: no shell is opened or attached, and every one
+ // open now is closed.
+ // Off asked again ends what a failed first try left.
+ if(shellTabs===false||shellTabs===true&&!shellTabsOn()){
+  // The setting is written to its own file first; the shells are ended even if that fails, and
+  // a failure to end them is said in the answer and the audit, never only logged.
+  let closed=true,saved=false;
+  try{state.agentSettings={...state.agentSettings,shellTabs};saveSettings();saved=true;}
+  catch(e){console.error('shell tabs setting not written:',e.message);}
+  finally{
+   if(!shellTabs){try{shells.killServer();}catch(e){closed=false;console.error('shells when switched off:',e.message);}}
+   try{require('./services/audit').audit({action:'shell-tabs',by:owner,to:shellTabs,saved,...(shellTabs?{}:{closed})});}catch(e){console.error('shell tabs audit:',e.message);}
+  }
+  // Said, never thrown: the switch is as asked in memory and any shells have ended already.
+  if(!saved)shellTabsWarning='終端機分頁的設定沒能寫入，服務重新啟動後會回到原本的設定。';
+  else if(!closed)shellTabsWarning='終端機分頁已關閉，但有些已開的分頁沒能結束，請重新整理後再試一次。';
+ }
  if(openView!==undefined)state.agentSettings={...state.agentSettings,openView};
  if(terminalTheme!==undefined)state.agentSettings={...state.agentSettings,terminalTheme};
  if(transcriptSwitch!==undefined)state.agentSettings={...state.agentSettings,transcriptSwitch};
@@ -3458,7 +3479,7 @@ function setPreferences(owner,{compactThreshold,handoff,subagents,autoCompact,te
  const pending=checkedSubagents?subagentFollowersPending().map(listed):undefined;
  // The same for when they compact: only the admin's own agents.
  const compactPending=autoCompact!==undefined?autoCompactFollowersPending(owner).map(listed):undefined;
- return {...getPreferences(owner),...(pending?{subagentPending:pending}:{}),...(compactPending?{autoCompactPending:compactPending}:{})};
+ return {...getPreferences(owner),...(pending?{subagentPending:pending}:{}),...(compactPending?{autoCompactPending:compactPending}:{}),...(shellTabsWarning?{shellTabsWarning}:{})};
 }
 function decidePermission(c,data){permissions.decide(active(c),data);save(c);}
 // The raw material behind one bubble. Admin-only at the route: this is the agent's
@@ -3617,6 +3638,8 @@ function saveAgain(owner){
 function clearFullAccessFor(owner){
  let cleared=0;const failed=[],relaunch=[];
  for(const c of state.conversations.filter(x=>x.owner===owner)){
+  // The shells this admin opened end with the role: only an admin may have them.
+  try{shells.closeAll(c);}catch(e){console.error(`shells of ${c.id} at demotion: ${e.message}`);}
   const wasFull=!!agentAccess.of(c).full,g=active(c);
   const running=c.mode==='claude'&&!c.archived&&!['stopped','error'].includes(g.phase);
   if(!wasFull&&!running)continue;
@@ -4298,7 +4321,7 @@ try{reconcileGrants();}catch(e){console.error('granted reports:',e.message);}
 // attachments.thumbsDirectory, the next time the file list shows them.
 function dropOldThumbs(){for(const c of state.conversations){try{const old=path.join(attachments.directory(stateRoot,c),'thumbs');if(fs.lstatSync(old).isDirectory())fs.rmSync(old,{recursive:true,force:true});}catch{}}}
 try{dropOldThumbs();}catch(e){console.error('old stills:',e.message);}
-module.exports={restartByOwner,processesGone,channelOff,CHANNEL_OFF_GAP_MS,conversationFiles,removeSentFile,withoutPaths,shells,TERMINAL_KEEP_DAYS,attachTerminalFile,terminalFileAccess,mirrorTerminal,followSessionModel,diagnosticReports:diagnostics,pendingDiagnosticNotifications:()=>diagnostics.pending(),markDiagnosticsNotified:ids=>{diagnostics.markNotified(ids);},CHECKLIST_RETENTION_CHOICES,checklistRetentionDays,loginShutdown:signal=>claudeLogin.shutdown(signal),loginView:()=>claudeLogin.view(),loginStart:()=>claudeLogin.start(),loginCode:text=>claudeLogin.code(text),loginCancel,loginResend,loginFailed,loginProven,reviveSilentChannels,peerLinkDigest,peerExchange,peerKey,peerLink,peerConfig,peerWidens,setPeerConfig,peerDraft,peerView,relaunchMarked,tmuxSocket,subagentList,runLimitResumes,runWrapUps,setWrapUp,mentionsFor,commandInGroup,groupList,reorderGroups,groupFor,groupView,createGroup,updateGroup,removeGroup,updateGroupChecklist,sendToGroup,searchGroup,deliverGroups,chooseTerminalOption,updateChecklist:(c,data,by)=>{const r=checklists.apply(c,data,by);save(c);return r;},syncAllRelays,scopeSettled,syncRelays,scheduleCheckList,schedulesFor,addSchedule,approveSchedule,updateSchedule,removeSchedule,rejectSchedule,runSchedules,runScheduleNow,testSchedule,SCHEDULE_WAIT_MS,pendingScheduleNotifications,markScheduleNotified,searchMessages,runCommand,commandsFor,setThreshold,setSubagents,applyAgentSubagents,applySubagentDefault,subagentEnv,setAutoCompact,applyAgentAutoCompact,profileRestartNeeds,applyAgentRestart,applyAutoCompactDefault,autoCompactEnv,AUTO_COMPACT_PRESETS,listPreferences,setListPreferences,setAvatar,clearAvatar,avatarLocation,AVATAR_MAX_BYTES,clearFullAccessFor,pendingReportNotifications,markReportsNotified,markReportsQueuing,markReportsDelivered,archiveFor,setAccessFor,accessReports:()=>reports.list().map(reportView),accessReport:id=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(r);},resolvedFolder,decideReport,grantFromReport,dismissNotNeeded,dismissFormerlySelfResolved,grantAccess,reconcile,reconnect,purgeOwner,sweepRetention,stopAgentsOf,bridgeActions:()=>[...BRIDGE_ACTIONS],archivedList,restoreArchived,keepArchived,purgeArchived,archiveRetentionDays,RETENTION_MAX_DAYS,UNSENT_ATTACHMENT_HOURS,STALE_MS,STARTUP_SLOW_MS,STARTUP_LIMIT_MS,messageTranscript,importHistory,interrupt,markViewing,markAllRead,isViewing,attachableFolders,MESSAGE_PAGE,updateProfile,reorder,pendingNotifications,getPreferences,setPreferences,decidePermission,confirmWorkspace,confirmChannel,compact,stateRoot,create,get,list,publicView,launch,stop,send,rotate,bridge,byToken,active,save,error};
+module.exports={shellTabsOn,ownerIsActiveAdmin,restartByOwner,processesGone,channelOff,CHANNEL_OFF_GAP_MS,conversationFiles,removeSentFile,withoutPaths,shells,TERMINAL_KEEP_DAYS,attachTerminalFile,terminalFileAccess,mirrorTerminal,followSessionModel,diagnosticReports:diagnostics,pendingDiagnosticNotifications:()=>diagnostics.pending(),markDiagnosticsNotified:ids=>{diagnostics.markNotified(ids);},CHECKLIST_RETENTION_CHOICES,checklistRetentionDays,loginShutdown:signal=>claudeLogin.shutdown(signal),loginView:()=>claudeLogin.view(),loginStart:()=>claudeLogin.start(),loginCode:text=>claudeLogin.code(text),loginCancel,loginResend,loginFailed,loginProven,reviveSilentChannels,peerLinkDigest,peerExchange,peerKey,peerLink,peerConfig,peerWidens,setPeerConfig,peerDraft,peerView,relaunchMarked,tmuxSocket,subagentList,runLimitResumes,runWrapUps,setWrapUp,mentionsFor,commandInGroup,groupList,reorderGroups,groupFor,groupView,createGroup,updateGroup,removeGroup,updateGroupChecklist,sendToGroup,searchGroup,deliverGroups,chooseTerminalOption,updateChecklist:(c,data,by)=>{const r=checklists.apply(c,data,by);save(c);return r;},syncAllRelays,scopeSettled,syncRelays,scheduleCheckList,schedulesFor,addSchedule,approveSchedule,updateSchedule,removeSchedule,rejectSchedule,runSchedules,runScheduleNow,testSchedule,SCHEDULE_WAIT_MS,pendingScheduleNotifications,markScheduleNotified,searchMessages,runCommand,commandsFor,setThreshold,setSubagents,applyAgentSubagents,applySubagentDefault,subagentEnv,setAutoCompact,applyAgentAutoCompact,profileRestartNeeds,applyAgentRestart,applyAutoCompactDefault,autoCompactEnv,AUTO_COMPACT_PRESETS,listPreferences,setListPreferences,setAvatar,clearAvatar,avatarLocation,AVATAR_MAX_BYTES,clearFullAccessFor,pendingReportNotifications,markReportsNotified,markReportsQueuing,markReportsDelivered,archiveFor,setAccessFor,accessReports:()=>reports.list().map(reportView),accessReport:id=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(r);},resolvedFolder,decideReport,grantFromReport,dismissNotNeeded,dismissFormerlySelfResolved,grantAccess,reconcile,reconnect,purgeOwner,sweepRetention,stopAgentsOf,bridgeActions:()=>[...BRIDGE_ACTIONS],archivedList,restoreArchived,keepArchived,purgeArchived,archiveRetentionDays,RETENTION_MAX_DAYS,UNSENT_ATTACHMENT_HOURS,STALE_MS,STARTUP_SLOW_MS,STARTUP_LIMIT_MS,messageTranscript,importHistory,interrupt,markViewing,markAllRead,isViewing,attachableFolders,MESSAGE_PAGE,updateProfile,reorder,pendingNotifications,getPreferences,setPreferences,decidePermission,confirmWorkspace,confirmChannel,compact,stateRoot,create,get,list,publicView,launch,stop,send,rotate,bridge,byToken,active,save,error};
 
 // Account deletion checks the agents an account actually has running.
 module.exports.lifecycleInventory=async()=>({sources:[{provider:"claude",providerLabel:"Claude Code",ok:true}],schedules:state.conversations.filter(c=>!['stopped','error'].includes(active(c).phase)).map(c=>({id:c.id,ownerUserId:c.owner,provider:"claude",status:active(c).phase,running:active(c).phase==="busy"}))});

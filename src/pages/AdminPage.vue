@@ -48,6 +48,7 @@
       <f7-list-item link class="nav-buttons-row" :title="ct('對話頁按鈕')" :footer="ct('按鈕的順序、要不要顯示，手機右上要顯示幾個')" @click.prevent="goNavButtons"><template #media><f7-icon f7="rectangle_3_offgrid"/></template></f7-list-item>
       <f7-list-item v-if="terminalSwitch" link no-chevron class="open-view" :title="ct('Agent 開啟畫面')" :after="openViewLabel(openView)" @click.prevent="openDropdown('openView',$event)"><template #media><f7-icon f7="rectangle_on_rectangle"/></template></f7-list-item>
       <f7-list-item v-if="terminalSwitch" link no-chevron class="terminal-theme" :title="ct('終端機配色')" :after="terminalThemeLabel(terminalTheme)" @click.prevent="openDropdown('terminalTheme',$event)"><template #media><f7-icon f7="paintbrush"/></template></f7-list-item>
+      <f7-list-item class="shell-tabs" :title="ct('終端機分頁')" :footer="ct('在終端機頁按＋開自己的 shell；關掉後所有管理員都不能開，已開的會關掉。')"><template #media><f7-icon f7="square_stack"/></template><template #after><label class="toggle"><input type="checkbox" :aria-label="ct('終端機分頁')" :checked="shellTabs" @change="setShellTabs($event)"/><span class="toggle-icon"></span></label></template></f7-list-item>
       <!-- The peer link: pairing with another machine. -->
       <f7-list-item link class="peer-link-row" :title="ct('跨機連線')" @click.prevent="goPeerLink"><template #media><f7-icon f7="link"/></template></f7-list-item>
       <f7-list-item link :title="ct('範圍報告單')" :badge="openReports||null" badge-color="orange" @click.prevent="goReports"><template #media><f7-icon f7="lock_shield"/></template></f7-list-item>
@@ -88,7 +89,7 @@ import {editSubagents,subagentLabel} from '../js/subagentDialog.js';
 import UsageMeters from '../components/UsageMeters.vue';
 async function pullRefresh(done) { try { await Promise.all([loadUsage({fresh: true}), loadOpenReports(), loadAgentPreferences().catch(() => {})]); } finally { done(); } }
 import { usageGroups, watchUsage, loadUsage } from '../js/usage.js';
-import {subagents,autoCompact,autoCompactPresets,handoff,wrapUp,archiveRetentionDays,checklistRetentionDays,compactThreshold,terminalSwitch,openView,terminalTheme,loadAgentPreferences,saveAgentPreferences} from '../js/agentPreferences.js';
+import {subagents,autoCompact,autoCompactPresets,handoff,wrapUp,archiveRetentionDays,checklistRetentionDays,compactThreshold,terminalSwitch,openView,terminalTheme,shellTabs,loadAgentPreferences,saveAgentPreferences} from '../js/agentPreferences.js';
 
 const isAdmin = computed(() => currentUser.value?.role === 'admin');
 const toast = (text) => f7.toast.create({ text, closeTimeout: 1800 }).open();
@@ -107,6 +108,14 @@ async function loadCompactPolicy(){if(!isAdmin.value)return;try{await loadAgentP
 // What an agent opens on: its conversation, or its terminal for those used to one.
 // Offered while the terminal's button is shown (its eye on 對話頁按鈕).
 // The web terminal's colours: this computer's terminal theme or CC Agent's own.
+// Shell tabs for every admin (server: shellTabsOn). Off closes every one open now: asked first,
+// and the switch goes back if the answer is no.
+async function setShellTabs(event){
+ const value=event.target.checked;
+ const go=async()=>{const was=shellTabs.value;shellTabs.value=value;try{const r=await saveAgentPreferences({shellTabs:value});if(r?.shellTabsWarning)f7.dialog.alert(ct(r.shellTabsWarning));else toast(t('settingsSaved'));}catch(e){shellTabs.value=was;event.target.checked=was;f7.dialog.alert(e.message||t('settingsFailed'));}};
+ if(value)return go();
+ f7.dialog.confirm(ct('關閉後，所有管理員都不能再開終端機分頁，現在開著的分頁也會關掉。'),ct('關閉終端機分頁？'),go,()=>{event.target.checked=true;});
+}
 const terminalThemeLabel=v=>v==='cc-agent'?ct('CC Agent 配色'):ct('跟隨電腦');
 const openViewLabel=v=>v==='terminal'?ct('終端機'):ct('聊天室');
 // The wrap-up check: its switch, its wait, and its words in a dialog with room for

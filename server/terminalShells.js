@@ -108,8 +108,19 @@ function create({stateRoot, run = execFileSync, now = Date.now}) {
     for (const s of list(c)) close(c, s.n);
   }
 
+  // Every shell of every agent at once (shell tabs switched off): the whole shells server goes,
+  // whatever any one listing would have missed. No server is nothing to end; any other failure
+  // is the caller's to report.
+  function killServer() {
+    // tmux removes its socket when its server ends, and a server cannot run without one: no
+    // socket is no shells.
+    if (!fs.existsSync(socket)) return;
+    try { tmux(['kill-server']); }
+    catch (e) { if (/no server running|error connecting|No such file/i.test(e.stderr || e.message)) return; throw e; }
+  }
+
   const folder = (c, g) => tilde(folderOf(c, g));
-  return {socket, available: !platform.isWin, list, alive, open, close, closeAll, nameOf, folder};
+  return {socket, available: !platform.isWin, list, alive, open, close, closeAll, killServer, nameOf, folder};
 }
 
 module.exports = {create};
