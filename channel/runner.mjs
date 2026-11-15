@@ -74,6 +74,12 @@ const referenceDirs=[config.reference,config.attachments].filter(d=>d&&plainFile
 // Those are denied too. A deny-everything-and-reopen fence breaks git, node and
 // curl, so it is this list; /private/var/folders stays readable because git, node and mktemp need it.
 const OUTSIDE_HOME_DENY=['/Volumes','/Users','/private/tmp','/Library/LaunchDaemons','/Library/LaunchAgents'];
+// CC Agent's own install, data and accounts folders, wherever they are: under the home folder ~
+// already covers them, but an install under /opt or /srv would leave the sign-in secret and other
+// people's conversations readable to a scoped agent's shell.
+// The agent's own workspace, attachments and reference folders inside them stay readable through
+// allowRead, which reopens a path under a denied one.
+const dataRoots=(Array.isArray(config.dataRoots)?config.dataRoots:[]).filter(p=>typeof p==='string'&&path.isAbsolute(p));
 // Its own temp folder, and a git config of its own, so git neither reads the owner's
 // ~/.gitconfig nor dies on it. How Claude Code gives sandboxed commands a temp folder
 // (read from 2.1.301): TMPDIR=<CLAUDE_CODE_TMPDIR>/claude-<uid>, TMPPREFIX=<that>/zsh
@@ -255,7 +261,7 @@ const ownerConfig=full;
 const scope=full?{permissions:{...(own.permissions||{})}}:{
  sandbox:{enabled:true,failIfUnavailable:true,allowUnsandboxedCommands:false,autoAllowBashIfSandboxed:true,
   // ~/.nvm is readable: a node installed with nvm lives there, and without it node aborts at start.
-  filesystem:{denyRead:['~',...OUTSIDE_HOME_DENY,...excludeDirs],allowRead:[config.cwd,...tmpDirs,'~/.nvm',...runtimeTools.toolReadRoots(),...allowDirs,...referenceDirs,...readOnlyDirs,...toolResultsDirs],allowWrite:[config.cwd,...writableTmp,...allowDirs],denyWrite:[...sharedTmp,...excludeDirs,...referenceDirs,...readOnlyDirs,...toolResultsDirs,...configDirs,...tmpConfigDirs,...toolDirs,...offLimits,...programDirs]},
+  filesystem:{denyRead:['~',...OUTSIDE_HOME_DENY,...dataRoots,...excludeDirs],allowRead:[config.cwd,...tmpDirs,'~/.nvm',...runtimeTools.toolReadRoots(),...allowDirs,...referenceDirs,...readOnlyDirs,...toolResultsDirs],allowWrite:[config.cwd,...writableTmp,...allowDirs],denyWrite:[...sharedTmp,...excludeDirs,...referenceDirs,...readOnlyDirs,...toolResultsDirs,...configDirs,...tmpConfigDirs,...toolDirs,...offLimits,...programDirs]},
   // Bash's network only: Claude Code's own WebFetch does not go through the sandbox; it is held
   // to the listed sites by the scope gate (scopeGate below), or removed when none are listed.
   network:{allowedDomains:access.domains||[]},
