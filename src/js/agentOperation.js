@@ -21,7 +21,9 @@ export function usageRows(u) {
 // The shield over a busy agent: kind is agentActivity()'s answer, op the operation
 // this page started, if any.
 export function operationTitle(kind) {
- return ct(kind==='compact'?'正在整理對話記憶…':kind==='rotate'?'正在接續新 session…':'Claude agent 喚醒中…');
+ // No "…" at the end: the spinner above says it is under way, and the steps under it have their
+ // own marks.
+ return ct(kind==='compact'?'正在整理對話記憶':kind==='rotate'?'正在接續新 session':'Agent 喚醒中');
 }
 // done / in progress / not started, matching the rotate list's existing marks.
 const step=(done,active)=>done?'✓ ':active?'⋯ ':'○ ';
@@ -31,7 +33,7 @@ export function operationSteps(d, kind, op) {
  // awaiting-workspace/confirmation gates deliberately do not lock the page.
  if(kind==='start'){
   const session=d.phase==='ready';
-  return [step(session,true)+ct('啟動 Claude session'),step(false,session)+ct('確認連線')];
+  return [step(session,true)+ct('啟動 Claude'),step(false,session)+ct('確認連線')];
  }
  // How long it has run; its percentage, from Claude Code's own screen, is a bar.
  if(kind==='compact'){const since=Date.parse(d.compactingSince||'');return Number.isFinite(since)?[ct('已進行')+' '+duration(Math.max(0,Math.round((Date.now()-since)/1000)))]:[];}
@@ -45,7 +47,7 @@ export function operationSteps(d, kind, op) {
 // half a second. Not when it stopped or failed instead. The ref is 0 (nothing to show), 1 (the
 // first ticked) or 2 (both).
 export const WAKE_HOLD_MS=500,WAKE_FIRST_MS=450;
-export const wakeDoneSteps=(stage=2)=>['✓ '+ct('啟動 Claude session'),(stage>=2?'✓ ':'⋯ ')+ct('確認連線')];
+export const wakeDoneSteps=(stage=2)=>['✓ '+ct('啟動 Claude'),(stage>=2?'✓ ':'⋯ ')+ct('確認連線')];
 export function useWakeDone(agent,kind,{first=WAKE_FIRST_MS,hold=WAKE_HOLD_MS}={}){
  const stage=ref(0);let timer,ticked=false;
  watch(()=>[agent()?.id,kind(),agent()?.phase],([id,now,phase],[was,before]=[])=>{

@@ -51,7 +51,7 @@
   <div v-if="detail&&locked" class="split-operation" role="status" aria-live="polite" aria-busy="true">
    <div class="split-operation-card">
     <b>{{operationTitle}}</b>
-    <p v-for="step in operationSteps" :key="step">{{step}}</p>
+    <OperationSteps v-if="operationSteps.length" :steps="operationSteps"/>
     <div v-if="operationPercent!==null" class="split-operation-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="operationPercent"><div class="track"><div class="fill" :style="{width:operationPercent+'%'}"/></div><span>{{operationPercent}}%</span></div>
     <f7-preloader v-else :size="22"/>
    </div>
@@ -93,6 +93,7 @@
 import {ref,computed,watch,nextTick,onMounted,onUnmounted,inject,provide} from 'vue';
 import {secondClock} from '../js/secondClock.js';
 import MessageList from './MessageList.vue';
+import OperationSteps from './OperationSteps.vue';
 import TerminalPromptCard from './TerminalPromptCard.vue';
 import TerminalPane from '../TerminalPane.vue';
 import SpinnerIcon from './SpinnerIcon.vue';
