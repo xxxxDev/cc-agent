@@ -9,15 +9,15 @@
     <img v-if="t.key==='claude'" class="terminal-tab-avatar" :src="avatar" alt=""/><f7-icon v-else class="terminal-tab-shell" :f7="panes[focused]===t.key?'chevron_right_square_fill':'chevron_right_square'" :size="16" aria-hidden="true"/>
     <!-- Every tab is named while the row has room, Claude's too; only the current one offers
          ✕ and its whole name, the others' names are cut short, or left out when the row is
-         tight, so four shells still fit. -->
+         tight; past that the row scrolls. -->
     <span class="terminal-tab-name">{{t.label}}</span>
     <span v-if="t.state==='working'" class="terminal-tab-spin" role="img" :aria-label="ct('執行中')"><SpinnerIcon/></span><span v-else class="terminal-tab-dot" :class="t.state" role="img" :aria-label="ct(t.state==='online'?'可使用':'離線')"/>
     <span v-if="t.n&&panes[focused]===t.key" class="terminal-tab-close" role="button" :aria-label="ct('關閉')+' '+t.label" :title="ct('關閉')" @click.stop="closeShell(t)"><f7-icon f7="xmark" :size="11"/></span>
    </button>
    </div>
-   <button v-if="shells.length<max" type="button" class="terminal-tab-add" :aria-label="ct('新增終端機')" :title="ct('新增終端機')" :disabled="opening" @click="openShell()"><f7-icon f7="plus" :size="15"/></button>
+   <button v-if="available" type="button" class="terminal-tab-add" :aria-label="ct('新增終端機')" :title="ct('新增終端機')" :disabled="opening" @click="openShell()"><f7-icon f7="plus" :size="15"/></button>
   </div>
-  <div v-if="(canColumns||canRows)&&(max>0||tabs.length>1)" class="terminal-layouts" role="group" :aria-label="ct('排列方式')">
+  <div v-if="(canColumns||canRows)&&(available||tabs.length>1)" class="terminal-layouts" role="group" :aria-label="ct('排列方式')">
    <button type="button" class="terminal-layout" :class="{active:shownLayout==='single'}" :aria-pressed="shownLayout==='single'" :title="ct('單一')" :aria-label="ct('單一')" @click="setLayout('single')"><f7-icon f7="rectangle" :size="15"/></button>
    <button v-if="canColumns" type="button" class="terminal-layout" :class="{active:shownLayout==='columns'}" :aria-pressed="shownLayout==='columns'" :title="ct('左右分割')" :aria-label="ct('左右分割')" @click="setLayout('columns')"><f7-icon f7="square_split_2x1" :size="15"/></button>
    <button v-if="canRows" type="button" class="terminal-layout" :class="{active:shownLayout==='rows'}" :aria-pressed="shownLayout==='rows'" :title="ct('上下分割')" :aria-label="ct('上下分割')" @click="setLayout('rows')"><f7-icon f7="square_split_1x2" :size="15"/></button>
@@ -46,7 +46,7 @@ import {api} from '../js/api.js';
 const props=defineProps({conversationId:String,acceptFiles:Boolean,avatar:String,agentState:String});
 const emit=defineEmits(['files']);
 const root=ref(null),body=ref(null);
-const shells=ref([]),max=ref(4),folder=ref(''),opening=ref(false);
+const shells=ref([]),available=ref(true),folder=ref(''),opening=ref(false);
 const tabs=computed(()=>[{key:'claude',label:'Claude',state:props.agentState||'offline'},...shells.value.map(s=>({key:'sh'+s.n,n:s.n,label:shellLabel(s)||ct('終端機')+' '+s.n,cwd:s.cwd,state:s.busy?'working':'online'}))]);
 // A shell's tab is named after the folder it is in now, as a terminal app's tab is, read
 // every few seconds with the list.
@@ -127,7 +127,7 @@ async function setLayout(next){
 }
 
 async function load(){
- try{const r=await api('/conversations/'+props.conversationId+'/shells');shells.value=r.shells||[];max.value=r.max??4;folder.value=r.folder||'';}
+ try{const r=await api('/conversations/'+props.conversationId+'/shells');shells.value=r.shells||[];available.value=r.available!==false;folder.value=r.folder||'';}
  catch{return;}
  // Claude's tab alone: back to one pane, as chosen.
  if(!shells.value.length&&layout.value!=='single'){layout.value='single';write('cc-terminal-layout','single');}

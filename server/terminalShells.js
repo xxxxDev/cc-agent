@@ -20,7 +20,7 @@ const {execFileSync} = require('node:child_process');
 const agentEnv = require('../channel/agentEnv.cjs');
 const platform = require('../channel/platform.cjs');
 
-const MAX = 4;
+// No cap on how many; each takes the lowest free number.
 const prefix = (c) => 'sh-' + c.id + '-';
 const nameOf = (c, n) => prefix(c) + n;
 // Paths are shown under the home folder as ~, as a shell's prompt shows them.
@@ -74,19 +74,19 @@ function create({stateRoot, run = execFileSync, now = Date.now}) {
       const quiet = Math.floor(now() / 1000) - Number(activity);
       const busy = running && Number.isFinite(quiet) && quiet <= BUSY_QUIET_S;
       return {n, cwd: tilde(cwd || ''), busy, running, ...(running ? {command: command.slice(0, 40), title: cleanTitle(title)} : {})};
-    }).filter((s) => Number.isInteger(s.n) && s.n >= 1 && s.n <= MAX).sort((a, b) => a.n - b.n);
+    }).filter((s) => Number.isInteger(s.n) && s.n >= 1).sort((a, b) => a.n - b.n);
   }
 
   function alive(c, n) {
-    if (platform.isWin || !Number.isInteger(n) || n < 1 || n > MAX) return false;
+    if (platform.isWin || !Number.isInteger(n) || n < 1) return false;
     try { tmux(['has-session', '-t', '=' + nameOf(c, n)]); return true; } catch { return false; }
   }
 
   function open(c, g) {
     if (platform.isWin) { const e = new Error('Windows 不支援終端機分頁'); e.status = 409; throw e; }
     const taken = new Set(list(c).map((s) => s.n));
-    const n = [1, 2, 3, 4].find((i) => !taken.has(i));
-    if (!n) { const e = new Error(`最多 ${MAX} 個終端機分頁`); e.status = 409; throw e; }
+    let n = 1;
+    while (taken.has(n)) n += 1;
     fs.mkdirSync(dir, {recursive: true, mode: 0o700});
     const env = agentEnv();
     const home = os.userInfo().homedir;
@@ -109,7 +109,7 @@ function create({stateRoot, run = execFileSync, now = Date.now}) {
   }
 
   const folder = (c, g) => tilde(folderOf(c, g));
-  return {socket, MAX: platform.isWin ? 0 : MAX, list, alive, open, close, closeAll, nameOf, folder};
+  return {socket, available: !platform.isWin, list, alive, open, close, closeAll, nameOf, folder};
 }
 
-module.exports = {create, MAX};
+module.exports = {create};
