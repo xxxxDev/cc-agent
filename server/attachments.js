@@ -38,7 +38,7 @@ function removeSent(root,c,id){
  if(m&&typeof m.file==='string'&&path.basename(m.file)===m.file&&m.file.startsWith(id))fs.rmSync(path.join(dir,m.file),{force:true});
  fs.rmSync(path.join(dir,id+'.json'),{force:true});
  // Its still on the file list (fileThumbs.js) goes with it.
- for(const n of [id+'.jpg',id+'.none'])fs.rmSync(path.join(thumbsDirectory(root,c),n),{force:true});
+ for(const n of [id+'.jpg',id+'.none',id+'.timeout'])fs.rmSync(path.join(thumbsDirectory(root,c),n),{force:true});
  return !!m;
 }
 // A file handed to the terminal (markTerminal) that no message holds may go too: its paste

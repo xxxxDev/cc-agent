@@ -264,10 +264,9 @@ app.get('/api/conversations/:id/attachments/:fileId',own,(req,res,next)=>{try{co
  const kind=req.query.as==='video'&&VIDEO_TYPES[require('node:path').extname(String(file.meta.name||'')).toLowerCase()];
  if(kind){res.set('X-Content-Type-Options','nosniff');res.set('Content-Disposition','inline');return res.sendFile(file.path,{headers:{'Content-Type':kind}});}
  res.set('Content-Type','application/octet-stream');res.download(file.path,file.meta.name);}catch(e){next(e);}});
-// A small still of a sent picture or video for the file list (fileThumbs.js): made once
-// and kept, so the browser may keep it too. Only a file a message holds and the list shows;
-// none to give is a 404 and the list shows the icon.
-const fileThumbs=require('./fileThumbs').create();
+// A small still of a sent picture or video for the file list (fileThumbs.js): made once and kept on the server; the browser keeps no copy, so a
+// file deleted for good leaves none behind. Only a file a message holds and the list shows; none to give is a 404 and the list shows the icon.
+const fileThumbs=require('./fileThumbs').create({denyRead:[agents.stateRoot,require('node:path').resolve(__dirname,'..')]});
 app.get('/api/conversations/:id/attachments/:fileId/thumb',own,async(req,res,next)=>{try{
  const c=req.conversation,fileId=req.params.fileId;
  if(!c.messages.some(m=>(m.attachments||[]).some(a=>a.id===fileId&&a.removed!==true)))throw agents.error('Attachment not found',404);
