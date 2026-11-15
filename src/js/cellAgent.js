@@ -38,12 +38,12 @@ export function useCellAgent({workspace, conversationId, detail, refresh, profil
  }
  async function action(name,body={}){
   const id=conversationId.value;
-  if(['compact','rotate','start'].includes(name)){if(!(await guardOperation(name==='rotate'?'handoff':name)))return;return run(name,body);}
+  if(['compact','rotate','start','restart'].includes(name)){if(!(await guardOperation(name==='rotate'?'handoff':name==='restart'?'start':name)))return;return run(name,body);}
   if(operation.value)return;
   return attempt(async()=>{const d=await api('/conversations/'+id+'/'+name,{method:'POST',body:JSON.stringify(body)});await refresh();return d;});
  }
  const pause=()=>f7.dialog.confirm(ct("暫停會中斷執行中的回覆。聊天紀錄仍會保留。"),ct("暫停執行"),()=>action('stop'));
- const restart=onCancel=>f7.dialog.confirm(ct("重啟會中斷執行中的回覆，並接回同一個 session。聊天紀錄仍會保留。"),ct("重啟"),async()=>{if(await action('stop'))await action('start');},onCancel);
+ const restart=onCancel=>f7.dialog.confirm(ct("重啟會中斷執行中的回覆，並接回同一個 session。聊天紀錄仍會保留。"),ct("重啟"),()=>action('restart'),onCancel);
  const handoff=()=>askHandoff(detail.value?.handoffSetting,body=>action('rotate',body));
  async function importHistory(){
   const d=await action('import-history');

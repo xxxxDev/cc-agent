@@ -346,7 +346,7 @@ async function interrupt(){
  catch(e){f7.dialog.alert(ct(e.message));}
  finally{interrupting.value=false;}
 }
-async function reconnect(){if(await action('stop'))await action('start');}
+async function reconnect(){await action('restart');}
 // Esc in a cell stops that cell's turn, as on the conversation page; not when a menu
 // took it, not in its terminal, which passes Esc to Claude, nor while composing in
 // an input method.

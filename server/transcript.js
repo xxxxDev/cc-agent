@@ -723,6 +723,65 @@ function currentWork(stateRoot, conversation, now = false) {
     lingering: jobs.filter(j => j.kind === 'subagent' && j.reported).map(({description, since, reportedAt}) => ({description, since, reportedAt}))};
 }
 
+// The session's file as locate() finds it, but a miss is not remembered: a mark taken before
+// Claude has written its first line must not hide the file from every other reader for
+// LOOKUP_TTL_MS (wrapUp's checks did not find their transcript).
+function locateNow(cwd, sessionId) {
+  const cached = located.get(sessionId);
+  if (cached?.file && cached.at > Date.now() - LOOKUP_TTL_MS) return cached.file;
+  const file = path.join(PROJECTS, cwd.replace(/[^a-zA-Z0-9]/g, '-'), sessionId + '.jsonl');
+  return fs.existsSync(file) ? file : null;
+}
+// Where the session's transcript stands now: its session id and size, noted when a web message
+// is handed to Claude, so a later restart can look for that message from there on.
+function transcriptMark(stateRoot, conversation) {
+  const run = (conversation?.runs || []).at(-1);
+  if (conversation?.mode !== 'claude' || !run) return null;
+  const file = locateNow(path.join(stateRoot, 'workspaces', conversation.id, 'g' + run.number), run.sessionId);
+  if (!file) return null;
+  try { return {session: run.sessionId, at: fs.statSync(file).size, t: Date.now()}; } catch { return null; }
+}
+// Which handed-over messages certainly never reached Claude (a
+// restart left one that never reached Claude marked interrupted). Each is {id, mark} with the
+// mark taken when it was handed over; it never arrived only when the same session's transcript
+// is read from that mark to its end and holds no trace of its message_id (a prompt, a queued
+// message, or Claude Code's own queue line). No mark, another session, a shorter file or a read
+// that fails is not knowing, and not knowing is never "it did not arrive".
+const UNRECEIVED_MAX = 64 * 1024 * 1024;
+function unreceived(stateRoot, conversation, handed) {
+  const out = new Set();
+  const run = (conversation?.runs || []).at(-1);
+  if (conversation?.mode !== 'claude' || !run || !handed?.length) return out;
+  const known = handed.filter(h => /^[0-9a-f-]{36}$/.test(h.id) && h.mark && h.mark.session === run.sessionId && Number.isInteger(h.mark.at) && h.mark.at >= 0);
+  if (!known.length) return out;
+  const file = locateNow(path.join(stateRoot, 'workspaces', conversation.id, 'g' + run.number), run.sessionId);
+  if (!file) return out;
+  let text = '', size = 0;
+  const from = Math.min(...known.map(h => h.mark.at));
+  // Another session file in the same folder written since the first of them was handed over: a
+  // /clear, /resume or /branch in the terminal moved Claude to it, where these may have arrived.
+  // Not knowing, so nothing goes back in line.
+  const since = Math.min(...known.map(h => Number.isFinite(h.mark.t) ? h.mark.t : 0));
+  try {
+    const dir = path.dirname(file);
+    for (const name of fs.readdirSync(dir)) {
+      if (!name.endsWith('.jsonl') || path.join(dir, name) === file) continue;
+      if (fs.statSync(path.join(dir, name)).mtimeMs >= since) return out;
+    }
+  } catch { return out; }
+  try {
+    const fd = fs.openSync(file, 'r');
+    try {
+      size = fs.fstatSync(fd).size;
+      if (size < from || size - from > UNRECEIVED_MAX) return out;
+      const buf = Buffer.alloc(size - from); fs.readSync(fd, buf, 0, buf.length, from); text = buf.toString('utf8');
+    } finally { fs.closeSync(fd); }
+  } catch { return out; }
+  // A message id is a UUID: read from the earliest mark on, it is found only where it arrived.
+  for (const h of known) if (!text.includes(h.id)) out.add(h.id);
+  return out;
+}
+
 // Whether the session has finished a turn since `since` (ms) and is not in one now: a
 // start-up turn that ended without the ready handshake (an agent told to translate
 // everything translated the start-up prompt).
@@ -1261,4 +1320,4 @@ function subagents(stateRoot, conversation) {
   return out;
 }
 
-module.exports = {terminalEvents, typedSettings, turnEndedSince, workedSince, subagents, lastCompaction, usage, progress, currentWork, quotaReset, waiting, skills, connectors, relays, segment, history, messageCost, priceOf, PRICES, WEB_SEARCH_USD};
+module.exports = {transcriptMark, unreceived, terminalEvents, typedSettings, turnEndedSince, workedSince, subagents, lastCompaction, usage, progress, currentWork, quotaReset, waiting, skills, connectors, relays, segment, history, messageCost, priceOf, PRICES, WEB_SEARCH_USD};

@@ -9,7 +9,7 @@
    <template v-if="detail">
     <TerminalTabs v-if="terminalOpen&&!terminalSide&&user.role==='admin'" ref="terminalPane" :accept-files="terminalTakes" @files="filesToTerminal" :key="detail.sessionId" :conversation-id="detail.id" :avatar="agentAvatar" :agent-state="detail.phase==='busy'&&presence==='online'?'working':presence"/>
     <template v-else>
-     <f7-block v-if="detail.lastError">{{detail.lastError}}<f7-button @click="action('stop').then(()=>action('start'))">{{ct('重新連線')}}</f7-button></f7-block>
+     <f7-block v-if="detail.lastError">{{detail.lastError}}<f7-button @click="action('restart')">{{ct('重新連線')}}</f7-button></f7-block>
      <f7-block v-for="permission in detail.permissions||[]" :key="permission.request_id"><p>{{permission.description}}</p><pre>{{permission.input_preview}}</pre><f7-button @click="action('permission',{request_id:permission.request_id,generation:permission.generation,behavior:'allow'})">{{ct('允許這一次')}}</f7-button><f7-button @click="action('permission',{request_id:permission.request_id,generation:permission.generation,behavior:'deny'})">{{ct('拒絕')}}</f7-button></f7-block>
      <MessageList replyable :peer-targets="detail.peerLink?.targets||[]" :messages="detail.messages" :conversation-id="detail.id" :has-older="detail.hasOlder" :older-busy="olderBusy" :avatar="agentAvatar"
       :inspectable="inspectorVisible" :inspect-id="inspectId" :found-id="foundMessage"

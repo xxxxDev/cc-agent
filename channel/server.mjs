@@ -1,10 +1,12 @@
 import fs from 'node:fs';
 import {z} from 'zod';
 import {randomUUID} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
 import {Server} from '@modelcontextprotocol/sdk/server/index.js';
 import {StdioServerTransport} from '@modelcontextprotocol/sdk/server/stdio.js';
 import {ListToolsRequestSchema,CallToolRequestSchema} from '@modelcontextprotocol/sdk/types.js';
 import {bridge} from './client.mjs';
+import {channelLoaded} from './channelFlag.mjs';
 import {versionedTools,baseName} from './versionedTools.mjs';
 import platform from './platform.cjs';
 const config=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
@@ -71,4 +73,19 @@ mcp.setRequestHandler(CallToolRequestSchema,async({params})=>{
 mcp.setNotificationHandler(z.object({method:z.literal('notifications/claude/channel/permission_request'),params:z.object({request_id:z.string(),tool_name:z.string(),description:z.string(),input_preview:z.string()})}),async({params})=>{await bridge(config,'permission-request',params);});
 await mcp.connect(new StdioServerTransport());
 let stopped=false;process.on('SIGTERM',()=>{stopped=true;process.exit(0);});
+// Claude Code's /restart (2.1.325) starts it again in the same process without the channel
+// flag: this server starts again and
+// would take messages Claude never sees. So it first asks whether the Claude that started it
+// loaded this channel; when it plainly did not, it takes nothing and says so, and CC Agent starts
+// the agent again the way it launches it. Not knowing (no ps, another parent) is taken as loaded.
+function parentArgv(){
+ if(platform.isWin)return null;
+ try{return execFileSync('ps',['-ww','-o','command=','-p',String(process.ppid)],{encoding:'utf8',timeout:5000});}catch{return null;}
+}
+if(!channelLoaded(parentArgv())){
+ // Said until CC Agent has it: the service may be restarting.
+ for(;;){try{await bridge(config,'channel-off');break;}catch{await new Promise(ok=>setTimeout(ok,5000));}}
+ // Tools still answer; no message is taken, so none waits on a channel Claude did not open.
+ await new Promise(()=>{});
+}
 while(!stopped){try{const r=await bridge(config,'poll',...(platform.isWin?[{address:process.env.CLAUDE_CODE_MESSAGING_SOCKET}]:[]));for(const verdict of r.permissions||[]){await mcp.notification({method:'notifications/claude/channel/permission',params:{request_id:verdict.request_id,behavior:verdict.behavior}});await bridge(config,'permission-ack',{request_id:verdict.request_id});}if(r.message)await mcp.notification({method:'notifications/claude/channel',params:{content:r.message.text,meta:{message_id:r.message.id,...senderMeta(r.message),...replyMeta(r.message)}}});}catch(e){console.error(e.message);}await new Promise(r=>setTimeout(r,700));}

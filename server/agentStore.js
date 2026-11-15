@@ -650,6 +650,45 @@ function reconnect(c) {
  if(['starting','ready','handing-off'].includes(g.phase)&&g.heartbeat>Date.now()-15000)stop(c);
  launch(c);
 }
+// The page's 重啟 and 重新連線 as one step: stopped and started
+// again here, so a restart is told apart from a pause. What waited goes back in line for the new
+// session: one never handed to Claude, and one handed over that its session's transcript shows
+// never arrived (a /restart in the terminal left the channel taking a message Claude never saw).
+// One that may have arrived stays interrupted, so it is not done twice.
+// The processes of an agent's tmux session (the pane's and their children, to a few levels), so
+// a restart can wait for Claude to exit after the kill. None when the session is gone.
+function sessionPids(g){
+ const out=[];
+ try{for(const x of execFileSync('tmux',['-L',tmuxSocket,'list-panes','-t',g.tmux,'-F','#{pane_pid}'],{encoding:'utf8',timeout:2000,stdio:['ignore','pipe','ignore']}).split('\n'))if(Number(x)>0)out.push(Number(x));}catch{return out;}
+ for(let i=0;i<out.length&&out.length<64;i++){try{for(const x of execFileSync('pgrep',['-P',String(out[i])],{encoding:'utf8',timeout:2000,stdio:['ignore','pipe','ignore']}).split('\n'))if(Number(x)>0&&!out.includes(Number(x)))out.push(Number(x));}catch{}}
+ return out;
+}
+function processesGone(pids,ms=5000){
+ const alive=p=>{try{process.kill(p,0);return true;}catch(e){return e.code==='EPERM';}};
+ const end=Date.now()+ms,nap=new Int32Array(new SharedArrayBuffer(4));
+ while(pids.some(alive)){if(Date.now()>=end)return false;Atomics.wait(nap,0,0,50);}
+ return true;
+}
+function restartByOwner(c){
+ // Claude agents only (a command agent's running message is queued too), and never an automatic
+ // resume or wrap-up, which a stop drops on purpose.
+ const waiting=c.mode!=='claude'?[]:c.messages.filter(m=>m.role==='user'&&['queued','delivered'].includes(m.delivery)&&!m.limitResume&&!m.loginNotice&&!m.wrapUp);
+ const back=new Set(waiting.filter(m=>m.delivery==='queued').map(m=>m.id));
+ const handed=waiting.filter(m=>m.delivery==='delivered');
+ const pids=handed.length?sessionPids(active(c)):[];
+ stop(c);
+ // Read once Claude has exited: the kill does not wait for it, and a line it was still writing
+ // could otherwise be missed and the message sent twice. Not gone within a few seconds is not
+ // knowing, and what was handed over stays interrupted.
+ if(handed.length&&processesGone(pids)){
+  try{for(const id of transcript.unreceived(stateRoot,c,handed.map(m=>({id:m.id,mark:m.transcriptMark}))))back.add(id);}
+  catch(e){console.error(`restart check for ${c.id}: ${e.message}`);}
+ }
+ launch(c);
+ let n=0;for(const m of c.messages)if(back.has(m.id)&&m.delivery==='interrupted'){m.delivery='queued';n++;}
+ if(n)save(c);
+ return n;
+}
 // Stop only what Claude is doing now, the way Esc does in its terminal: the
 // process, the session and the conversation stay, and the next message can go
 // straight in. An interrupted turn fires no Stop
@@ -2015,7 +2054,7 @@ const POSTCOMPACT_WAIT_MS=4000;
 // starting, heartbeat) and channel/hook.mjs (precompact, postcompact, result, failure).
 // Anything else is refused before it touches the agent, its heartbeat included
 // Keep it equal to the actions the channel's sources send.
-const BRIDGE_ACTIONS=new Set(['hook-check','plugin-check','bootstrap','poll','schedule-propose','schedule-update','schedule-remove','schedule-list','permission-request','permission-ack','post','checklists','checklist','group-post','ready','reply','memory','describe','history','precompact','postcompact','result','failure','error','starting','heartbeat','peer-agents','peer-send','peer-status','starter-agents','starter-start','starter-restart','report-explain']);
+const BRIDGE_ACTIONS=new Set(['channel-off','hook-check','plugin-check','bootstrap','poll','schedule-propose','schedule-update','schedule-remove','schedule-list','permission-request','permission-ack','post','checklists','checklist','group-post','ready','reply','memory','describe','history','precompact','postcompact','result','failure','error','starting','heartbeat','peer-agents','peer-send','peer-status','starter-agents','starter-start','starter-restart','report-explain']);
 function bridge(c,action,data={}) {
  if(typeof action!=='string'||!BRIDGE_ACTIONS.has(action))throw error('Unknown bridge action',404);
  const g=active(c);g.heartbeat=Date.now();
@@ -2070,7 +2109,7 @@ function bridge(c,action,data={}) {
   // agent then sends that group's members shows there.
   const named=pending.mentions?.find(m=>m.group&&groupStore.get(m.id)?.owner===c.owner);
   if(!pending.wrapUp)c.groupContext=pending.group?{id:pending.group.id,at:Date.now()}:named?{id:named.id,at:Date.now()}:null;const skipped=g.startupSkipped&&!g.bootstrapped;if(skipped)g.bootstrapped=true;
-  const text=(skipped?STARTUP_REMINDER:'')+profileMessage(c,g,pending.peer?peerWrap(c,pending,neutralSender(attachments.channelText(stateRoot,c,pending))):scheduleNote(pending)+limitResumeNote(pending)+wrapUpNote(pending)+groupNote(c,pending)+mentionNote(pending)+neutralSender(attachments.channelText(stateRoot,c,pending)));pending.delivery='delivered';pending.deliveredAt=new Date().toISOString();g.deliveryEpoch=(g.deliveryEpoch||0)+1;g.phase='busy';save(c);return {message:{id:pending.id,text,...senderOf(c,pending),...replyMeta(pending)},rotate:c.pendingRotation};}
+  const text=(skipped?STARTUP_REMINDER:'')+profileMessage(c,g,pending.peer?peerWrap(c,pending,neutralSender(attachments.channelText(stateRoot,c,pending))):scheduleNote(pending)+limitResumeNote(pending)+wrapUpNote(pending)+groupNote(c,pending)+mentionNote(pending)+neutralSender(attachments.channelText(stateRoot,c,pending)));pending.delivery='delivered';pending.deliveredAt=new Date().toISOString();{const mark=c.mode==='claude'?transcript.transcriptMark(stateRoot,c):null;if(mark)pending.transcriptMark=mark;else delete pending.transcriptMark;}g.deliveryEpoch=(g.deliveryEpoch||0)+1;g.phase='busy';save(c);return {message:{id:pending.id,text,...senderOf(c,pending),...replyMeta(pending)},rotate:c.pendingRotation};}
   return {rotate:c.pendingRotation};
  }
  // An agent sets up a long-running schedule the owner agreed to in its conversation;
@@ -2427,6 +2466,7 @@ function bridge(c,action,data={}) {
  }
  else if(action==='error'){permissions.cancel(g);g.phase='error';g.ready=false;wakeFailed(c,g);g.lastError=String(data.message||'Claude 已離線').slice(0,1000);}
  else if(action==='starting'){g.phase='starting';g.startedAt=Date.now();}
+ else if(action==='channel-off')channelOff(c);
  else if(action==='heartbeat'){
   // A heartbeat is only "still alive", and memory is what answers that while the
   // service runs; persisting it rewrote this owner's whole file every five seconds
@@ -3283,6 +3323,22 @@ setInterval(relaunchMarked,30_000).unref();
 // come back after a restart is not tried again: the agent shows why.
 const CHANNEL_SILENT_MS=3*60000,CHANNEL_REVIVE_GAP_MS=10*60000,CHANNEL_START_GAP_MS=2*60000,serviceStartedAt=Date.now();
 const CHANNEL_LOST='頻道中斷，自動重新連線後仍沒有回來。請按重新連線再試一次。';
+// The channel server found Claude running without the channel (channel/server.mjs: Claude
+// Code's /restart starts it again without the flag). The agent is
+// started again as CC Agent launches it, back on the same session, and what waited goes back in
+// line as a restart's does (restartByOwner). Once in CHANNEL_OFF_GAP_MS: a second time in that
+// window it is left as an error to reconnect by hand, never started over and over.
+const CHANNEL_OFF_GAP_MS=120000,channelOffAt=new Map();
+const CHANNEL_OFF_NOTE='在終端機重開 Claude Code（/restart）後，聊天室頻道沒有跟著打開，已自動重新接回同一個 session。';
+function channelOff(c,now=Date.now(),restart=restartByOwner){
+ if(c.archived||c.mode!=='claude')return;
+ const last=channelOffAt.get(c.id);
+ if(last&&now-last<CHANNEL_OFF_GAP_MS){const g=active(c);g.phase='error';g.ready=false;g.lastError=CHANNEL_LOST;save(c);return;}
+ channelOffAt.set(c.id,now);
+ console.error(`channel off for ${c.id}: starting it again`);
+ // After this request is answered: the restart ends the process that sent it.
+ setTimeout(()=>{try{if(c.archived||c.pausedByOwner)return;restart(c);add(c,'system',CHANNEL_OFF_NOTE,{notice:'channel-off'});save(c);}catch(e){const g=active(c);g.phase='error';g.ready=false;g.lastError=CHANNEL_LOST;save(c);console.error(`channel off restart for ${c.id}: ${e.message}`);}},0);
+}
 const tmuxClients=(g)=>{try{return execFileSync('tmux',['-L',tmuxSocket,'list-clients','-t',g.tmux],{encoding:'utf8',timeout:2000,stdio:['ignore','pipe','ignore']}).trim()!=='';}catch{return false;}};
 function reviveSilentChannels({now=Date.now(),relaunch=(c)=>{stop(c);launch(c);},attached=tmuxClients}={}){
  const due=[];
@@ -4242,7 +4298,7 @@ try{reconcileGrants();}catch(e){console.error('granted reports:',e.message);}
 // attachments.thumbsDirectory, the next time the file list shows them.
 function dropOldThumbs(){for(const c of state.conversations){try{const old=path.join(attachments.directory(stateRoot,c),'thumbs');if(fs.lstatSync(old).isDirectory())fs.rmSync(old,{recursive:true,force:true});}catch{}}}
 try{dropOldThumbs();}catch(e){console.error('old stills:',e.message);}
-module.exports={conversationFiles,removeSentFile,withoutPaths,shells,TERMINAL_KEEP_DAYS,attachTerminalFile,terminalFileAccess,mirrorTerminal,followSessionModel,diagnosticReports:diagnostics,pendingDiagnosticNotifications:()=>diagnostics.pending(),markDiagnosticsNotified:ids=>{diagnostics.markNotified(ids);},CHECKLIST_RETENTION_CHOICES,checklistRetentionDays,loginShutdown:signal=>claudeLogin.shutdown(signal),loginView:()=>claudeLogin.view(),loginStart:()=>claudeLogin.start(),loginCode:text=>claudeLogin.code(text),loginCancel,loginResend,loginFailed,loginProven,reviveSilentChannels,peerLinkDigest,peerExchange,peerKey,peerLink,peerConfig,peerWidens,setPeerConfig,peerDraft,peerView,relaunchMarked,tmuxSocket,subagentList,runLimitResumes,runWrapUps,setWrapUp,mentionsFor,commandInGroup,groupList,reorderGroups,groupFor,groupView,createGroup,updateGroup,removeGroup,updateGroupChecklist,sendToGroup,searchGroup,deliverGroups,chooseTerminalOption,updateChecklist:(c,data,by)=>{const r=checklists.apply(c,data,by);save(c);return r;},syncAllRelays,scopeSettled,syncRelays,scheduleCheckList,schedulesFor,addSchedule,approveSchedule,updateSchedule,removeSchedule,rejectSchedule,runSchedules,runScheduleNow,testSchedule,SCHEDULE_WAIT_MS,pendingScheduleNotifications,markScheduleNotified,searchMessages,runCommand,commandsFor,setThreshold,setSubagents,applyAgentSubagents,applySubagentDefault,subagentEnv,setAutoCompact,applyAgentAutoCompact,profileRestartNeeds,applyAgentRestart,applyAutoCompactDefault,autoCompactEnv,AUTO_COMPACT_PRESETS,listPreferences,setListPreferences,setAvatar,clearAvatar,avatarLocation,AVATAR_MAX_BYTES,clearFullAccessFor,pendingReportNotifications,markReportsNotified,markReportsQueuing,markReportsDelivered,archiveFor,setAccessFor,accessReports:()=>reports.list().map(reportView),accessReport:id=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(r);},resolvedFolder,decideReport,grantFromReport,dismissNotNeeded,dismissFormerlySelfResolved,grantAccess,reconcile,reconnect,purgeOwner,sweepRetention,stopAgentsOf,bridgeActions:()=>[...BRIDGE_ACTIONS],archivedList,restoreArchived,keepArchived,purgeArchived,archiveRetentionDays,RETENTION_MAX_DAYS,UNSENT_ATTACHMENT_HOURS,STALE_MS,STARTUP_SLOW_MS,STARTUP_LIMIT_MS,messageTranscript,importHistory,interrupt,markViewing,markAllRead,isViewing,attachableFolders,MESSAGE_PAGE,updateProfile,reorder,pendingNotifications,getPreferences,setPreferences,decidePermission,confirmWorkspace,confirmChannel,compact,stateRoot,create,get,list,publicView,launch,stop,send,rotate,bridge,byToken,active,save,error};
+module.exports={restartByOwner,processesGone,channelOff,CHANNEL_OFF_GAP_MS,conversationFiles,removeSentFile,withoutPaths,shells,TERMINAL_KEEP_DAYS,attachTerminalFile,terminalFileAccess,mirrorTerminal,followSessionModel,diagnosticReports:diagnostics,pendingDiagnosticNotifications:()=>diagnostics.pending(),markDiagnosticsNotified:ids=>{diagnostics.markNotified(ids);},CHECKLIST_RETENTION_CHOICES,checklistRetentionDays,loginShutdown:signal=>claudeLogin.shutdown(signal),loginView:()=>claudeLogin.view(),loginStart:()=>claudeLogin.start(),loginCode:text=>claudeLogin.code(text),loginCancel,loginResend,loginFailed,loginProven,reviveSilentChannels,peerLinkDigest,peerExchange,peerKey,peerLink,peerConfig,peerWidens,setPeerConfig,peerDraft,peerView,relaunchMarked,tmuxSocket,subagentList,runLimitResumes,runWrapUps,setWrapUp,mentionsFor,commandInGroup,groupList,reorderGroups,groupFor,groupView,createGroup,updateGroup,removeGroup,updateGroupChecklist,sendToGroup,searchGroup,deliverGroups,chooseTerminalOption,updateChecklist:(c,data,by)=>{const r=checklists.apply(c,data,by);save(c);return r;},syncAllRelays,scopeSettled,syncRelays,scheduleCheckList,schedulesFor,addSchedule,approveSchedule,updateSchedule,removeSchedule,rejectSchedule,runSchedules,runScheduleNow,testSchedule,SCHEDULE_WAIT_MS,pendingScheduleNotifications,markScheduleNotified,searchMessages,runCommand,commandsFor,setThreshold,setSubagents,applyAgentSubagents,applySubagentDefault,subagentEnv,setAutoCompact,applyAgentAutoCompact,profileRestartNeeds,applyAgentRestart,applyAutoCompactDefault,autoCompactEnv,AUTO_COMPACT_PRESETS,listPreferences,setListPreferences,setAvatar,clearAvatar,avatarLocation,AVATAR_MAX_BYTES,clearFullAccessFor,pendingReportNotifications,markReportsNotified,markReportsQueuing,markReportsDelivered,archiveFor,setAccessFor,accessReports:()=>reports.list().map(reportView),accessReport:id=>{const r=reports.get(id);if(!r)throw error('找不到這張報告單',404);return reportView(r);},resolvedFolder,decideReport,grantFromReport,dismissNotNeeded,dismissFormerlySelfResolved,grantAccess,reconcile,reconnect,purgeOwner,sweepRetention,stopAgentsOf,bridgeActions:()=>[...BRIDGE_ACTIONS],archivedList,restoreArchived,keepArchived,purgeArchived,archiveRetentionDays,RETENTION_MAX_DAYS,UNSENT_ATTACHMENT_HOURS,STALE_MS,STARTUP_SLOW_MS,STARTUP_LIMIT_MS,messageTranscript,importHistory,interrupt,markViewing,markAllRead,isViewing,attachableFolders,MESSAGE_PAGE,updateProfile,reorder,pendingNotifications,getPreferences,setPreferences,decidePermission,confirmWorkspace,confirmChannel,compact,stateRoot,create,get,list,publicView,launch,stop,send,rotate,bridge,byToken,active,save,error};
 
 // Account deletion checks the agents an account actually has running.
 module.exports.lifecycleInventory=async()=>({sources:[{provider:"claude",providerLabel:"Claude Code",ok:true}],schedules:state.conversations.filter(c=>!['stopped','error'].includes(active(c).phase)).map(c=>({id:c.id,ownerUserId:c.owner,provider:"claude",status:active(c).phase,running:active(c).phase==="busy"}))});

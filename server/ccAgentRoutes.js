@@ -371,6 +371,8 @@ app.post('/api/conversations/:id/:action',(req,res,next)=>{try{
  // it cannot tell what changed by counting them.
  case 'import-history':{const imported=agents.importHistory(c);res.set('X-Imported',String(imported.added));extra={imported};break;}
  case 'start':agents.reconnect(c);break;
+ // 重啟 and 重新連線 in one step, so what waited is kept for the new session.
+ case 'restart':agents.restartByOwner(c);break;
  // Paused by hand: schedules wait for it rather than starting it again.
  case 'stop':agents.stop(c);c.pausedByOwner=true;agents.save(c);break;
  case 'rotate':agents.rotate(c,req.body?.recent);break;

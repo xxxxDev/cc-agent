@@ -115,9 +115,9 @@ async function everyAgent(kind){
  bulkBusy.value=kind;
  let done=0;const failed=[];
  for(const c of targets){
-  // Restart is a pause and a start, so it also ends a turn still running; start alone refuses a busy agent.
-  try{if(kind==='restart'&&!['stopped','error'].includes(c.phase))await api('/conversations/'+c.id+'/stop',{method:'POST',body:'{}'});
-   await api('/conversations/'+c.id+'/'+(kind==='restart'?'start':kind),{method:'POST',body:'{}'});done+=1;}
+  // Restart ends a turn still running too, in one step that
+  // keeps what waited for the new session.
+  try{await api('/conversations/'+c.id+'/'+kind,{method:'POST',body:'{}'});done+=1;}
   catch(e){failed.push(labelled(c.title,e.message));}
  }
  bulkBusy.value='';
@@ -360,7 +360,7 @@ function updateAgent(d){conversations.value=conversations.value.map(c=>c.id===d.
 async function runAgentOperation(id,kind,body={}){
  if(operations.value[id])return;
  // From anywhere (the error card's 「重新連線」 too): unsaved profile changes are asked about first.
- if(selected.value===id&&!(await guardOperation(kind==='rotate'?'handoff':kind)))return;
+ if(selected.value===id&&!(await guardOperation(kind==='rotate'?'handoff':kind==='restart'?'start':kind)))return;
  const owner=user.value?.id,op={kind,generation:(detail.value?.id===id?detail.value:conversations.value.find(c=>c.id===id))?.generation};
  operations.value[id]=op;delete operationErrors.value[id];if(selected.value===id){infoOpen.value=false;profilePanelOpen.value=false;terminalOpen.value=false;}
  // Identify the operation across Vue reactive proxy reads.
@@ -1019,7 +1019,7 @@ async function send(){if(!canSend.value)return;if(!files.value.length&&user.valu
 function enterSend(e){if(!shouldSendOnEnter(e,f7.device))return;e.preventDefault();send();}
 async function action(name,body={}){
  const id=selected.value;
- if(['compact','rotate','start'].includes(name))return runAgentOperation(id,name,body);
+ if(['compact','rotate','start','restart'].includes(name))return runAgentOperation(id,name,body);
  if(operations.value[id])return;
  return attempt(async()=>{const owner=user.value?.id;const d=await api('/conversations/'+id+'/'+name,{method:'POST',body:JSON.stringify(body)});if(user.value?.id!==owner)return;updateAgent(d);await refresh();return d;});
 }
@@ -1072,7 +1072,7 @@ function onEscape(event){
 // Copying code from the bubbles lives with the bubbles, in components/MessageList.vue.
 function pause(){f7.dialog.confirm(ct("暫停會中斷執行中的回覆。聊天紀錄仍會保留。"),ct("暫停執行"),()=>action('stop'));}
 // A pause and a start, so it also ends a turn still running; the session and chat are kept.
-function restart(onCancel){f7.dialog.confirm(ct("重啟會中斷執行中的回覆，並接回同一個 session。聊天紀錄仍會保留。"),ct("重啟"),async()=>{if(await action('stop'))await action('start');},onCancel);}
+function restart(onCancel){f7.dialog.confirm(ct("重啟會中斷執行中的回覆，並接回同一個 session。聊天紀錄仍會保留。"),ct("重啟"),()=>action('restart'),onCancel);}
 // From a row's swipe on the Agents list, for that agent rather than the open one.
 // Pausing one that is answering asks first, as the pause in its profile does.
 async function listAgentAction(c,kind){await attempt(async()=>{await api('/conversations/'+c.id+'/'+kind,{method:'POST',body:'{}'});await refresh();});}
