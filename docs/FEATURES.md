@@ -183,7 +183,7 @@ Agents on two of your computers can talk to each other, for example a build agen
 - **Terminal view.** Switch to the agent's real Claude Code terminal, beside the chat on a computer. An admin shows its button with the eye on its row under **Conversation buttons** in the Admin tab, and can then have agents open on the terminal instead of the chat.
 - **Terminal tabs (admins).** Beside Claude's own terminal, **+** opens up to four shells of your own. They start in your home folder and run apart from the agent, which cannot see or type into them. A tab is named after its folder, or after the program running in it, and spins while that program writes. On a computer, show two tabs side by side or one above the other, pick each pane's tab with the switch at its top right, and double-click the divider to split it evenly again. Not on Windows.
 - **Terminal colours.** On a Mac the terminal uses your Terminal app's default profile colours; the Admin tab can switch it to CC Agent's own.
-- **Terminal keys on a phone.** Under the terminal, just above the keyboard: esc, tab, ⇧tab, the arrows and ^C, and on a second page home, end, page up and page down. A round button brings the keyboard up or puts it away, and the pencil swaps the terminal's typing for the chat's own box, attachments included, sending the line when you tap send.
+- **Terminal keys on a phone.** Under the terminal, just above the keyboard: esc, tab, ⇧tab, the arrows and ^C, and on a second page home, end, page up and page down. A round button brings the keyboard up or puts it away, and the pencil swaps the terminal's typing for the chat's own box, attachments included, sending the line when you tap send; a file added with **+** goes in as its path after the words, so Claude Code can read it.
 - **Terminal and chat in step.** With the terminal open beside the chat on a computer (admins):
   - **Where a file goes.** While you drag a file, the overlay shows two places, **Drop into the chat** and **Drop into the terminal**. A file let go on the terminal is saved where the agent can read it, and its path is typed at Claude's prompt without pressing Enter. If the agent cannot read that folder, the overlay says so and the file goes to the chat.
   - **What you type there shows in the chat.** What you type straight into the terminal, and the agent's answer to it, also show in the chat, marked **from the terminal**.
@@ -210,6 +210,7 @@ Agents on two of your computers can talk to each other, for example a build agen
 
 <p align="center">
   <img src="../.github/assets/anim/phone-terminal-keys-dark.svg" width="300" alt="On a phone: arrow keys choose in Claude's menu, esc closes it, the keys swipe to their second page, and the pencil opens the chat's box to type a line into the terminal">
+  <img src="../.github/assets/anim/phone-terminal-attach-dark.svg" width="300" alt="On a phone: the round button brings the keyboard up and puts it away; the pencil opens the chat's box, a question is typed, + adds a picture, and sending puts the words and the picture's path into the terminal, where Claude reads it">
 </p>
 
 <p align="center">
