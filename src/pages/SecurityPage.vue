@@ -219,7 +219,7 @@ function signFooter(s) {
 .sec-card .orange,.sec-legend .orange {background:#ff9f0a;}
 .sec-stats b.red {background:none;color:#ff453a;}
 .sec-stats b.orange {background:none;color:#ff9f0a;}
-.sec-note {font-size:12px;color:var(--cc-color-text-secondary,#8e8e93);margin:8px 32px;}
+.sec-note {font-size:12px;color:var(--cc-color-text-secondary,#8e8e93);margin:8px calc(var(--f7-block-padding-horizontal,16px) + 16px);}
 .sec-error {color:#ff453a;}
 .sec-empty {color:var(--cc-color-text-secondary,#8e8e93);font-size:14px;}
 .sec-flag {font-size:22px;}
@@ -228,7 +228,7 @@ function signFooter(s) {
 .sec-tag.orange {background:rgba(255,159,10,.18);color:#ff9f0a;}
 .sec-tag.green {background:rgba(48,209,88,.18);color:#30d158;}
 .sec-unblock {color:#0a84ff;}
-.sec-seg {display:flex;margin:0 16px 10px;background:rgba(120,120,128,.24);border-radius:10px;padding:2px;max-width:min(828px,calc(100% - 32px));box-sizing:border-box;}
+.sec-seg {display:flex;margin:0 var(--f7-block-padding-horizontal,16px) 10px;background:rgba(120,120,128,.24);border-radius:10px;padding:2px;max-width:min(828px,calc(100% - 32px));box-sizing:border-box;}
 @media (min-width:1024px){.sec-seg,.page-large-static .sec-card{max-width:min(828px,calc(100% - 32px));margin-left:auto;margin-right:auto;box-sizing:border-box;}.sec-note{max-width:min(828px,calc(100% - 32px));margin:8px auto;padding:0 16px;box-sizing:border-box;}}
 .sec-seg button {flex:1;border:0;background:none;color:var(--cc-color-text-secondary,#8e8e93);padding:7px;font-size:13px;border-radius:8px;}
 .sec-seg button.on {background:rgba(120,120,128,.5);color:var(--f7-text-color,#fff);}

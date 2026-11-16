@@ -141,7 +141,7 @@ function remove(p) {
 }
 </script>
 <style>
-.peer-note {font-size:12px;color:var(--cc-color-text-secondary,#8e8e93);margin:8px 32px;}
+.peer-note {font-size:12px;color:var(--cc-color-text-secondary,#8e8e93);margin:8px calc(var(--f7-block-padding-horizontal,16px) + 16px);}
 .peer-intro {font-size:13px;line-height:1.5;margin-top:16px;}
 .peer-error {color:#ff453a;}
 .peer-empty {color:var(--cc-color-text-secondary,#8e8e93);font-size:14px;}
