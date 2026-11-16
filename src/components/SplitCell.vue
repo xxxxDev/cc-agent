@@ -154,8 +154,10 @@ const DRAFT_KEY='cc-split-draft:';
 const draft=ref((()=>{try{return sessionStorage.getItem(DRAFT_KEY+props.conversationId)||'';}catch{return '';}})());
 watch(draft,text=>{try{if(text)sessionStorage.setItem(DRAFT_KEY+props.conversationId,text);else sessionStorage.removeItem(DRAFT_KEY+props.conversationId);}catch{}});
 // The message the next one replies to, as on the conversation page.
-const replyDraft=ref(null);
-watch(()=>props.conversationId,()=>{replyDraft.value=null;});
+// Kept for each conversation, as the main chat does: back to an agent, its reply is still there.
+const replyDraft=ref(null),replyDrafts=new Map();
+watch(()=>props.conversationId,id=>{replyDraft.value=(id&&replyDrafts.get(id))||null;},{flush:'sync'});
+watch(replyDraft,quote=>{const id=props.conversationId;if(!id)return;if(quote)replyDrafts.set(id,quote);else replyDrafts.delete(id);},{flush:'sync'});
 function startReply(quote){if(!quote?.id)return;replyDraft.value=quote;nextTick(()=>{const editor=composer.value?.querySelector('.chat-editor');if(editor&&!f7.device?.ios&&!f7.device?.android)editor.focus();});}
 // The conversation page's own drafts: kept per conversation, uploaded when sent.
 const attachmentDrafts=useAttachmentDrafts(computed(()=>props.conversationId),ref(null),sending,ct);
@@ -335,7 +337,7 @@ async function send(){
   const attachmentIds=await attachmentDrafts.upload(id,items);
   await api(`/conversations/${id}/messages`,{method:'POST',body:JSON.stringify({text,requestId,attachmentIds,mentions:mention.current.value.map(m=>m.id),...(quote?{replyTo:quote.id}:{})})});
   attachmentDrafts.sent(id,items);
-  if(replyDraft.value===quote)replyDraft.value=null;
+  if(replyDraft.value===quote)replyDraft.value=null;if(replyDrafts.get(id)===quote)replyDrafts.delete(id);
   if(draft.value===text)draft.value='';
   atBottom.value=true;await refresh();toBottom();
  }catch(e){f7.dialog.alert(e.message);}

@@ -210,9 +210,10 @@ const attachmentDrafts=useAttachmentDrafts(selected,user,busy,ct);
 const {files,fileInput,pickFiles,dropFiles,pasteFiles,removeFile,chooseFiles,previewDraft,status:sendStatus}=attachmentDrafts;
 const drafts=new Map();
 // The message the next one replies to: {id,who,text} from the bubble, shown over the box
-// until it is sent, cancelled (X, Escape) or the conversation changes.
-const replyDraft=ref(null);
-watch(selected,()=>{replyDraft.value=null;});
+// until it is sent or cancelled (X, Escape), kept for each conversation like its draft text.
+const replyDraft=ref(null),replyDrafts=new Map();
+watch(selected,id=>{replyDraft.value=(id&&replyDrafts.get(id))||null;},{flush:'sync'});
+watch(replyDraft,quote=>{const id=selected.value;if(!id)return;if(quote)replyDrafts.set(id,quote);else replyDrafts.delete(id);},{flush:'sync'});
 function startReply(quote){
  if(!quote?.id)return;
  replyDraft.value=quote;
@@ -1014,7 +1015,7 @@ async function runSlashCommand(id,text){
  busy.value=false;
 }
 function composerKeydown(e){if(slash.onKeydown(e,send))return;if(mention.onKeydown(e,mentionCaret))return;if(e.key==='Enter'&&!e.shiftKey&&!e.altKey&&!e.ctrlKey&&!e.metaKey)enterSend(e);}
-async function send(){if(!canSend.value)return;if(!files.value.length&&user.value?.role==='admin'&&detail.value?.mode==='claude'&&await slash.resolveTerminal(draft.value))return runSlashCommand(selected.value,draft.value);const id=selected.value,text=draft.value,items=[...files.value],requestId=attachmentDrafts.requestId(id,text,items),quote=replyDraft.value;busy.value=true;attachmentDrafts.begin(id);await attempt(async()=>{const attachmentIds=await attachmentDrafts.upload(id,items);await api('/conversations/'+id+'/messages',{method:'POST',body:JSON.stringify({text,requestId,attachmentIds,mentions:mention.current.value.map(m=>m.id),...(quote?{replyTo:quote.id}:{})})});attachmentDrafts.sent(id,items);if(replyDraft.value===quote)replyDraft.value=null;if(drafts.get(id)===text)drafts.delete(id);if(selected.value===id&&draft.value===text)draft.value='';if(detail.value?.hasNewer)await toLatest();else{await refresh();await bottom();}});attachmentDrafts.end(id);busy.value=false;}
+async function send(){if(!canSend.value)return;if(!files.value.length&&user.value?.role==='admin'&&detail.value?.mode==='claude'&&await slash.resolveTerminal(draft.value))return runSlashCommand(selected.value,draft.value);const id=selected.value,text=draft.value,items=[...files.value],requestId=attachmentDrafts.requestId(id,text,items),quote=replyDraft.value;busy.value=true;attachmentDrafts.begin(id);await attempt(async()=>{const attachmentIds=await attachmentDrafts.upload(id,items);await api('/conversations/'+id+'/messages',{method:'POST',body:JSON.stringify({text,requestId,attachmentIds,mentions:mention.current.value.map(m=>m.id),...(quote?{replyTo:quote.id}:{})})});attachmentDrafts.sent(id,items);if(replyDraft.value===quote)replyDraft.value=null;if(replyDrafts.get(id)===quote)replyDrafts.delete(id);if(drafts.get(id)===text)drafts.delete(id);if(selected.value===id&&draft.value===text)draft.value='';if(detail.value?.hasNewer)await toLatest();else{await refresh();await bottom();}});attachmentDrafts.end(id);busy.value=false;}
 
 function enterSend(e){if(!shouldSendOnEnter(e,f7.device))return;e.preventDefault();send();}
 async function action(name,body={}){
