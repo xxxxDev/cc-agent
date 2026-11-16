@@ -49,6 +49,8 @@
       <f7-list-item v-if="terminalSwitch" link no-chevron class="open-view" :title="ct('Agent 預設畫面')" :after="openViewLabel(openView)" @click.prevent="openDropdown('openView',$event)"><template #media><f7-icon f7="rectangle_on_rectangle"/></template></f7-list-item>
       <f7-list-item v-if="terminalSwitch" link no-chevron class="terminal-theme" :title="ct('終端機配色')" :after="terminalThemeLabel(terminalTheme)" @click.prevent="openDropdown('terminalTheme',$event)"><template #media><f7-icon f7="paintbrush"/></template></f7-list-item>
       <f7-list-item class="shell-tabs" :title="ct('終端機分頁')"><template #media><f7-icon f7="square_stack"/></template><template #after><label class="toggle"><input type="checkbox" :aria-label="ct('終端機分頁')" :checked="shellTabs" @change="setShellTabs($event)"/><span class="toggle-icon"></span></label></template></f7-list-item>
+      <!-- The largest file the page may send; larger ones go up in parts. -->
+      <f7-list-item link no-chevron class="upload-max" :title="ct('最大接收檔案大小')" :after="uploadMaxLabel(uploadMaxMb)" :footer="ct('網頁可以傳給 agent 的單一檔案上限；大檔案會自動分段上傳。')" @click.prevent="openDropdown('uploadMax',$event)"><template #media><f7-icon f7="paperclip"/></template></f7-list-item>
       <!-- The peer link: pairing with another machine. -->
       <f7-list-item link class="peer-link-row" :title="ct('跨機連線')" @click.prevent="goPeerLink"><template #media><f7-icon f7="link"/></template></f7-list-item>
       <f7-list-item link :title="ct('範圍報告單')" :badge="openReports||null" badge-color="orange" @click.prevent="goReports"><template #media><f7-icon f7="lock_shield"/></template></f7-list-item>
@@ -89,7 +91,7 @@ import {editSubagents,subagentLabel} from '../js/subagentDialog.js';
 import UsageMeters from '../components/UsageMeters.vue';
 async function pullRefresh(done) { try { await Promise.all([loadUsage({fresh: true}), loadOpenReports(), loadAgentPreferences().catch(() => {})]); } finally { done(); } }
 import { usageGroups, watchUsage, loadUsage } from '../js/usage.js';
-import {subagents,autoCompact,autoCompactPresets,handoff,wrapUp,archiveRetentionDays,checklistRetentionDays,compactThreshold,terminalSwitch,openView,terminalTheme,shellTabs,loadAgentPreferences,saveAgentPreferences} from '../js/agentPreferences.js';
+import {uploadMaxMb,uploadChoicesMb,subagents,autoCompact,autoCompactPresets,handoff,wrapUp,archiveRetentionDays,checklistRetentionDays,compactThreshold,terminalSwitch,openView,terminalTheme,shellTabs,loadAgentPreferences,saveAgentPreferences} from '../js/agentPreferences.js';
 
 const isAdmin = computed(() => currentUser.value?.role === 'admin');
 const toast = (text) => f7.toast.create({ text, closeTimeout: 1800 }).open();
@@ -187,6 +189,7 @@ const dropdownItems = computed(() => {
   if(dropdownKind.value==='terminalTheme')return ['computer','cc-agent'].map(v=>({value:v,label:terminalThemeLabel(v)}));
   if(dropdownKind.value==='autoCompact')return [{value:'default',label:autoCompactLabel(null)},...autoCompactPresets.value.map(n=>({value:String(n),label:autoCompactLabel(n)}))];
   if(dropdownKind.value==='retention')return [{value:'never',label:retentionLabel(null)},...RETENTION_CHOICES.map(d=>({value:String(d),label:retentionLabel(d)}))];
+  if(dropdownKind.value==='uploadMax')return [...uploadChoicesMb.value].sort((a,b)=>b-a).map(n=>({value:String(n),label:uploadMaxLabel(n)}));
   if(dropdownKind.value==='checklistRetention')return [{value:'never',label:checklistRetentionLabel(null)},...CHECKLIST_RETENTION_CHOICES.map(d=>({value:String(d),label:checklistRetentionLabel(d)}))];
   return [...Array.from({length:10},(_,i)=>({value:String(i+1),label:compactCount(i+1)})),{value:'0',label:compactPolicy(0)}];
 });
@@ -197,6 +200,7 @@ const dropdownSelected = computed(() => {
   if(dropdownKind.value==='terminalTheme')return terminalTheme.value;
   if(dropdownKind.value==='autoCompact')return autoCompact.value?String(autoCompact.value):'default';
   if(dropdownKind.value==='retention')return archiveRetentionDays.value===null?'never':String(archiveRetentionDays.value);
+  if(dropdownKind.value==='uploadMax')return String(uploadMaxMb.value);
   if(dropdownKind.value==='checklistRetention')return checklistRetentionDays.value===null?'never':String(checklistRetentionDays.value);
   return String(compactThreshold.value);
 });
@@ -227,6 +231,7 @@ async function saveRetention(value){
 }
 // Finished checklists: kept (the default) or removed this many days after their last change.
 const CHECKLIST_RETENTION_CHOICES=[1,3,7,14,30];
+const uploadMaxLabel=mb=>mb>=1024?(mb/1024)+' GB':mb+' MB';
 const checklistRetentionLabel=days=>days?days+' '+ct('天'):ct('不刪除');
 async function saveChecklistRetention(value){
  const days=value==='never'?null:Number(value);
@@ -238,6 +243,7 @@ async function onDropdownSelect(value) {
   if(dropdownKind.value==='wrapUp'){await saveWrapUp({minutes:Number(value)});return;}
   if(dropdownKind.value==='retention'){await saveRetention(value);return;}
   if(dropdownKind.value==='checklistRetention'){await saveChecklistRetention(value);return;}
+  if(dropdownKind.value==='uploadMax'){const mb=Number(value);if(mb===uploadMaxMb.value)return;try{await saveAgentPreferences({uploadMaxMb:mb});toast(t('settingsSaved'));}catch(e){f7.dialog.alert(e.message);}return;}
   if(dropdownKind.value==='lazy'){await saveHandoff({lazy:value==='lazy'});return;}
   if(dropdownKind.value==='terminalTheme'){if(value===terminalTheme.value)return;const was=terminalTheme.value;terminalTheme.value=value;try{await saveAgentPreferences({terminalTheme:value});toast(t('settingsSaved'));}catch(e){terminalTheme.value=was;f7.dialog.alert(e.message||t('settingsFailed'));}return;}
   if(dropdownKind.value==='openView'){if(value===openView.value)return;const was=openView.value;openView.value=value;try{await saveAgentPreferences({openView:value});toast(t('settingsSaved'));}catch(e){openView.value=was;f7.dialog.alert(e.message||t('settingsFailed'));}return;}

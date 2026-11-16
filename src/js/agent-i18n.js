@@ -589,6 +589,7 @@ const english = {
  
  "最多 10 個附件":"Up to 10 attachments",
  "附件大小須為 1 byte 至 95 MB":"Each file must be between 1 byte and 95 MB",
+ "附件大小須為 1 byte 至 {max}":"Each file must be between 1 byte and {max}",
    "取消":"Cancel",
  "加入附件":"Add attachments", "移除附件":"Remove attachment", "附件":"Attachments",
  "傳送中…":"Sending…", "上傳附件 {n}/{total}（{percent}%）…":"Uploading {n} of {total} ({percent}%)…", "上傳附件 {n}/{total}（伺服器處理中）…":"Uploading {n} of {total} (server processing)…", "處理中":"Processing", "等待上傳":"Waiting to upload", "上傳中":"Uploading", "已上傳":"Uploaded", "上傳失敗":"Upload failed",
@@ -617,6 +618,8 @@ const english = {
   "Compact 自動接續": "Continue after compaction",
   "Agent 刪除": "Deleted agents",
   "已完成的待辦事項保留": "Keep finished to-dos",
+  "最大接收檔案大小": "Largest file to receive",
+  "網頁可以傳給 agent 的單一檔案上限；大檔案會自動分段上傳。": "The largest single file the page may send to an agent; large files go up in parts by themselves.",
   "天": "days",
   "整份清單的項目都完成後，從最後一次更新起算，到期自動刪除；還有未完成、進行中或卡住項目的清單不會刪。": "Once every item on a list is done, it is deleted this long after its last change. A list with anything still to do, in progress or blocked is never deleted.",
   "等待工作目錄確認": "Waiting for workspace confirmation",

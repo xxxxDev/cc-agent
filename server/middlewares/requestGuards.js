@@ -134,6 +134,8 @@ function requireJsonContentType(req, res, next) {
   // a message, or an agent's picture. application/octet-stream is not a type a form
   // can send without a preflight, so this opens no simple-request CSRF shape.
   if (req.method === 'POST' && /^\/conversations\/[a-f0-9-]{36}\/(attachments|avatar)$/.test(req.path) && req.is('application/octet-stream')) return next();
+  // A part of a file sent in parts (attachments.uploadPart): the same gates, PUT to its own upload only.
+  if (req.method === 'PUT' && /^\/conversations\/[a-f0-9-]{36}\/uploads\/[a-f0-9-]{36}$/.test(req.path) && req.is('application/octet-stream')) return next();
   if (!req.is('application/json')) {
     return res.status(415).json({ message: 'Content-Type must be application/json' });
   }

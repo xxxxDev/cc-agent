@@ -242,11 +242,15 @@ watch(()=>props.file,file=>{
   on:{closed(){dialog=null;emit('close');}},
  }).open();
 });
-function cleanup(){controller?.abort();controller=null;if(imageUrl.value)URL.revokeObjectURL(imageUrl.value);imageUrl.value='';size.value=null;zoomable.value=false;text.value='';cut.value=false;}
+const STREAM_ABOVE=200*1024*1024;
+function cleanup(){controller?.abort();controller=null;if(imageUrl.value.startsWith('blob:'))URL.revokeObjectURL(imageUrl.value);imageUrl.value='';size.value=null;zoomable.value=false;text.value='';cut.value=false;}
 watch([()=>props.file,()=>props.conversationId],async()=>{
  cleanup();error.value='';loading.value=false;
  if(!isImage.value&&!isText.value&&!isMedia.value)return;
  const current=new AbortController();controller=current;loading.value=true;
+ // A large video plays as it arrives instead of being held whole in the phone's memory (files may
+ // be up to 2 GB); saving it fetches it separately.
+ if(isVideo.value&&!props.file.local&&props.file.size>STREAM_ABOVE){imageUrl.value=url.value+'?as=video';loading.value=false;return;}
  if(isMedia.value){
   try{let blob=props.file.local;if(!blob){const r=await fetch(url.value,{credentials:'include',signal:current.signal});if(!r.ok)throw new Error();blob=await r.blob();}if(controller!==current)return;imageUrl.value=URL.createObjectURL(new Blob([blob],{type:(isVideo.value?VIDEO_TYPES:AUDIO_TYPES)[props.file.name.split('.').pop().toLowerCase()]}));}
   catch(e){if(controller===current&&!current.signal.aborted)error.value=ct(isVideo.value?'無法播放此影片':'無法播放此音訊');}

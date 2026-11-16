@@ -44,10 +44,10 @@ export async function api(endpoint, options = {}) {
 // attachments looked stuck while they went up). fetch()
 // reports no upload progress, so this one request goes by XMLHttpRequest, with what
 // api() sends (the cookie, the CSRF header) and the same answer and error.
-export function apiUpload(endpoint, body, { headers = {}, onProgress } = {}) {
+export function apiUpload(endpoint, body, { method = 'POST', headers = {}, onProgress } = {}) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', `/api${endpoint}`);
+    xhr.open(method, `/api${endpoint}`);
     xhr.withCredentials = true;
     for (const [name, value] of Object.entries({ 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken(), ...headers })) xhr.setRequestHeader(name, value);
     if (onProgress) xhr.upload.onprogress = (event) => { if (event.lengthComputable && event.total) onProgress(event.loaded / event.total); };
@@ -67,6 +67,9 @@ export function apiUpload(endpoint, body, { headers = {}, onProgress } = {}) {
         error.status = xhr.status;
         error.code = data.code;
         error.data = data;
+        // How long the server asks to wait (a 429), for an upload to try again then.
+        const wait = Number(xhr.getResponseHeader?.('Retry-After'));
+        if (wait > 0) error.retryAfter = wait;
         reject(error);
         return;
       }

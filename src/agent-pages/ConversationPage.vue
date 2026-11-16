@@ -89,7 +89,7 @@ import AgentProfilePanel from "../components/AgentProfilePanel.vue";import Messa
 import SlashMenu from "../components/SlashMenu.vue";
 import GlassDropdown from "../components/GlassDropdown.vue";
 import MentionMenu from "../components/MentionMenu.vue";
-import ChecklistPanel,{askNewChecklist} from "../components/ChecklistPanel.vue";import FilesPanel from "../components/FilesPanel.vue";import ContextRing from "../components/ContextRing.vue";import ContextUsagePanel from "../components/ContextUsagePanel.vue";import FileDropOverlay from "../components/FileDropOverlay.vue";import {useFileDrag} from "../js/fileDrag.js";import {dropTarget,typedPaths,pastedName} from "../js/terminalDrop.js";import {api,apiUpload} from "../js/api.js";import {f7} from "framework7-vue";import TerminalPromptCard from "../components/TerminalPromptCard.vue";import {ref,computed,inject,watch,nextTick,Teleport,TransitionGroup,onMounted,onBeforeUnmount} from "vue";import {bindConversationViewport} from "../js/conversationViewport.js";import TerminalTabs from "../components/TerminalTabs.vue";import SpinnerIcon from "../components/SpinnerIcon.vue";import {listDetailActive,startListColumnResize,setListColumnWidth} from "../js/listDetail.js";import {navPlace,navShown,phoneNavOrder,phoneNavCount} from "../js/agentPreferences.js";export default {components:{OperationSteps,DraftUploadState,DraftPictures,ContextRing,ContextUsagePanel,FileDropOverlay,GlassDropdown,MentionMenu,TerminalPromptCard,ChecklistPanel,FilesPanel,ChatComposer,TerminalTabs,SpinnerIcon,TransitionGroup,Teleport,AttachmentPreview,MessageList,TranscriptInspector,AgentProfilePanel,SlashMenu,MessageSearchResults},setup(){const workspace=inject("workspace");let cleanup,cleanupComposer,cleanupTrace,stopOrphanWatch;onMounted(()=>{const page=workspace.scroll.value?.closest(".page");cleanupTrace=bindKeyboardTrace(page);cleanupComposer=bindConversationComposer(page);cleanup=bindConversationViewport(page);// Losing the agent (expired session, aborted open, interrupted back gesture)
+import ChecklistPanel,{askNewChecklist} from "../components/ChecklistPanel.vue";import FilesPanel from "../components/FilesPanel.vue";import ContextRing from "../components/ContextRing.vue";import ContextUsagePanel from "../components/ContextUsagePanel.vue";import FileDropOverlay from "../components/FileDropOverlay.vue";import {useFileDrag} from "../js/fileDrag.js";import {dropTarget,typedPaths,pastedName} from "../js/terminalDrop.js";import {api} from "../js/api.js";import {uploadInParts,formatBytes} from "../js/uploadParts.js";import {f7} from "framework7-vue";import TerminalPromptCard from "../components/TerminalPromptCard.vue";import {ref,computed,inject,watch,nextTick,Teleport,TransitionGroup,onMounted,onBeforeUnmount} from "vue";import {bindConversationViewport} from "../js/conversationViewport.js";import TerminalTabs from "../components/TerminalTabs.vue";import SpinnerIcon from "../components/SpinnerIcon.vue";import {listDetailActive,startListColumnResize,setListColumnWidth} from "../js/listDetail.js";import {navPlace,navShown,phoneNavOrder,phoneNavCount,uploadMaxBytes} from "../js/agentPreferences.js";export default {components:{OperationSteps,DraftUploadState,DraftPictures,ContextRing,ContextUsagePanel,FileDropOverlay,GlassDropdown,MentionMenu,TerminalPromptCard,ChecklistPanel,FilesPanel,ChatComposer,TerminalTabs,SpinnerIcon,TransitionGroup,Teleport,AttachmentPreview,MessageList,TranscriptInspector,AgentProfilePanel,SlashMenu,MessageSearchResults},setup(){const workspace=inject("workspace");let cleanup,cleanupComposer,cleanupTrace,stopOrphanWatch;onMounted(()=>{const page=workspace.scroll.value?.closest(".page");cleanupTrace=bindKeyboardTrace(page);cleanupComposer=bindConversationComposer(page);cleanup=bindConversationViewport(page);// Losing the agent (expired session, aborted open, interrupted back gesture)
 // used to leave this page stranded with an empty body and no way forward.
 workspace.recoverOrphanedConversation();
 stopOrphanWatch=watch(workspace.selected,id=>{if(!id)nextTick(workspace.recoverOrphanedConversation);});});
@@ -164,15 +164,15 @@ function dropAt(e){
  if(list.length&&dropTarget(e.target,terminalTakes.value).to==='terminal')return filesToTerminal(list);
  if(!workspace.agentLocked.value)workspace.dropFiles(e);
 }
-const MAX_TERMINAL_FILES=10,MAX_BYTES=95*1024*1024;
+const MAX_TERMINAL_FILES=10;
 async function filesToTerminal(list){
  const id=workspace.detail.value?.id;if(!id)return;
  if(list.length>MAX_TERMINAL_FILES){f7.dialog.alert(workspace.ct('最多 10 個附件'));list=list.slice(0,MAX_TERMINAL_FILES);}
  const paths=[],ids=[],stamp=new Date();
  for(const [i,file] of list.entries()){
-  if(!file.size||file.size>MAX_BYTES){f7.dialog.alert(workspace.ct('附件大小須為 1 byte 至 95 MB')+': '+file.name);continue;}
+  if(!file.size||file.size>uploadMaxBytes.value){f7.dialog.alert(workspace.ct('附件大小須為 1 byte 至 {max}').replace('{max}',formatBytes(uploadMaxBytes.value))+': '+file.name);continue;}
   try{
-   const saved=await apiUpload('/conversations/'+id+'/attachments?name='+encodeURIComponent(pastedName(file,i,stamp)),file,{headers:{'Content-Type':'application/octet-stream'}});
+   const saved=await uploadInParts(id,file,pastedName(file,i,stamp));
    paths.push((await api('/conversations/'+id+'/attachments/'+saved.id+'/terminal-path',{method:'POST',body:'{}'})).path);
    ids.push(saved.id);
   }catch(err){f7.dialog.alert(workspace.ct('無法放到終端機')+': '+(err?.message||file.name));}

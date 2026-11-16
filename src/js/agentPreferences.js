@@ -25,6 +25,11 @@ export const transcriptSwitch = ref(false);
 export const archiveRetentionDays = ref(null);
 // Days a checklist whose every item is done is kept after its last change, or null for never.
 export const checklistRetentionDays = ref(null);
+// The largest file the page may send (an admin's choice): bytes for every signed-in page,
+// from /agent-list; the admin page's choice in MB and the choices it offers.
+export const uploadMaxBytes = ref(99 * 1024 * 1024);
+export const uploadMaxMb = ref(99);
+export const uploadChoicesMb = ref([99, 256, 512, 1024, 2048]);
 // The wrap-up check sent to an agent that finished a task: on or off,
 // the minutes it sits idle first, and its words.
 export const wrapUp = ref({enabled: false, minutes: 10, text: '', custom: false});
@@ -65,6 +70,8 @@ function absorb(preferences) {
   if (preferences.wrapUp && typeof preferences.wrapUp === 'object') wrapUp.value = preferences.wrapUp;
   archiveRetentionDays.value = Number.isInteger(preferences.archiveRetentionDays) ? preferences.archiveRetentionDays : null;
   checklistRetentionDays.value = Number.isInteger(preferences.checklistRetentionDays) ? preferences.checklistRetentionDays : null;
+  if (Number.isInteger(preferences.uploadMaxMb)) { uploadMaxMb.value = preferences.uploadMaxMb; uploadMaxBytes.value = preferences.uploadMaxMb * 1024 * 1024; }
+  if (Array.isArray(preferences.uploadChoicesMb)) uploadChoicesMb.value = preferences.uploadChoicesMb;
   takeNavHidden(preferences.navHidden);
   scopedAgents.value = typeof preferences.scopedAgents === 'boolean' ? preferences.scopedAgents : null;
   preferencesLoaded.value = true;
@@ -88,6 +95,7 @@ export const listGroups = ref([]);
 export const listPins = ref([]);
 export function absorbList(preferences) {
   autoSort.value = preferences?.autoSort === true;
+  if (Number.isSafeInteger(preferences?.uploadMaxBytes) && preferences.uploadMaxBytes > 0) uploadMaxBytes.value = preferences.uploadMaxBytes;
   takeNavOrder(preferences?.navOrder);
   takeNavHidden(preferences?.navHidden);
   takePhoneCount(preferences?.phoneNavCount);

@@ -254,7 +254,17 @@ app.get('/api/conversations/:id/subagents',(req,res,next)=>{try{
  res.json(agents.subagentList(agents.get(req.params.id,req.userId)));
 }catch(e){next(e);}});
 const own=(req,res,next)=>{try{req.conversation=agents.get(req.params.id,req.userId);next();}catch(e){next(e);}};
-app.post('/api/conversations/:id/attachments',own,express.raw({type:()=>true,limit:attachments.MAX_BYTES}),(req,res,next)=>{try{res.status(201).json(attachments.put(agents.stateRoot,req.conversation,req.query.name,req.body));}catch(e){next(e);}});
+app.post('/api/conversations/:id/attachments',own,express.raw({type:()=>true,limit:attachments.MAX_BYTES}),(req,res,next)=>{try{res.status(201).json(attachments.put(agents.stateRoot,req.conversation,req.query.name,req.body,{max:agents.uploadMaxBytes()}));}catch(e){next(e);}});
+// A file in parts (attachments.startUpload): start with its name
+// and size, send the parts in order (PUT ?offset=), ask where it got to after a dropped connection
+// (GET), or let it go (DELETE). The last part answers with the attachment.
+const uploadError=(res,e,next)=>{if(e&&e.status===409&&e.received!==undefined)return res.status(409).json({message:e.message,received:e.received});if(e&&e.status===413&&e.maxBytes)return res.status(413).json({message:e.message,maxBytes:e.maxBytes});next(e);};
+app.post('/api/conversations/:id/uploads',own,(req,res,next)=>{try{res.status(201).json(attachments.startUpload(agents.stateRoot,req.conversation,req.body?.name,req.body?.size,{max:agents.uploadMaxBytes()}));}catch(e){uploadError(res,e,next);}});
+app.get('/api/conversations/:id/uploads/:uploadId',own,(req,res,next)=>{try{res.set('Cache-Control','private, no-store');res.json(attachments.uploadStatus(agents.stateRoot,req.conversation,req.params.uploadId));}catch(e){next(e);}});
+// The part is marked as arriving before its body is read, so a slow one is never taken for a dropped upload.
+const partArriving=(req,res,next)=>{const done=attachments.partArriving(req.conversation,String(req.params.uploadId));res.on('close',done);res.on('finish',done);next();};
+app.put('/api/conversations/:id/uploads/:uploadId',own,partArriving,express.raw({type:()=>true,limit:attachments.CHUNK_BYTES}),async(req,res,next)=>{try{const r=await attachments.uploadPart(agents.stateRoot,req.conversation,req.params.uploadId,req.query.offset,req.body);res.status(r.done?201:200).json(r);}catch(e){uploadError(res,e,next);}});
+app.delete('/api/conversations/:id/uploads/:uploadId',own,(req,res,next)=>{try{attachments.cancelUpload(agents.stateRoot,req.conversation,req.params.uploadId);res.json({ok:true});}catch(e){next(e);}});
 // A video asked for as one (?as=video, the file list's preview) is served as its kind,
 // inline and in ranges, so a phone draws its first frame; an iPhone draws nothing for
 // application/octet-stream. Only the video kinds; nosniff keeps it from being read as

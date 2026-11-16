@@ -1,6 +1,8 @@
 import {ref,computed,nextTick,watch} from 'vue';
 import {f7} from 'framework7-vue';
-import {api,apiUpload} from './api.js';
+import {api} from './api.js';
+import {uploadInParts,formatBytes} from './uploadParts.js';
+import {uploadMaxBytes} from './agentPreferences.js';
 export function useAttachmentDrafts(selected,user,busy,ct){
  const drafts=ref({}),fileInput=ref(null);
  const files=computed(()=>drafts.value[selected.value]||[]);
@@ -8,7 +10,7 @@ export function useAttachmentDrafts(selected,user,busy,ct){
  const resize=()=>nextTick(()=>document.querySelector('.chat-page .messagebar')?.f7Messagebar?.resizePage());
  // Files into one conversation's drafts: the open one's (picked, dropped, pasted), or the one
  // an admin hands a diagnostics report to (agent-chat.js handToAgent).
- function addFilesTo(id,list){if(!id||busy.value)return false;const next=[...(drafts.value[id]||[])];for(const file of Array.from(list||[])){if(next.length>=10){f7.dialog.alert(ct('最多 10 個附件'));break;}if(!file.size||file.size>95*1024*1024){f7.dialog.alert(ct('附件大小須為 1 byte 至 95 MB')+': '+file.name);continue;}next.push({key:crypto.randomUUID(),file,name:file.name,size:file.size,uploadedId:null});}drafts.value[id]=next;pendingSend.delete(id);resize();return true;}
+ function addFilesTo(id,list){if(!id||busy.value)return false;const next=[...(drafts.value[id]||[])];for(const file of Array.from(list||[])){if(next.length>=10){f7.dialog.alert(ct('最多 10 個附件'));break;}if(!file.size||file.size>uploadMaxBytes.value){f7.dialog.alert(ct('附件大小須為 1 byte 至 {max}').replace('{max}',formatBytes(uploadMaxBytes.value))+': '+file.name);continue;}next.push({key:crypto.randomUUID(),file,name:file.name,size:file.size,uploadedId:null});}drafts.value[id]=next;pendingSend.delete(id);resize();return true;}
  const addFiles=list=>addFilesTo(selected.value,list);
  function pickFiles(e){addFiles(e.target.files);e.target.value='';}
  function dropFiles(e){if(e.dataTransfer?.files?.length)addFiles(e.dataTransfer.files);}
@@ -60,7 +62,7 @@ export function useAttachmentDrafts(selected,user,busy,ct){
   for(const [i,item] of queue.entries()){
    progress.value[id]={phase:'upload',at:i+1,total:queue.length,percent:0};item.state='uploading';
    try{
-    const r=await apiUpload('/conversations/'+id+'/attachments?name='+encodeURIComponent(item.name),item.file,{headers:{'Content-Type':'application/octet-stream'},onProgress:f=>{const pct=Math.min(99,Math.floor(f*100));item.percent=pct;const p=progress.value[id];if(p?.phase==='upload'&&p.at===i+1)p.percent=pct;}});
+    const r=await uploadInParts(id,item.file,item.name,{onProgress:f=>{const pct=Math.min(99,Math.floor(f*100));item.percent=pct;const p=progress.value[id];if(p?.phase==='upload'&&p.at===i+1)p.percent=pct;}});
     item.uploadedId=r.id;item.state='done';item.percent=100;
    }catch(e){item.state='failed';throw e;}
   }
