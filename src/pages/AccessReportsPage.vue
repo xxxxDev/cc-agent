@@ -13,7 +13,7 @@
            can be looked at later. -->
       <div class="report-views">
         <f7-segmented strong tag="div">
-          <f7-button :active="view === 'open'" class="report-view-open" @click="view = 'open'">{{ ct('待處理') }}<span v-if="openCount"> {{ openCount }}</span></f7-button>
+          <f7-button :active="view === 'open'" class="report-view-open" @click="view = 'open'">{{ ct('待處理') }}<span v-if="openCount" class="report-open-count">{{ openCount }}</span></f7-button>
           <f7-button :active="view === 'all'" class="report-view-all" @click="view = 'all'">{{ ct('紀錄') }}</f7-button>
         </f7-segmented>
       </div>
@@ -179,6 +179,8 @@ function open(r) {
 </script>
 
 <style scoped>
+/* The count beside 待處理: a flex button drops a leading space, so it keeps its own gap. */
+.report-open-count{margin-left:4px;}
 .report-views { padding: 0 16px 12px; }
 .report-bulk { padding: 0 16px 14px; }
 .report-not-needed { color: #64d2ff; }
