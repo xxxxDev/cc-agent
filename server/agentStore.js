@@ -2787,6 +2787,8 @@ function sweepRetention({now=Date.now()}={}){
 
  let files=0;
  const usersDir=path.join(stateRoot,'users');
+ let groupsSetAside=false,groupsNow=[];try{groupsNow=groupStore.list();groupsSetAside=fs.readdirSync(stateRoot).some(f=>f.startsWith('groups.json.unreadable-'));}catch{groupsSetAside=true;}
+ if(groupsSetAside)console.error('[retention] a groups.json that could not be read lies set aside: files posted to groups are kept until it is dealt with');
  for(const owner of fs.existsSync(usersDir)?fs.readdirSync(usersDir):[]){
   const dir=path.join(usersDir,owner,'attachments');
   if(!fs.existsSync(dir))continue;
@@ -2795,12 +2797,15 @@ function sweepRetention({now=Date.now()}={}){
    if(!c){try{fs.rmSync(path.join(dir,id),{recursive:true,force:true});files+=1;}catch{}continue;}
    const sent=new Set(c.messages.flatMap(m=>(m.attachments||[]).map(a=>a.id)));
    // A group's message holds files an agent posted there (group-post): sent too.
-   for(const x of groupStore.list())for(const gm of x.messages||[])if(gm.attachmentsFrom===c.id)for(const a of gm.attachments||[])if(a?.id)sent.add(a.id);
+   for(const x of groupsNow)for(const gm of x.messages||[])if(gm.attachmentsFrom===c.id)for(const a of gm.attachments||[])if(a?.id)sent.add(a.id);
    for(const entry of fs.readdirSync(path.join(dir,id))){
     if(!entry.endsWith('.json'))continue;
     const meta=path.join(dir,id,entry);
     let data;try{data=JSON.parse(fs.readFileSync(meta,'utf8'));}catch{continue;}
     if(sent.has(data.id))continue;
+    // A file posted to a group is kept while a groups.json that could not be read lies set aside: the
+    // groups it held are not known, and restoring that file must find their files still here.
+    if(data.posted===true&&groupsSetAside)continue;
     // One handed to the terminal that no typed prompt took (its paste failed, the tab closed):
     // kept TERMINAL_KEEP_DAYS from then, not forever.
     if(data.terminal===true?!((data.sentAt??data.createdAt)<now-TERMINAL_KEEP_DAYS*86400000):!(data.createdAt<now-UNSENT_ATTACHMENT_HOURS*3600000))continue;
