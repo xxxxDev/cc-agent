@@ -2242,6 +2242,7 @@ function bridge(c,action,data={}) {
   if(!x.members.includes(c.id)&&!named)throw error(zh?'這個群聊沒有 @ 你，你也不是成員，不能在這裡發話。':'This group chat has not named you with @ and you are not a member, so you cannot post in it.',403);
   if(!(data.replyKey&&x.messages.some(m=>m.replyKey===data.replyKey))){
    const files=attachments.fromPaths(stateRoot,c,data.files,attachableFolders(c));
+   for(const f of files)attachments.markPosted(stateRoot,c,f.id);
    groupStore.addMessage(x,{role:'assistant',agentId:c.id,agentTitle:c.title,text:data.text,final:data.final,post:true,replyKey:data.replyKey,...(files.length?{attachments:files,attachmentsFrom:c.id}:{}),...groupPush(x,c,data.text)});
    c.groupContext={id:x.id,at:Date.now()};save(c);groupStore.save();
   }
@@ -2793,6 +2794,8 @@ function sweepRetention({now=Date.now()}={}){
    const c=state.conversations.find(x=>x.id===id);
    if(!c){try{fs.rmSync(path.join(dir,id),{recursive:true,force:true});files+=1;}catch{}continue;}
    const sent=new Set(c.messages.flatMap(m=>(m.attachments||[]).map(a=>a.id)));
+   // A group's message holds files an agent posted there (group-post): sent too.
+   for(const x of groupStore.list())for(const gm of x.messages||[])if(gm.attachmentsFrom===c.id)for(const a of gm.attachments||[])if(a?.id)sent.add(a.id);
    for(const entry of fs.readdirSync(path.join(dir,id))){
     if(!entry.endsWith('.json'))continue;
     const meta=path.join(dir,id,entry);
