@@ -19,6 +19,11 @@ const { isWin } = require('../../channel/platform.cjs');
 
 const ROTATE_AFTER_DAYS = 7;
 const RETENTION_DAYS = 365;
+// A log is also rotated once it is this large, and the oldest archive segments go once
+// they add up to more than the archive cap, so requests nobody signed in for cannot fill
+// the disk.
+const ROTATE_AT_BYTES = 100 * 1024 * 1024;
+const ARCHIVE_MAX_BYTES = 2 * 1024 * 1024 * 1024;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FIRST_LINE_CAP = 64 * 1024;
 // The setting that moves the audit log (services/audit.js) is named by the product.
@@ -150,14 +155,14 @@ function uniqueSegment(archiveDir, base, stamp) {
   return candidate;
 }
 
-function rotateFile(filePath, archiveDir, { now, dryRun }) {
+function rotateFile(filePath, archiveDir, { now, dryRun, rotateAtBytes = ROTATE_AT_BYTES }) {
   const inspected = activeFileInfo(filePath);
   if (!inspected.info) return { rotated: null, reason: inspected.reason };
   const firstLine = firstLineTimeMs(filePath, inspected.info);
   if (firstLine.stamp === null) return { rotated: null, reason: firstLine.reason };
   const stamp = firstLine.stamp;
   const ageDays = (now.getTime() - stamp) / DAY_MS;
-  if (ageDays <= ROTATE_AFTER_DAYS) return { rotated: null, reason: 'young' };
+  if (ageDays <= ROTATE_AFTER_DAYS && inspected.info.size < rotateAtBytes) return { rotated: null, reason: 'young' };
 
   const base = path.basename(filePath, path.extname(filePath));
   const segment = uniqueSegment(archiveDir, base, utcStamp(now));
@@ -175,8 +180,9 @@ function rotateFile(filePath, archiveDir, { now, dryRun }) {
   return { rotated: segmentName };
 }
 
-function deleteOldSegments(archiveDir, base, { now, dryRun }) {
+function deleteOldSegments(archiveDir, base, { now, dryRun, archiveMaxBytes = ARCHIVE_MAX_BYTES }) {
   const deleted = [];
+  const kept = [];
   const skipped = [];
   // The archive folder itself is looked at without following it: a link put in its
   // place would have old files deleted wherever it points. (Rotating into one is refused by ensurePrivateDirectory.)
@@ -203,7 +209,15 @@ function deleteOldSegments(archiveDir, base, { now, dryRun }) {
     if (info.mtimeMs < cutoff) {
       if (!dryRun) fs.unlinkSync(full);
       deleted.push(name);
-    }
+    } else kept.push({ name, full, size: info.size, mtimeMs: info.mtimeMs });
+  }
+  // Over the cap, the oldest segments go first.
+  let total = kept.reduce((n, k) => n + k.size, 0);
+  for (const k of kept.sort((a, b) => a.mtimeMs - b.mtimeMs)) {
+    if (total <= archiveMaxBytes) break;
+    if (!dryRun) fs.unlinkSync(k.full);
+    deleted.push(k.name);
+    total -= k.size;
   }
   return { deleted, skipped };
 }
@@ -213,23 +227,25 @@ function runLogRotation({
   now = new Date(),
   files = defaultFiles(),
   dryRun = false,
+  rotateAtBytes = ROTATE_AT_BYTES,
+  archiveMaxBytes = ARCHIVE_MAX_BYTES,
 } = {}) {
   const archiveDir = path.join(logsDir, 'archive');
   const report = {};
   for (const file of files) {
     const base = path.basename(file, path.extname(file));
-    const { deleted, skipped } = deleteOldSegments(archiveDir, base, { now, dryRun });
-    const rotated = rotateFile(path.join(logsDir, file), archiveDir, { now, dryRun });
+    const { deleted, skipped } = deleteOldSegments(archiveDir, base, { now, dryRun, archiveMaxBytes });
+    const rotated = rotateFile(path.join(logsDir, file), archiveDir, { now, dryRun, rotateAtBytes });
     report[file] = { rotated, deleted, skipped };
   }
   return report;
 }
 
 // House start pattern: run one pass at startup,
-// then a 24h unref'd interval; never throw (a failed pass logs one line only).
+// then an hourly unref'd interval (a size check needs more than one a day); never throw (a failed pass logs one line only).
 function startLogRotation(options = {}) {
   const {
-    intervalMs = DAY_MS,
+    intervalMs = 60 * 60 * 1000,
     timers = { setInterval, clearInterval },
     logger = console,
     ...passthrough
@@ -250,6 +266,8 @@ function startLogRotation(options = {}) {
 module.exports = {
   ROTATE_AFTER_DAYS,
   RETENTION_DAYS,
+  ROTATE_AT_BYTES,
+  ARCHIVE_MAX_BYTES,
   runLogRotation,
   startLogRotation,
   defaultLogsDir,

@@ -12,7 +12,7 @@ const pushRoutes = require('./routes/pushRoutes');
 const { security } = require('./services/securityLog');
 const { getDefaultPushService } = require('./services/pushService');
 const { resolveClientIp } = require('./services/clientIp');
-const { audit } = require('./services/audit');
+const { audit, auditRefused } = require('./services/audit');
 const {
   isAllowedOrigin,
   issueCsrfCookie,
@@ -142,10 +142,12 @@ app.use((req,res,next)=>{for(const k of ['session_id'])if(k in req.cookies&&type
 app.use('/bridge', (req, res, next) => {
   const cloudflare = req.headers['cf-connecting-ip'] || req.headers['cf-ray'] || req.headers['cdn-loop'];
   if (cloudflare || !req.originalUrl.startsWith('/bridge')) {
-    audit({ source: 'bridge', method: req.method, path: req.originalUrl, status: 404, reason: cloudflare ? 'forwarded by Cloudflare' : 'not spelled /bridge', ip: resolveClientIp(req) });
+    // Its own budget: anyone can send these through Cloudflare, so they must not crowd out the local ones.
+    auditRefused({ source: cloudflare ? 'bridge-cloudflare' : 'bridge', method: req.method, path: req.originalUrl, status: 404, reason: cloudflare ? 'forwarded by Cloudflare' : 'not spelled /bridge', ip: resolveClientIp(req) });
     return res.status(404).json({ message: 'Not found' });
   }
   res.on('finish', () => {
+    // Only local callers get this far (Cloudflare is refused above): written in full.
     if (res.statusCode >= 400) audit({ source: 'bridge', method: req.method, path: req.originalUrl, status: res.statusCode });
   });
   next();
@@ -172,7 +174,8 @@ app.use('/api', (req, res, next) => {
       hasSessionCookie: Boolean(req.cookies?.session_id),
       ip: resolveClientIp(req),
     };
-    audit(entry);
+    // A request from someone not signed in is budgeted: anyone can send those.
+    (!req.username ? auditRefused : audit)(entry);
   });
   next();
 });
