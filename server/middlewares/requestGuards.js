@@ -165,6 +165,9 @@ const RATE_LIMIT_MAX_KEYS = 5000;
 // An IPv6 /48 holds 65,536 /64s, so one holder could take many keys. Past this many
 // /64 keys under one /48, the rest of that /48 shares one bucket.
 const RATE_LIMIT_PER_48 = 16;
+// That shared bucket allows this many times a normal one, so the others in the /48 are
+// not easily crowded out by whoever took the first sixteen.
+const RATE_LIMIT_SHARED_FACTOR = 8;
 
 const { ipGroup } = require('../services/qrLogin');
 const prefix48 = (group) => (group.includes(':') ? group.split(':').slice(0, 3).join(':') : '');
@@ -213,7 +216,7 @@ function rateLimit({ windowMs, max }) {
       return next();
     }
     entry.count += 1;
-    if (entry.count > max) {
+    if (entry.count > (entry.shared ? max * RATE_LIMIT_SHARED_FACTOR : max)) {
       res.setHeader('Retry-After', Math.ceil((entry.resetAt - now) / 1000));
       return res.status(429).json({ message: 'Too many requests, slow down' });
     }
@@ -249,6 +252,7 @@ module.exports = {
   requireCsrfToken,
   rateLimit,
   RATE_LIMIT_PER_48,
+  RATE_LIMIT_SHARED_FACTOR,
   RATE_LIMIT_MAX_KEYS,
   jsonBodyErrorHandler,
   JSON_BODY_LIMIT,
