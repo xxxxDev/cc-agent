@@ -33,9 +33,15 @@ function audit(entry) {
 // are written a minute for each source (api, bridge, bridge-cloudflare); the rest are counted
 // in one line for that source and minute, written with the next one or within a minute.
 const REFUSED_PER_MINUTE = 60;
+// Within that, one address (its group, as the sign-in limits count it) has at most this many
+// a minute, so it cannot crowd out the others; at most ADDRESSES_PER_MINUTE addresses are
+// tracked a minute, past which only the per-source budget applies.
+const REFUSED_PER_ADDRESS = 10;
+const ADDRESSES_PER_MINUTE = 1000;
+const { ipGroup } = require('./qrLogin');
 const budgets = new Map();
 function flush(source, b) {
-  if (b.count > REFUSED_PER_MINUTE) audit({ source, action: 'refusals-not-logged', count: b.count - REFUSED_PER_MINUTE, minute: new Date(b.minute * 60000).toISOString() });
+  if (b.skipped > 0) audit({ source, action: 'refusals-not-logged', count: b.skipped, minute: new Date(b.minute * 60000).toISOString() });
 }
 function auditRefused(entry, now = Date.now()) {
   const source = entry.source || 'api';
@@ -43,16 +49,23 @@ function auditRefused(entry, now = Date.now()) {
   let b = budgets.get(source);
   if (!b || b.minute !== minute) {
     if (b) { flush(source, b); clearTimeout(b.timer); }
-    b = { minute, count: 0, timer: null };
+    b = { minute, count: 0, skipped: 0, addresses: new Map(), timer: null };
     budgets.set(source, b);
   }
-  b.count += 1;
-  if (b.count <= REFUSED_PER_MINUTE) return audit(entry);
-  if (!b.timer) {
-    const t = b;
-    b.timer = setTimeout(() => { if (budgets.get(source) === t) { flush(source, t); budgets.delete(source); } }, 61_000);
-    b.timer.unref?.();
+  const address = entry.ip ? ipGroup(String(entry.ip)) : '';
+  const seen = address ? b.addresses.get(address) || 0 : 0;
+  if (b.count >= REFUSED_PER_MINUTE || seen >= REFUSED_PER_ADDRESS) {
+    b.skipped += 1;
+    if (!b.timer) {
+      const t = b;
+      b.timer = setTimeout(() => { if (budgets.get(source) === t) { flush(source, t); budgets.delete(source); } }, 61_000);
+      b.timer.unref?.();
+    }
+    return;
   }
+  b.count += 1;
+  if (address && (b.addresses.has(address) || b.addresses.size < ADDRESSES_PER_MINUTE)) b.addresses.set(address, seen + 1);
+  audit(entry);
 }
 
-module.exports = { audit, auditRefused, REFUSED_PER_MINUTE, PATH_MAX, AUDIT_LOG };
+module.exports = { audit, auditRefused, REFUSED_PER_MINUTE, REFUSED_PER_ADDRESS, ADDRESSES_PER_MINUTE, PATH_MAX, AUDIT_LOG };
