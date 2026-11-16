@@ -38,7 +38,7 @@ import {f7} from 'framework7-vue';
 import {api} from '../js/api.js';
 import {ct} from '../js/agent-i18n.js';
 import {timeLocale} from '../js/i18n.js';
-import {saveFile,sharesFiles} from '../js/saveFile.js';
+import {sharesFiles} from '../js/saveFile.js';import {saveWithProgress} from '../js/saveWithProgress.js';
 import AttachmentPreview from './AttachmentPreview.vue';
 import FileThumb from './FileThumb.vue';
 const w=inject('workspace');
@@ -77,7 +77,7 @@ const open=file=>{if(file.removed)return;previewing.value={...file,group:files.v
 const escape=s=>String(s).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
 async function jump(file){await w.showFile(file);}
 // An iPhone's home-screen app shares the file instead (saveFile.js), as a bubble's link does.
-function onDownload(file,event){if(!sharesFiles())return;event.preventDefault();saveFile(url(file),file.name,{confirm:run=>f7.dialog.create({title:escape(file.name),text:ct('檔案準備好了'),buttons:[{text:ct('取消')},{text:ct('儲存或分享'),bold:true,onClick:run}]}).open()});}
+function onDownload(file,event){if(!sharesFiles())return;event.preventDefault();saveWithProgress(url(file),file.name,{title:escape(file.name),size:file.size,ct});}
 function remove(file){
  const conversation=id.value;
  f7.dialog.confirm(ct('會永久刪除這個檔案，無法復原。對話裡的訊息會顯示它已刪除。')+'<br><b>'+escape(file.name)+'</b>',ct('刪除檔案'),async()=>{

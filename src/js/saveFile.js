@@ -26,17 +26,38 @@ function download(url, name, scope) {
   scope.document.body.appendChild(a); a.click(); a.remove();
 }
 
+// The file's bytes, telling onProgress(got, total) as they come, so a large video fetched over a
+// slow connection does not show nothing for a long while. total is the size the
+// server gave, else the one the caller knows, else 0.
+export async function fetchBlob(url, {scope = globalThis, signal, onProgress, size = 0} = {}) {
+  const res = await scope.fetch(url, {credentials: 'same-origin', ...(signal ? {signal} : {})});
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const reader = onProgress && res.body?.getReader?.();
+  if (!reader) return res.blob();
+  const total = Number(res.headers?.get?.('content-length')) || size || 0, parts = [];
+  let got = 0;
+  onProgress(0, total);
+  for (;;) {
+    const {done, value} = await reader.read();
+    if (done) break;
+    parts.push(value); got += value.length;
+    onProgress(got, total);
+  }
+  return new scope.Blob(parts, {type: res.headers?.get?.('content-type') || ''});
+}
+
 // confirm(run) shows one button that calls run(): the file is fetched first, and by
 // then the tap that asked for it may be too old for the share sheet, so a second tap
-// opens it.
-export async function saveFile(url, name, {scope = globalThis, confirm} = {}) {
+// opens it. A file already here (blob: the preview fetched it to show it) goes to the
+// share sheet at once, inside the tap, instead of taking several taps that each fetched it
+// again. onFetched() runs when the bytes are here.
+export async function saveFile(url, name, {scope = globalThis, confirm, blob, onProgress, onFetched, size} = {}) {
   if (!sharesFiles(scope)) return download(url, name, scope);
   let file;
   try {
-    const res = await scope.fetch(url, {credentials: 'same-origin'});
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    file = new scope.File([await res.blob()], name, {type: typeOf(name)});
-  } catch { return download(url, name, scope); }
+    file = new scope.File([blob || await fetchBlob(url, {scope, onProgress, size})], name, {type: typeOf(name)});
+  } catch { onFetched?.(); return download(url, name, scope); }
+  onFetched?.();
   if (!scope.navigator.canShare({files: [file]})) return download(url, name, scope);
   const share = () => scope.navigator.share({files: [file]}).catch(() => {});
   try { await scope.navigator.share({files: [file]}); }

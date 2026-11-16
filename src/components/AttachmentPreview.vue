@@ -22,9 +22,14 @@
      <a v-if="!file.local" class="image-action external" :href="url" :download="file.name" target="_blank" rel="noopener" :aria-label="ct('下載檔案')" :title="ct('下載檔案')" @click="onSave"><i class="icon f7-icons">arrow_down_circle</i></a>
      <a class="image-action image-close" href="#" :aria-label="ct('關閉')" :title="ct('關閉')" @click.prevent="close"><i class="icon f7-icons">xmark</i></a>
     </header>
+    <!-- Saving on an iPhone app: how far the file got, then the tap the share sheet still needs. -->
+    <div v-if="sharePrompt||saving" class="save-bar" role="status">
+     <template v-if="sharePrompt"><span class="save-text">{{ct('檔案準備好了')}}</span><f7-button small class="save-cancel" @click="sharePrompt=null">{{ct('取消')}}</f7-button><f7-button small fill class="save-share" @click="shareNow">{{ct('儲存或分享')}}</f7-button></template>
+     <template v-else><span class="save-text">{{downloadText(ct,saving.got,saving.total)}}</span><span class="save-track"><span :style="{width:(saving.total?Math.min(100,saving.got/saving.total*100):0)+'%'}"></span></span></template>
+    </div>
     <!-- A text file shows what it says, a markdown file set as the bubbles set it. -->
     <div v-if="isText" class="text-stage">
-     <f7-preloader v-if="loading"/>
+     <div v-if="loading" class="load-wait"><f7-preloader/><p v-if="loadProgress" class="load-progress">{{downloadText(ct,loadProgress.got,loadProgress.total)}}</p></div>
      <p v-else-if="error" role="alert">{{error}}</p>
      <!-- The page runs in a frame with no origin of its own: the server's sandbox
           header and this attribute both keep it from this site's login and data. -->
@@ -38,17 +43,17 @@
     </div>
     <template v-if="siblings.length>1"><button type="button" class="image-step prev" :disabled="place<=0" :aria-label="ct('上一個檔案')" @click.stop="step(-1)"><i class="icon f7-icons">chevron_left</i></button><button type="button" class="image-step next" :disabled="place>=siblings.length-1" :aria-label="ct('下一個檔案')" @click.stop="step(1)"><i class="icon f7-icons">chevron_right</i></button></template>
     <div v-if="isVideo" class="video-stage">
-     <f7-preloader v-if="loading"/>
+     <div v-if="loading" class="load-wait"><f7-preloader/><p v-if="loadProgress" class="load-progress">{{downloadText(ct,loadProgress.got,loadProgress.total)}}</p></div>
      <video v-else-if="imageUrl&&!error" :key="imageUrl" :src="imageUrl" controls autoplay playsinline preload="auto" @error="error=ct('無法播放此影片')"></video>
      <p v-else-if="error" role="alert">{{error}}</p>
     </div>
     <div v-else-if="isAudio" class="audio-stage">
-     <f7-preloader v-if="loading"/>
+     <div v-if="loading" class="load-wait"><f7-preloader/><p v-if="loadProgress" class="load-progress">{{downloadText(ct,loadProgress.got,loadProgress.total)}}</p></div>
      <audio v-else-if="imageUrl&&!error" :key="imageUrl" :src="imageUrl" controls autoplay preload="auto" @error="error=ct('無法播放此音訊')"></audio>
      <p v-else-if="error" role="alert">{{error}}</p>
     </div>
     <div v-else-if="!isText" ref="stage" class="image-stage" :class="{actual,pinched:pinch.scale>1}" @touchstart="touchStart" @touchmove="touchMove" @touchend="touchEnd" @touchcancel="touchEnd" @wheel="wheelZoom" @pointerdown="mouseDown">
-     <f7-preloader v-if="loading"/>
+     <div v-if="loading" class="load-wait"><f7-preloader/><p v-if="loadProgress" class="load-progress">{{downloadText(ct,loadProgress.got,loadProgress.total)}}</p></div>
      <img v-else-if="imageUrl&&!error" :src="imageUrl" :alt="file.name" :class="{zoomable}"
       :title="actual||pinch.scale>1?ct('縮回畫面大小'):ct('點一下放大')" :style="[size?{'--w':size.width+'px','--h':size.height+'px'}:null,pinch.scale!==1||pinch.x||pinch.y?{transform:`translate(${pinch.x}px,${pinch.y}px) scale(${pinch.scale})`}:null]" @load="measure" @click="imageClick" @error="error=ct('無法預覽此圖片')"/>
      <p v-else-if="error" role="alert">{{error}}</p>
@@ -62,7 +67,7 @@ import {ref,reactive,computed,watch,nextTick,onBeforeUnmount,Teleport} from 'vue
 import {f7} from 'framework7-vue';
 import {ct} from '../js/agent-i18n.js';
 import {renderMarkdown} from '../js/markdown.js';
-import {saveFile as keepFile,sharesFiles} from '../js/saveFile.js';
+import {saveFile as keepFile,sharesFiles,fetchBlob} from '../js/saveFile.js';import {saveWithProgress,downloadText} from '../js/saveWithProgress.js';
 const props=defineProps({file:Object,conversationId:String});
 const imageUrl=ref(''),loading=ref(false),error=ref('');let controller;
 // A file chosen but not sent yet is previewed from the device itself (file.local): nothing is fetched and there is nothing to download.
@@ -225,10 +230,21 @@ function measure(event){
 }
 function toggle(){if(actual.value||zoomable.value)actual.value=!actual.value;}
 const escapeHtml=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-// A download, or on an iPhone home-screen app the share sheet (saveFile.js).
-function saveFile(){keepFile(url.value,props.file.name,{confirm:askShare});}
+// A download, or on an iPhone home-screen app the share sheet (saveFile.js). The file the preview
+// already fetched to show goes to the share sheet inside the tap, so it opens at once instead of
+// taking several taps that each fetched the file again. When the sheet still
+// needs another tap, the button for it is in the preview itself: a dialog opened under the viewer,
+// or behind the file dialog in Framework7's queue, until the preview closed.
+const loadProgress=ref(null),saving=ref(null),sharePrompt=ref(null);let loadedBlob=null;
+function saveFile(){
+ if(saving.value)return;
+ const viewer=isImage.value||isText.value||isMedia.value,blob=props.file.local||loadedBlob;
+ if(!viewer){saveWithProgress(url.value,props.file.name,{title:escapeHtml(props.file.name),size:props.file.size,ct});return;}
+ const file=props.file;
+ keepFile(url.value,file.name,{blob,size:file.size,onProgress:(got,total)=>{if(props.file===file)saving.value={got,total};},onFetched:()=>{if(props.file===file)saving.value=null;},confirm:run=>{if(props.file===file)sharePrompt.value=run;}}).finally(()=>{if(props.file===file)saving.value=null;});
+}
 function onSave(event){if(!sharesFiles())return;event.preventDefault();saveFile();}
-function askShare(run){f7.dialog.create({title:escapeHtml(props.file.name),text:ct('檔案準備好了'),buttons:[{text:ct('取消')},{text:ct('儲存或分享'),bold:true,onClick:run}]}).open();}
+function shareNow(){const run=sharePrompt.value;sharePrompt.value=null;run?.();}
 let dialog=null;
 watch(()=>props.file,file=>{
  dialog?.close();dialog=null;
@@ -243,28 +259,28 @@ watch(()=>props.file,file=>{
  }).open();
 });
 const STREAM_ABOVE=200*1024*1024;
-function cleanup(){controller?.abort();controller=null;if(imageUrl.value.startsWith('blob:'))URL.revokeObjectURL(imageUrl.value);imageUrl.value='';size.value=null;zoomable.value=false;text.value='';cut.value=false;}
+function cleanup(){controller?.abort();controller=null;loadedBlob=null;loadProgress.value=null;sharePrompt.value=null;saving.value=null;if(imageUrl.value.startsWith('blob:'))URL.revokeObjectURL(imageUrl.value);imageUrl.value='';size.value=null;zoomable.value=false;text.value='';cut.value=false;}
 watch([()=>props.file,()=>props.conversationId],async()=>{
  cleanup();error.value='';loading.value=false;
  if(!isImage.value&&!isText.value&&!isMedia.value)return;
  const current=new AbortController();controller=current;loading.value=true;
  // A large video plays as it arrives instead of being held whole in the phone's memory (files may
- // be up to 2 GB); saving it fetches it separately.
+ // be up to 2 GB); saving it then fetches it, showing how far it got.
  if(isVideo.value&&!props.file.local&&props.file.size>STREAM_ABOVE){imageUrl.value=url.value+'?as=video';loading.value=false;return;}
  if(isMedia.value){
-  try{let blob=props.file.local;if(!blob){const r=await fetch(url.value,{credentials:'include',signal:current.signal});if(!r.ok)throw new Error();blob=await r.blob();}if(controller!==current)return;imageUrl.value=URL.createObjectURL(new Blob([blob],{type:(isVideo.value?VIDEO_TYPES:AUDIO_TYPES)[props.file.name.split('.').pop().toLowerCase()]}));}
+  try{let blob=props.file.local;if(!blob){blob=await fetchBlob(url.value,{signal:current.signal,size:props.file.size,onProgress:(got,total)=>{if(controller===current)loadProgress.value={got,total};}});}if(controller!==current)return;loadedBlob=blob;imageUrl.value=URL.createObjectURL(new Blob([blob],{type:(isVideo.value?VIDEO_TYPES:AUDIO_TYPES)[props.file.name.split('.').pop().toLowerCase()]}));}
   catch(e){if(controller===current&&!current.signal.aborted)error.value=ct(isVideo.value?'無法播放此影片':'無法播放此音訊');}
   finally{if(controller===current)loading.value=false;}
   return;
  }
  if(isText.value){
   // Only the first megabyte: a large log would otherwise be read whole to show a page of it.
-  try{let blob=props.file.local;if(!blob){const r=await fetch(url.value,{credentials:'include',signal:current.signal});if(!r.ok)throw new Error();blob=await r.blob();}const shown=await blob.slice(0,TEXT_LIMIT).text();if(controller!==current)return;text.value=shown;cut.value=blob.size>TEXT_LIMIT;}
+  try{let blob=props.file.local;if(!blob){blob=await fetchBlob(url.value,{signal:current.signal,size:props.file.size,onProgress:(got,total)=>{if(controller===current)loadProgress.value={got,total};}});}const shown=await blob.slice(0,TEXT_LIMIT).text();if(controller!==current)return;loadedBlob=blob;text.value=shown;cut.value=blob.size>TEXT_LIMIT;}
   catch(e){if(controller===current&&!current.signal.aborted)error.value=ct('無法預覽此檔案');}
   finally{if(controller===current)loading.value=false;}
   return;
  }
- try{let blob=props.file.local;if(!blob){const r=await fetch(url.value,{credentials:'include',signal:current.signal});if(!r.ok)throw new Error();blob=await r.blob();}const own=await pngSize(blob);if(controller!==current)return;size.value=own;
+ try{let blob=props.file.local;if(!blob){blob=await fetchBlob(url.value,{signal:current.signal,size:props.file.size,onProgress:(got,total)=>{if(controller===current)loadProgress.value={got,total};}});}const own=await pngSize(blob);if(controller!==current)return;loadedBlob=blob;size.value=own;
  // An SVG served as plain bytes shows only when the blob says what it is; it is still drawn in an <img>, so scripts in it never run.
  imageUrl.value=URL.createObjectURL(/\.svg$/i.test(props.file.name)&&blob.type!=='image/svg+xml'?new Blob([blob],{type:'image/svg+xml'}):blob);}
  catch(e){if(controller===current&&!current.signal.aborted)error.value=ct('無法預覽此圖片');}
@@ -273,6 +289,15 @@ watch([()=>props.file,()=>props.conversationId],async()=>{
 onBeforeUnmount(()=>{cleanup();dialog?.close();window.removeEventListener('keydown',onKey);window.removeEventListener('resize',measure);});
 </script>
 <style scoped>
+.load-wait {display:flex;flex-direction:column;align-items:center;gap:10px;}
+.load-progress {margin:0;font-size:13px;font-variant-numeric:tabular-nums;color:var(--cc-color-text-secondary);}
+.save-bar {position:relative;z-index:4;display:flex;align-items:center;gap:8px;padding:0 12px 10px 16px;background:var(--f7-page-bg-color,#121212);}
+.save-text {flex:1 1 auto;min-width:0;font-size:13px;font-variant-numeric:tabular-nums;color:var(--cc-color-text-secondary);}
+.save-bar .button {flex:0 0 auto;width:auto;}
+/* The viewer sits on the body, outside the app's own button colours: the filled one takes the page colour for its words. */
+.save-bar .save-share {--f7-button-fill-text-color:var(--f7-page-bg-color,#121212);}
+.save-track {flex:0 0 96px;height:4px;border-radius:2px;overflow:hidden;background:color-mix(in srgb,currentColor 15%,transparent);}
+.save-track span {display:block;height:100%;background:var(--f7-theme-color);transition:width .2s;}
 /* A screenshot of this app must not melt into the app behind it: a darker backdrop
    and an edge round the panel. */
 .image-viewer {position:fixed;inset:0;z-index:13600;display:flex;align-items:center;justify-content:center;padding:max(16px,var(--f7-safe-area-top,0px)) 16px max(16px,var(--f7-safe-area-bottom,0px));box-sizing:border-box;background:rgba(0,0,0,.86);}

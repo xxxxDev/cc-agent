@@ -590,6 +590,8 @@ const english = {
  "最多 10 個附件":"Up to 10 attachments",
  "附件大小須為 1 byte 至 95 MB":"Each file must be between 1 byte and 95 MB",
  "附件大小須為 1 byte 至 {max}":"Each file must be between 1 byte and {max}",
+ "已下載 {got}／{total}（{percent}%）":"Downloaded {got} of {total} ({percent}%)",
+ "已下載 {got}":"Downloaded {got}",
    "取消":"Cancel",
  "加入附件":"Add attachments", "移除附件":"Remove attachment", "附件":"Attachments",
  "傳送中…":"Sending…", "上傳附件 {n}/{total}（{percent}%）…":"Uploading {n} of {total} ({percent}%)…", "上傳附件 {n}/{total}（伺服器處理中）…":"Uploading {n} of {total} (server processing)…", "處理中":"Processing", "等待上傳":"Waiting to upload", "上傳中":"Uploading", "已上傳":"Uploaded", "上傳失敗":"Upload failed",

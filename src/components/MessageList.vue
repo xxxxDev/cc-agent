@@ -22,7 +22,7 @@ import {timeLocale} from '../js/i18n.js';
 import {avatarShape} from '../js/avatarShape.js';
 import {bubbleTime} from '../js/bubbleTime.js';
 import {renderMarkdown,renderTypedMarkdown} from '../js/markdown.js';
-import {saveFile,sharesFiles} from '../js/saveFile.js';
+import {sharesFiles} from '../js/saveFile.js';import {saveWithProgress} from '../js/saveWithProgress.js';
 import {PICTURE} from '../js/pictureFiles.js';
 import ClaudeLoginCard from './ClaudeLoginCard.vue';
 import ReplyQuote from './ReplyQuote.vue';
@@ -238,7 +238,7 @@ function cardOf(m){
 // The instruction above a script's result, in either language it is sent in.
 // On an iPhone home-screen app the file goes to the share sheet, not a full-screen
 // download with no way back (saveFile.js); elsewhere the link downloads as before.
-function onDownload(file,event){if(!sharesFiles())return;event.preventDefault();saveFile(attachmentUrl(file),file.name,{confirm:run=>f7.dialog.create({title:file.name.replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';'),text:ct('檔案準備好了'),buttons:[{text:ct('取消')},{text:ct('儲存或分享'),bold:true,onClick:run}]}).open()});}
+function onDownload(file,event){if(!sharesFiles())return;event.preventDefault();saveWithProgress(attachmentUrl(file),file.name,{title:file.name.replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';'),size:file.size,ct});}
 function scheduleInstruction(text){return String(text).split(/\n\n(?:腳本結果|Script result)/)[0];}
 const scheduleResults=new Map();
 // Messages to and from a paired machine are plain bubbles: one from the other machine
