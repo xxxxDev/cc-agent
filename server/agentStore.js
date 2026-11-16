@@ -1052,6 +1052,7 @@ function ownerTurn(c){
 // in a turn). A stopped one is agent_start's.
 function restartOps(c,data){
  if(!agentStarter(c))throw error('Not allowed',403);
+ if(outsideTaken(c))throw error('An agent that answers an outside chat cannot restart agents',403);
  ownerTurn(c);
  const targets=starterTargets(c),view=x=>({id:x.id,name:x.title||x.name||'',account:activeOwner(x.owner)?.username||'',state:starterState(x)});
  const ids=Array.isArray(data?.ids)?[...new Set(data.ids.filter(id=>typeof id==='string'))].slice(0,20):[];
@@ -1073,8 +1074,13 @@ function restartOps(c,data){
 }
 function starterOps(c,action,data){
  if(!agentStarter(c))throw error('Not allowed',403);
+ // Never an agent open to outside people.
+ if(outsideTaken(c))throw error('An agent that answers an outside chat cannot start agents',403);
  const targets=starterTargets(c),view=x=>({id:x.id,name:x.title||x.name||'',account:activeOwner(x.owner)?.username||'',state:starterState(x),pausedByOwner:!!x.pausedByOwner,pausedForUpdate:!!x.pausedForUpdate});
  if(action==='starter-agents')return {agents:targets.map(view)};
+ // Starting, like restarting, only while answering a message the owner typed: a schedule,
+ // another session or machine cannot have it start anyone.
+ ownerTurn(c);
  const ids=Array.isArray(data?.ids)?[...new Set(data.ids.filter(id=>typeof id==='string'))].slice(0,20):[];
  if(!ids.length)throw error('Give the ids of the agents to start');
  const by=c.title||c.name||'agent';
