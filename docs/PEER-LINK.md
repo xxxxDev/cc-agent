@@ -43,10 +43,12 @@ You need SSH from machine A to machine B, with the host key known and pinned.
 3. **On machine B, add the public key with a forced command.** Add one line to `~/.ssh/authorized_keys`. Use absolute paths for `node` and for this project.
 
    ```text
-   command="/absolute/path/to/node /absolute/path/to/cc-agent/scripts/peer-exchange.mjs",restrict ssh-ed25519 AAAA… cc-agent-peer
+   command="/usr/bin/env -i HOME=/Users/you /absolute/path/to/node /absolute/path/to/cc-agent/scripts/peer-exchange.mjs",restrict ssh-ed25519 AAAA… cc-agent-peer
    ```
 
-   `restrict` turns off forwarding, the terminal and agent forwarding. With this key, the forced command is the only program SSH can run. The program ignores `SSH_ORIGINAL_COMMAND`. It reads `server/.env` as the service does, so a port set there with `CC_AGENT_PORT` applies to it too.
+   `restrict` turns off forwarding, the terminal and agent forwarding. With this key, the forced command is the only program SSH can run. The program ignores `SSH_ORIGINAL_COMMAND`. It reads `server/.env` as the service does, so a port set there with `CC_AGENT_PORT` applies to it too. `env -i` starts node with an empty environment, so nothing the SSH client is allowed to pass (`AcceptEnv`, `PermitUserEnvironment`, an `environment=` option) reaches it; the program also drops any `CC_AGENT_*` setting and `NODE_OPTIONS` it is given over SSH. Keep `environment=` out of this line, and put settings in `server/.env`: a `CC_AGENT_*` setting written in front of the program in this line is not used.
+
+   A line set up before `env -i` was suggested keeps working. To change it, edit the line on machine B as above; nothing on machine A changes.
 
 4. **On machine A, tell CC Agent how to call.** Add the two settings below to `server/.env`, then restart CC Agent. A machine without these settings is the answering side.
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The answering side of the peer link (docs/PEER-LINK.md): run only by the forced
 // command of the other machine's dedicated SSH key, as
-//   command="<node> <this project>/scripts/peer-exchange.mjs",restrict ssh-ed25519 …
+//   command="/usr/bin/env -i HOME=<home> <node> <this project>/scripts/peer-exchange.mjs",restrict ssh-ed25519 …
 // It reads one exchange (JSON, at most 256 KB) from stdin and hands it to this machine's
 // CC Agent on 127.0.0.1 with the peer key only this account can read; the answer goes
 // to stdout. It takes no arguments and ignores SSH_ORIGINAL_COMMAND, so the key runs
@@ -15,6 +15,11 @@ import {createRequire} from 'node:module';
 const MAX=256*1024;
 const fail=(code=1)=>{process.stdout.write('{"error":"exchange failed"}\n');process.exit(code);};
 const require=createRequire(import.meta.url);
+// Run by sshd, take nothing from the caller's environment: an SSH client may be allowed to
+// pass variables (AcceptEnv, PermitUserEnvironment), so no inherited CC_AGENT_* setting or
+// NODE_OPTIONS is used; the settings come from server/.env below. (A NODE_OPTIONS already
+// acted on before this line; the forced command runs node through `env -i` for that.)
+if(process.env.SSH_CONNECTION||process.env.SSH_CLIENT)for(const k of Object.keys(process.env))if(k.startsWith('CC_AGENT_')||k==='NODE_OPTIONS')delete process.env[k];
 // The same settings the service starts with (scripts/start.mjs): SSH runs this with a
 // bare environment, so a port or key file set in server/.env would otherwise be missed
 // and the exchange sent to the default port. A value already in the environment wins.
