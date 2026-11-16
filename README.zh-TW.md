@@ -16,7 +16,7 @@
 https://github.com/user-attachments/assets/90a97af2-27d7-4e70-9ba4-fd4103b0bdb6
 
 <p align="center">
-  <img src=".github/assets/screens/hero-dark.png" alt="CC Agent 在筆電與手機上">
+  <img src=".github/assets/screens/hero-dark.png" alt="CC Agent 在瀏覽器視窗與手機上">
 </p>
 
 ---
@@ -75,8 +75,7 @@ CC Agent 跑在你自己的 Mac 上。你建立的每個 agent，都是 tmux 裡
 </p>
 
 <p align="center">
-  <img src=".github/assets/anim/swipe-reply-dark.svg" width="300" alt="在手機上把泡泡往左滑來回覆">
-  <img src=".github/assets/anim/long-press-dark.svg" width="300" alt="長按讓泡泡浮起，下方有複製、選取文字和回覆">
+  <img src=".github/assets/anim/chat-messages-phone-dark.svg" alt="三支手機：把泡泡往左滑來回覆，輸入框上方出現回覆列；長按讓泡泡浮起，下方有複製、選取文字和回覆；點回覆上方那一行，跳到它回答的訊息並標亮">
 </p>
 
 - **熟悉的聊天介面。**圓角輸入框會隨內容長高，附件有預覽和上傳進度，支援提及、回覆單一則訊息（回覆上方標出它回答哪一則）、訊息搜尋和回到最新。

@@ -32,8 +32,7 @@ This is the full tour. The [README](../README.md) is the short version.
 </p>
 
 <p align="center">
-  <img src="../.github/assets/anim/agent-list-drag-dark.svg" width="300" alt="Edit, then an agent dragged to the top, another into a group, and one let go on the source title going back with a shake; Done">
-  <img src="../.github/assets/anim/agent-swipe-actions-dark.svg" width="300" alt="A row swiped left shows pause and delete, a stopped agent's row shows start and delete; each swiped back shut">
+  <img src="../.github/assets/anim/agents-phone-dark.svg" alt="Three phones: Edit, then agents dragged to a new place and into a group, one let go on the source title going back with a shake; a row swiped left for pause or start and delete; two agents chosen and pinned to the top">
 </p>
 
 <p align="center">
@@ -41,19 +40,15 @@ This is the full tour. The [README](../README.md) is the short version.
 </p>
 
 <p align="center">
-  <img src="../.github/assets/anim/agent-pins-dark.svg" width="300" alt="Edit, a tap on two rows chooses them, the pin button pins them, Done: they stand in the Pinned section at the top">
-</p>
-
-<p align="center">
   <img src="../.github/assets/screens/desktop-list-detail-setting-dark.png" alt="Settings on a computer with List on the left, chat on the right switched on">
 </p>
 
 <p align="center">
-  <img src="../.github/assets/anim/list-detail-dark.svg" alt="A click on an agent narrows the list into a column with the chat beside it, a click on another agent switches the chat, and the back arrow widens the list again">
+  <img src="../.github/assets/anim/list-detail-desktop-dark.svg" alt="A click on an agent narrows the list into a column with the chat beside it, a click on another agent switches the chat, and the back arrow widens the list again">
 </p>
 
 <p align="center">
-  <img src="../.github/assets/anim/list-column-resize-dark.svg" width="640" alt="The column's edge shows an accent line under the mouse, is dragged wider, then narrower, and a double click puts it back">
+  <img src="../.github/assets/anim/list-column-resize-desktop-dark.svg" alt="The column's edge shows an accent line under the mouse, is dragged wider, then narrower, and a double click puts it back">
 </p>
 
 <p align="center">
@@ -85,18 +80,11 @@ This is the full tour. The [README](../README.md) is the short version.
 </p>
 
 <p align="center">
-  <img src="../.github/assets/anim/swipe-reply-dark.svg" width="300" alt="Swiping a bubble to the left to reply: the reply icon lights up and the reply bar shows over the box">
-  <img src="../.github/assets/anim/long-press-dark.svg" width="300" alt="A long press dims the page and lifts the bubble with copy, select text and reply under it; Select text selects its words">
+  <img src="../.github/assets/anim/chat-messages-phone-dark.svg" alt="Three phones: a bubble swiped left to reply, the reply bar over the box; a long press lifts the bubble with copy, select text and reply under it; a tap on the line over a reply jumps up to the message it answers">
 </p>
 
 <p align="center">
-  <img src="../.github/assets/anim/files-list-dark.svg" width="300" alt="The file list from the ⋯ menu: rows with picture previews; a tap opens a picture, the next one, and the one after, then the preview closes">
-  <img src="../.github/assets/anim/files-jump-dark.svg" width="300" alt="From the file list, Go to the message on an old file: the list closes and the chat lands on that message far up, highlighted">
-</p>
-
-<p align="center">
-  <img src="../.github/assets/anim/jump-to-message-dark.svg" width="300" alt="Tapping the line over a reply scrolls up to the message it answers and highlights it">
-  <img src="../.github/assets/anim/upload-progress-dark.svg" width="300" alt="Three files sent: each waits, uploads with its percent, shows Processing, then the message is in">
+  <img src="../.github/assets/anim/chat-files-phone-dark.svg" alt="Three phones: the file list from the ⋯ menu and a preview stepped through; Go to the message on an old file, landing far up the chat; three files sent, each waiting, uploading with its percent, then processing">
 </p>
 
 <p align="center">
@@ -207,12 +195,11 @@ Agents on two of your computers can talk to each other, for example a build agen
 </p>
 
 <p align="center">
-  <img src="../.github/assets/anim/terminal-tabs-dark.svg" width="640" alt="On a computer: + opens a shell tab named after its folder, a second one, then side by side and one above the other, and a pane's switch picks its tab">
+  <img src="../.github/assets/anim/terminal-tabs-desktop-dark.svg" alt="On a computer: + opens a shell tab named after its folder, a second one, then side by side and one above the other, and a pane's switch picks its tab">
 </p>
 
 <p align="center">
-  <img src="../.github/assets/anim/phone-terminal-keys-dark.svg" width="300" alt="On a phone: arrow keys choose in Claude's menu, esc closes it, the keys swipe to their second page, and the pencil opens the chat's box to type a line into the terminal">
-  <img src="../.github/assets/anim/phone-terminal-attach-dark.svg" width="300" alt="On a phone: the round button brings the keyboard up and puts it away; the pencil opens the chat's box, a question is typed, + adds a picture, and sending puts the words and the picture's path into the terminal, where Claude reads it">
+  <img src="../.github/assets/anim/terminal-phone-dark.svg" alt="Two phones: the terminal's keys choose in Claude's menu and the pencil's box sends a line into the terminal; the keyboard button, and a picture sent from the box into the terminal, where Claude reads it">
 </p>
 
 <p align="center">
@@ -244,7 +231,7 @@ Agents on two of your computers can talk to each other, for example a build agen
 </p>
 
 <p align="center">
-  <img src="../.github/assets/anim/recording-badge-dark.svg" width="300" alt="The recording badge counting; a tap asks, and Stop and report sends the diagnostics to the admins">
+  <img src="../.github/assets/anim/diagnostics-phone-dark.svg" alt="The recording badge counting; a tap asks, and Stop and report sends the diagnostics to the admins">
 </p>
 
 <p align="center">
@@ -284,5 +271,5 @@ Agents on two of your computers can talk to each other, for example a build agen
 - **The computer's own screen** is not part of CC Agent: to see and control a Mac from a phone, use [castpane](https://github.com/xxxxDev/castpane).
 
 <p align="center">
-  <img src="../.github/assets/anim/push-sheet-dark.svg" width="300" alt="On a phone, Usage stats opens from the ⋯ menu as a pushed card while the page behind steps back">
+  <img src="../.github/assets/anim/push-sheet-phone-dark.svg" alt="On a phone, Usage stats opens from the ⋯ menu as a pushed card while the page behind steps back, then closes again">
 </p>

@@ -16,7 +16,7 @@
 https://github.com/user-attachments/assets/90a97af2-27d7-4e70-9ba4-fd4103b0bdb6
 
 <p align="center">
-  <img src=".github/assets/screens/hero-dark.png" alt="CC Agent on a laptop and a phone">
+  <img src=".github/assets/screens/hero-dark.png" alt="CC Agent in a browser window and on a phone">
 </p>
 
 ---
@@ -75,8 +75,7 @@ For every feature in detail, see [docs/FEATURES.md](docs/FEATURES.md).
 </p>
 
 <p align="center">
-  <img src=".github/assets/anim/swipe-reply-dark.svg" width="300" alt="Swiping a bubble to the left to reply on a phone">
-  <img src=".github/assets/anim/long-press-dark.svg" width="300" alt="A long press lifts the bubble with copy, select text and reply under it">
+  <img src=".github/assets/anim/chat-messages-phone-dark.svg" alt="Three phones: a bubble swiped left to reply, the reply bar over the box; a long press lifts the bubble with copy, select text and reply under it; a tap on the line over a reply jumps up to the message it answers">
 </p>
 
 - **A chat that feels familiar.** A rounded composer that grows with your message, attachments with previews and upload progress, mentions, replies to a single message with a line showing what each reply answers, message search and jump-to-latest.
