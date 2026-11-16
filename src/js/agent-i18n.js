@@ -106,6 +106,8 @@ const english = {
 "這個頁面無法建立通行密鑰：需要從 {product} 的網址（https）開啟，而且瀏覽器要支援。":"A passkey cannot be created on this page: open {product} at its own https address, in a browser that supports passkeys.",
 "通行密鑰已建立":"Passkey created",
 "已取消，沒有建立。":"Cancelled; nothing was created.",
+"加的途中帳號的密碼或狀態變了，這把沒有留下，請重新加一次。":"Your password or account changed while this was being added; it was not kept. Add it again.",
+"加的途中帳號的密碼或狀態變了，但這把沒能移除，請在下方清單刪掉它。":"Your password or account changed while this was being added, and it could not be removed; delete it in the list below.",
 "這個裝置已經有這個帳號的通行密鑰。":"This device already has a passkey for this account.",
 "刪除後，這把通行密鑰就不能再登入。裝置或密碼管理工具裡的那一份要另外自己刪。":"Once deleted, this passkey no longer signs in. Remove the copy on your device or in your password manager yourself.",
 "通行密鑰登入":"Passkey sign-in",

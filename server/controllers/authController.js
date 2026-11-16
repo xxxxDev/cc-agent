@@ -673,6 +673,20 @@ exports.addPasskey = async (req, res) => {
     // was on) may later stand for them in an admin's confirmation: one added on a
     // sign-in moment ago could be a stolen session's own.
     const passkey = await passkeyStore.add(user._id, typeof body.name !== 'string' || textProblem(body.name, 40, 'name') ? 'Passkey' : body.name, { ...made, addedWith: byFresh ? 'fresh' : 'password', withCode: Boolean(user.twoStep && !byFresh) });
+    // The password changed, or the account was switched off (or off and on again), while this was checked: the
+    // key goes again (a password change removes the account's passkeys, and this one came
+    // after that).
+    const after = await activeAccount(req.userId);
+    if (!after || after.password !== user.password || after.enabledAt !== user.enabledAt) {
+      // Not removed: it would still sign in, so say so and leave a trace.
+      try { await passkeyStore.remove(user._id, passkey.id); } catch (e) {
+        console.error('passkey not removed again:', e.message);
+        audit({ source: 'passkey', action: 'add-not-undone', userId: req.userId, passkeyId: passkey.id });
+        return res.status(500).json({ message: 'Your sign-in changed meanwhile and the new passkey could not be removed; remove it on the Passkeys page', code: 'PASSKEY_NOT_REMOVED' });
+      }
+      audit({ source: 'passkey', action: 'add-undone', userId: req.userId, passkeyId: passkey.id });
+      return res.status(409).json({ message: 'Your sign-in changed meanwhile; add the passkey again', code: 'SIGN_IN_CHANGED' });
+    }
     audit({ source: 'passkey', action: 'add', userId: req.userId, passkeyId: passkey.id });
     security.passkey({ action: 'add', userId: req.userId, ip: resolveClientIp(req), place: placeOf(req) });
     res.status(201).json({ passkey });

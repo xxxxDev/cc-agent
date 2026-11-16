@@ -60,6 +60,8 @@ async function add() {
     else if (e.code === 'WRONG_PASSWORD') message.value = ct('密碼不正確');
     else if (e.code === 'NEED_CODE') message.value = ct('請輸入你的驗證碼或備用碼。');
     else if (e.code === 'WRONG_CODE') message.value = ct('驗證碼不正確');
+    else if (e.code === 'SIGN_IN_CHANGED') message.value = ct('加的途中帳號的密碼或狀態變了，這把沒有留下，請重新加一次。');
+    else if (e.code === 'PASSKEY_NOT_REMOVED') message.value = ct('加的途中帳號的密碼或狀態變了，但這把沒能移除，請在下方清單刪掉它。');
     else message.value = e.message;
   } finally { busy.value = false; }
 }
