@@ -162,36 +162,54 @@ function requireCsrfToken({ exempt = [] } = {}) {
 
 // Fixed window, in memory, same shape as authController's login-failure limiter.
 const RATE_LIMIT_MAX_KEYS = 5000;
+// An IPv6 /48 holds 65,536 /64s, so one holder could take many keys. Past this many
+// /64 keys under one /48, the rest of that /48 shares one bucket.
+const RATE_LIMIT_PER_48 = 16;
 
 const { ipGroup } = require('../services/qrLogin');
+const prefix48 = (group) => (group.includes(':') ? group.split(':').slice(0, 3).join(':') : '');
 function rateLimit({ windowMs, max }) {
   const hits = new Map();
-  return (req, res, next) => {
+  const per48 = new Map();
+  const drop = (k) => {
+    const e = hits.get(k);
+    if (!e) return;
+    hits.delete(k);
+    if (e.p48 && !e.shared) {
+      const n = (per48.get(e.p48) || 1) - 1;
+      if (n > 0) per48.set(e.p48, n); else per48.delete(e.p48);
+    }
+  };
+  const limiter = (req, res, next) => {
     if (!isUnsafe(req)) return next();
     const now = Date.now();
     // By the address's group, as the sign-in blocks are: an IPv6 /64 is one caller.
-    const key = ipGroup(String(resolveClientIp(req) || 'unknown'));
+    const group = ipGroup(String(resolveClientIp(req) || 'unknown'));
+    const p48 = prefix48(group);
+    let key = group;
+    if (p48 && !hits.has(group) && (per48.get(p48) || 0) >= RATE_LIMIT_PER_48) {
+      // Expired buckets of this /48 are let go first, so a count never sticks.
+      for (const [k, e] of hits) if (e.p48 === p48 && !e.shared && now > e.resetAt) drop(k);
+      if ((per48.get(p48) || 0) >= RATE_LIMIT_PER_48) key = p48 + '::/48';
+    }
     let entry = hits.get(key);
     // reclaim this caller's own expired bucket so a returning client is a fresh
     // window, not counted as a brand-new key against the cap
     if (entry && now > entry.resetAt) {
-      hits.delete(key);
+      drop(key);
       entry = undefined;
     }
     if (!entry) {
-      // Admitting a NEW key. Sweeping only expired entries frees nothing under a
-      // flood of unique unexpired, trusted client addresses, so after
-      // an opportunistic sweep we FAIL CLOSED once full: an unbounded key map is
-      // itself a denial-of-service. Existing keys (handled above/below) are never
-      // rejected here, so legitimate in-window callers keep their bucket.
+      // Admitting a NEW key. When the table is full, expired buckets go first and
+      // then the oldest one: refusing new keys instead would let anyone who fills
+      // the table with fresh addresses lock every new caller out.
       if (hits.size >= RATE_LIMIT_MAX_KEYS) {
-        for (const [k, e] of hits) if (now > e.resetAt) hits.delete(k);
+        for (const [k, e] of hits) if (now > e.resetAt) drop(k);
       }
-      if (hits.size >= RATE_LIMIT_MAX_KEYS) {
-        res.setHeader('Retry-After', Math.ceil(windowMs / 1000));
-        return res.status(429).json({ message: 'Too many requests, slow down' });
-      }
-      hits.set(key, { count: 1, resetAt: now + windowMs });
+      while (hits.size >= RATE_LIMIT_MAX_KEYS) drop(hits.keys().next().value);
+      const shared = key !== group;
+      hits.set(key, { count: 1, resetAt: now + windowMs, p48, shared });
+      if (p48 && !shared) per48.set(p48, (per48.get(p48) || 0) + 1);
       return next();
     }
     entry.count += 1;
@@ -201,6 +219,8 @@ function rateLimit({ windowMs, max }) {
     }
     next();
   };
+  limiter.size = () => hits.size;
+  return limiter;
 }
 
 // express.json()'s 100kb default, stated explicitly: mutation bodies are small
@@ -228,6 +248,7 @@ module.exports = {
   requireJsonContentType,
   requireCsrfToken,
   rateLimit,
+  RATE_LIMIT_PER_48,
   RATE_LIMIT_MAX_KEYS,
   jsonBodyErrorHandler,
   JSON_BODY_LIMIT,
