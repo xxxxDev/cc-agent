@@ -108,7 +108,7 @@ CC Agent 跑在你自己的 Mac 上。你建立的每個 agent，都是 tmux 裡
 
 | 需要 | 用途 |
 | --- | --- |
-| [Claude Code](https://code.claude.com/docs/en/overview) 最新版（測試過 2.1.325；2.1.293 以上可執行 agent，範圍報告單需要 2.1.322 以上），且已登入 | 每個 agent 都是一個 Claude Code session，CC Agent 用它的 channels 與 hooks |
+| [Claude Code](https://code.claude.com/docs/en/overview) 最新版（測試過 2.1.326；2.1.293 以上可執行 agent，範圍報告單需要 2.1.322 以上），且已登入 | 每個 agent 都是一個 Claude Code session，CC Agent 用它的 channels 與 hooks |
 | [Node.js](https://nodejs.org) 24 LTS 最新版（測試過 24.22.1；22.12 以上可用）與 npm | 執行伺服器、建置網頁 |
 | [tmux](https://github.com/tmux/tmux) 最新版（測試過 3.8；3.5 以上可用） | 讓每個 agent 的 session 在背景持續執行 |
 | Xcode Command Line Tools（macOS） | 選用，排程背景腳本用 Python 時提供 python3 |

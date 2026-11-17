@@ -108,7 +108,7 @@ Use the latest release of each dependency: they regularly ship security fixes. T
 
 | Dependency | Why |
 | --- | --- |
-| [Claude Code](https://code.claude.com/docs/en/overview), latest (tested 2.1.325; 2.1.293 or later runs agents, scope reports need 2.1.322 or later), signed in | Every agent is a Claude Code session; CC Agent uses its channels and hooks |
+| [Claude Code](https://code.claude.com/docs/en/overview), latest (tested 2.1.326; 2.1.293 or later runs agents, scope reports need 2.1.322 or later), signed in | Every agent is a Claude Code session; CC Agent uses its channels and hooks |
 | [Node.js](https://nodejs.org) 24 LTS, latest (tested 24.22.1; 22.12 or later works), and npm | Runs the server and builds the web app |
 | [tmux](https://github.com/tmux/tmux), latest (tested 3.8; 3.5 or later works) | Keeps each agent's session running in the background |
 | Xcode Command Line Tools (macOS) | Optional; provides python3 for background scripts written in Python |
