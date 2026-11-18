@@ -287,6 +287,8 @@ function returnFromProfile(){
 }
 async function openProfile(){
  profileReturn.value=null;
+ // The models on offer come from the launcher's settings, which can change while the page stays open; read them again.
+ loadPreferences().catch(()=>{});
  if(!wideScreen.value||terminalOpen.value){infoOpen.value=true;return;}
  if(profilePanelOpen.value&&!(await mayCloseProfile()))return;
  profilePanelOpen.value=!profilePanelOpen.value;
