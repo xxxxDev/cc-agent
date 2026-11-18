@@ -11,6 +11,11 @@ const TRIES = 6, SLOW_TRIES = 10;
 const pause = ms => new Promise(ok => setTimeout(ok, ms));
 // A dropped connection or a server that did not answer, worth trying again; a refusal is not.
 const passing = e => !e?.status || e.status >= 500 && e.status !== 507;
+// Parts small enough that a phone losing its signal sends one part again, not the whole file (a
+// 24 MB recording over a mobile network went as one request and failed); larger for a large file,
+// so it stays within the site's 60 changes in five minutes.
+const MB = 1024 * 1024, SMALL_PART = 8 * MB, MOST_PARTS = 40;
+export const partBytes = (size, most) => Math.min(most, Math.max(SMALL_PART, Math.ceil(size / MOST_PARTS / MB) * MB));
 
 export function formatBytes(n) {
   if (!Number.isFinite(n)) return '';
@@ -23,7 +28,7 @@ export function formatBytes(n) {
 export async function uploadInParts(conversationId, file, name, {onProgress} = {}) {
   const base = '/conversations/' + conversationId + '/uploads';
   const start = await api(base, {method: 'POST', body: JSON.stringify({name, size: file.size})});
-  const id = start.uploadId, step = start.chunkBytes, size = file.size;
+  const id = start.uploadId, size = file.size, step = partBytes(size, start.chunkBytes);
   let at = start.received || 0, tries = 0, slowed = 0;
   try {
     while (true) {
