@@ -11,7 +11,7 @@
       <section v-for="p in shownPanes" :key="p.key" class="sftp-pane" :class="{ 'drop-target': dropOn === p.key }"
         @dragover.prevent="dragOver(p.key, $event)" @dragleave="dragLeave(p.key, $event)" @drop.prevent="dropped(p.key, null, $event)">
         <header class="sftp-head">
-          <span class="sftp-title"><i class="icon f7-icons">{{ p.key === 'local' ? 'device_laptop' : 'desktopcomputer' }}</i>{{ p.key === 'local' ? ct('本機') + '（' + localName + '）' : host.name }}</span>
+          <span class="sftp-title"><i class="icon f7-icons">{{ p.key === 'local' ? 'device_laptop' : 'desktopcomputer' }}</i>{{ p.key === 'local' ? fmt('本機（{name}）', { name: localName }) : host.name }}</span>
           <span class="sftp-tools">
             <!-- From the device in the admin's hand: its own files, sent in parts as a chat's are. -->
             <a href="#" class="link" :aria-label="ct('從這台裝置上傳')" :title="ct('從這台裝置上傳')" @click.prevent="pick(p.key)"><i class="icon f7-icons">arrow_up_doc</i></a>
