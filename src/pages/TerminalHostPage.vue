@@ -82,7 +82,14 @@ onBeforeUnmount(() => { unbindViewport?.(); props.f7router?.off('routeUrlUpdate'
 <style>
 /* With no bottom bar under it on a phone (App.vue hides it while a machine is open, as for an
    agent's conversation), the page keeps only the safe area at its foot. */
-html:not(.list-detail-on) .page.terminal-host-page > .page-content, .page.terminal-host-page.conversation-keyboard > .page-content { padding-bottom: var(--f7-safe-area-bottom, 0px) !important; }
+/* With no bottom bar under it on a phone (App.vue hides it while a machine is open), nothing kept
+   at the page's foot: the terminal's key row already keeps the home bar's room, as on an agent's
+   terminal page; and no gap above the tabs either. */
+html:not(.list-detail-on) .page.terminal-host-page > .page-content:has(.host-ssh), .page.terminal-host-page.conversation-keyboard > .page-content { padding-bottom: 0 !important; }
+html:not(.list-detail-on) .page.terminal-host-page .terminal-host-body:has(.host-ssh) { padding-top: 0; padding-bottom: 0; }
+/* Its files (SFTP) and the overview keep the home bar's room. */
+html:not(.list-detail-on) .page.terminal-host-page > .page-content:not(:has(.host-ssh)) { padding-bottom: var(--f7-safe-area-bottom, 0px) !important; }
+@media (max-width: 767px) { html:not(.list-detail-on) .page.terminal-host-page .terminal-host-body:has(.host-ssh) { padding-left: 0; padding-right: 0; } }
 /* With the keyboard up the safe area is under it: nothing kept at the foot, the terminal reaches the
    keyboard as an agent's does (chatPage.css .conversation-keyboard). */
 .page.terminal-host-page.conversation-keyboard { --f7-safe-area-bottom: 0px; }

@@ -80,5 +80,11 @@ async function drop(ev) {
 .host-ssh-tabs:not(.split) :deep(.terminal-host) { border: 1px solid rgba(255, 255, 255, .1); border-top: 0; border-radius: 0 0 12px 12px; overflow: hidden; }
 .host-ssh-tabs :deep(.terminal-host) { padding: 6px 12px 12px 14px; background: var(--terminal-bg, #121212); box-sizing: border-box; }
 .host-ssh-tabs :deep(.terminal-keys) { background: transparent; }
+/* A phone: no frame at all, the terminal across the page as on an agent's terminal page. */
+@media (max-width: 767px) {
+  .host-ssh-tabs:not(.split) :deep(.terminal-bar), .host-ssh-tabs:not(.split) :deep(.terminal-host) { border: 0; border-radius: 0; }
+  .host-ssh-tabs :deep(.terminal-host) { padding: 0; }
+  .host-ssh-tabs :deep(.terminal-keys) { background: var(--terminal-bg, #121212); }
+}
 .host-ssh-sending { position: absolute; right: 14px; bottom: 14px; z-index: 6; padding: 6px 12px; border-radius: 999px; background: rgba(0, 0, 0, .6); color: #fff; font-size: 12px; }
 </style>
