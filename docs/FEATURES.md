@@ -169,7 +169,7 @@ Agents on two of your computers can talk to each other, for example a build agen
 
 - **Live progress** in the chat: the tool the agent is using, which step it is on and how long it has worked, and whether it is still working in the background.
 - **Terminal view.** Switch to the agent's real Claude Code terminal, beside the chat on a computer. An admin shows its button with the eye on its row under **Conversation buttons** in the Admin tab, and can then have agents open on the terminal instead of the chat.
-- **Terminal tabs (admins).** Beside Claude's own terminal, **+** opens shells of your own, as many as you like; the tab row scrolls when they do not fit. They start in your home folder and run apart from the agent's own session: a scoped agent cannot see or type into them, while a full-access agent runs as your account and could reach them. A tab is named after its folder, or after the program running in it, and spins while that program writes. On a computer, show two tabs side by side or one above the other, pick each pane's tab with the switch at its top right, and double-click the divider to split it evenly again. An admin can switch terminal tabs off for everyone on the Admin page (**Terminal tabs**, on by default), which also closes every open one; an admin who is made a member loses the shells they opened. Not on Windows.
+- **Terminal tabs (admins).** Beside Claude's own terminal, **+** opens shells of your own, as many as you like; the tab row scrolls when they do not fit. They start in your home folder and run apart from the agent's own session: a scoped agent cannot see or type into them, while a full-access agent runs as your account and could reach them. A tab is named after its folder, or after the program running in it, and spins while that program writes. On a computer, show two tabs side by side or one above the other, pick each pane's tab with the switch at its top right, and double-click the divider to split it evenly again. An admin can switch terminal tabs off for everyone on the Admin page (**Terminal tabs**, on by default), which also closes every open one and this computer's own terminals in the Terminal tab (other machines' SSH terminals stay); an admin who is made a member loses the shells they opened. Not on Windows.
 - **Terminal colours.** On a Mac the terminal uses your Terminal app's default profile colours; the Admin tab can switch it to CC Agent's own.
 - **Terminal keys on a phone.** Under the terminal, just above the keyboard: esc, tab, ⇧tab, the arrows and ^C, and on a second page home, end, page up and page down. A round button brings the keyboard up or puts it away, and the pencil swaps the terminal's typing for the chat's own box, attachments included, sending the line when you tap send; a file added with **+** goes in as its path after the words, so Claude Code can read it.
 - **Terminal and chat in step.** With the terminal open beside the chat on a computer (admins):
@@ -216,6 +216,41 @@ Agents on two of your computers can talk to each other, for example a build agen
 
 <p align="center">
   <img src="../.github/assets/screens/desktop-split-dark.png" alt="Split view with two conversations side by side">
+</p>
+
+## The Terminal tab: SSH and SFTP (admins)
+
+- **This computer and your other machines in one list.** The **Terminal** tab, between Schedules and Settings, lists this computer (its own shell, no sign-in), the machines you add with **+**, and the hosts in `~/.ssh/config`. A dot beside each says whether its SSH port answered when you opened the tab. On a computer wide enough, the list stays as a column beside the machine you open, as the Agents and Groups lists do; drag its edge to size it.
+- **Nothing is kept but where to connect.** CC Agent uses this computer's own `ssh`, keys and `~/.ssh/config`; it stores no password or key, only a key file's path if you give one. A machine that asks for a password asks in its SSH terminal, and for ten minutes after that its SFTP and further terminals use the same signed-in connection.
+- **Open, then choose.** Tapping a machine shows what it is and two buttons, **Connect with SSH** and **SFTP files**; the two round buttons on its row go straight to either. Right-click a row, or swipe it left, to edit or delete it. A `~/.ssh/config` host can be edited and deleted too: the changes are kept by CC Agent and go on top of the host's own settings, **Restore** brings the original back, and the file itself is never written. A deleted one can be brought back from **Edit**.
+- **Order and categories.** **Edit** drags machines into your order, makes categories (tap a name to rename it) and drags a whole category by its handle. A category folds to small tags of its machines; a row shows how many terminals it has open, spinning while one is busy.
+- **SSH.** The same terminal tabs as an agent's: **+** opens another, ✕ closes one, and on a computer two show side by side or one above the other. Each tab is named after the folder it is in. The terminals run in a tmux session of their own on this computer, so they keep running when you close the page or switch devices; they end when the account stops being an admin. On a phone the terminal fills the page, with the phone's terminal keys under it.
+- **SFTP.** This computer on one side and the machine on the other (one at a time on a phone). Drag files or folders from one side to the other, or onto a folder; right-click (long-press on a phone) for send, rename, delete, a new folder and permissions. A file of the same name on the other side is replaced only after you say so. Transfers show their progress at the bottom and can be cancelled.
+- **The device in your hand.** Each side has **Upload from this device**, and files can be dragged in from the desktop. A file's menu has **Download to this device**: another machine's file comes to this computer first, with its progress, and is gone once your device has taken it. A file dropped on a machine's SSH terminal goes to the folder that terminal is in and its path is typed in, without pressing Enter. A folder has to be compressed before it can be downloaded.
+- **Audited.** Adding, editing and deleting machines, opening and closing terminals, file actions and every transfer are written to the audit log.
+
+<p align="center">
+  <img src="../.github/assets/screens/desktop-hosts-ssh-dark.png" alt="The Terminal tab on a computer: the list of machines beside one machine's two SSH terminals, side by side">
+</p>
+
+<p align="center">
+  <img src="../.github/assets/screens/desktop-hosts-sftp-dark.png" alt="SFTP: this computer and the machine side by side, and a file's menu with Download to this device">
+</p>
+
+<p align="center">
+  <img src="../.github/assets/anim/hosts-desktop-dark.svg" alt="On a computer: a machine opened beside the list, Connect with SSH, two commands, a second terminal side by side, then SFTP and a file dragged across with its progress">
+</p>
+
+<p align="center">
+  <img src="../.github/assets/anim/hosts-edit-desktop-dark.svg" alt="Edit on the Terminal tab: a machine dragged up, a category made and dragged as a whole, and a category folded to the tags of its machines">
+</p>
+
+<p align="center">
+  <img src="../.github/assets/screens/phones-hosts-dark.png" alt="Three phones: the list of machines, one machine with Connect with SSH and SFTP files, and its SSH terminal with the terminal keys">
+</p>
+
+<p align="center">
+  <img src="../.github/assets/anim/hosts-phone-dark.svg" alt="Three phones: a machine's row swiped for edit and delete, a machine opened for SSH, and its files with two ticked">
 </p>
 
 ## Diagnostics
