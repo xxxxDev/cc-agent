@@ -2,6 +2,8 @@ import {lang} from './i18n.js';
 import {PRODUCT} from './productConfig.js';
 const english = {
 // The Terminal tab.
+"本機（{name}）":"Local ({name})",
+"Windows 不支援終端機頁":"The Terminal tab is not available on Windows",
 "新增":"Add",
 "這是捷徑（符號連結），請改下載它指到的檔案":"This is a link (symbolic link); download the file it points to",
 "這台電腦的磁碟空間不夠放這個檔案":"Not enough free disk space on this computer for this file",
@@ -27,7 +29,7 @@ const english = {
 "SSH 連線":"Connect with SSH",
 "SFTP 檔案":"SFTP files",
 "{n} 個終端機開著":"{n} terminals open",
-"還原成 ~/.ssh/config 的設定":"Restore the ~/.ssh/config settings",
+"還原成 ~/.ssh/config 的設定":"Reset to the ~/.ssh/config settings",
 "這台來自 ~/.ssh/config（{alias}）。改過的設定存在這頁，~/.ssh/config 不會被改；之後刪掉這頁的設定就回到原本的。":"This machine comes from ~/.ssh/config ({alias}). Your changes are kept on this page and ~/.ssh/config is not changed; restore it to go back to the original.",
 "「{name}」回到 ~/.ssh/config 的設定？開著的終端機也會關掉。":"Restore “{name}” to its ~/.ssh/config settings? Its open terminals close too.",
 "附接失敗，請確認登入與連線":"Attachment failed. Check your sign-in and connection.",

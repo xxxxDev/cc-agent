@@ -54,6 +54,7 @@ function installTerminal(server,{tmuxClient=serverTmux,ptyModule=require('node-p
  let auditMinute=0,audited=0;const mayAudit=()=>{const m=Math.floor(Date.now()/60000);if(m!==auditMinute){if(audited>30)audit({source:'terminal',action:'refusals-not-logged',count:audited-30});auditMinute=m;audited=0;}return ++audited<=30;};
  // A Terminal tab's terminal: the admin's own, attached as a shell tab is (no prefix, no menus).
  async function attachHost(req,socket,head,hostId,n,reject,known){
+  if(require('../channel/platform.cjs').isWin)return reject(socket,409);
   const cookies=Object.fromEntries((req.headers.cookie||'').split(';').map(x=>x.trim().split('=')));const token=cookies.session_id;
   if(!token)return reject(socket,401);
   let decoded;try{decoded=jwt.verify(token,process.env.JWT_SECRET);}catch{return reject(socket,401);}

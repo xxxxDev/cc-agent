@@ -14,9 +14,13 @@ module.exports = function installHostRoutes(app, {hosts = require('./hostTermina
   // A file for the device is opened only by the page itself, never by a link from another site
   // (a top-level navigation carries the session cookie).
   const sameSite = (req) => { const site = req.get('sec-fetch-site'); if (site && site !== 'same-origin' && site !== 'none') throw agents.error('Not allowed', 403); };
-  const wrap = (fn) => async (req, res, next) => { try { admin(req); await fn(req, res); } catch (e) { next(e); } };
+  // Windows has no tmux or unix sockets for these terminals, as for the shell tabs (terminalShells.js):
+  // the list says so and everything else is refused with a plain message.
+  const platform = require('../channel/platform.cjs');
+  const notHere = () => { if (platform.isWin) throw agents.error('Windows 不支援終端機頁', 409); };
+  const wrap = (fn) => async (req, res, next) => { try { admin(req); if (!(req.method === 'GET' && req.path === '/api/hosts')) notHere(); await fn(req, res); } catch (e) { next(e); } };
 
-  app.get('/api/hosts', wrap((req, res) => { const out = hosts.sessions(); res.json({hosts: hosts.list(req.userId).map((h) => view(req.userId, h, out)), layout: hosts.layout(req.userId), hidden: hosts.hidden(req.userId).length}); }));
+  app.get('/api/hosts', wrap((req, res) => { if (platform.isWin) return res.json({hosts: [], layout: {order: [], groups: []}, hidden: 0, available: false}); const out = hosts.sessions(); res.json({hosts: hosts.list(req.userId).map((h) => view(req.userId, h, out)), layout: hosts.layout(req.userId), hidden: hosts.hidden(req.userId).length}); }));
   app.delete('/api/hosts-layout/hidden', wrap((req, res) => { hosts.restoreHidden(req.userId); note(req, 'host-restore-hidden'); res.json({ok: true}); }));
   app.put('/api/hosts-layout', wrap((req, res) => { const l = hosts.setLayout(req.userId, req.body || {}); note(req, 'host-layout', {groups: l.groups.length}); res.json(l); }));
   app.get('/api/hosts/status', wrap(async (req, res) => {
@@ -54,7 +58,7 @@ module.exports = function installHostRoutes(app, {hosts = require('./hostTermina
   const attachments = require('./attachments');
   const shelf = (req) => ({owner: req.userId, id: attachments.HOST_SHELF, archived: false, messages: []});
   const uploadError = (res, e, next) => { if (e && e.status === 409 && e.received !== undefined) return res.status(409).json({message: e.message, received: e.received}); if (e && e.status === 413 && e.maxBytes) return res.status(413).json({message: e.message, maxBytes: e.maxBytes}); next(e); };
-  const upWrap = (fn) => async (req, res, next) => { try { admin(req); await fn(req, res); } catch (e) { uploadError(res, e, next); } };
+  const upWrap = (fn) => async (req, res, next) => { try { admin(req); notHere(); await fn(req, res); } catch (e) { uploadError(res, e, next); } };
   app.post('/api/host-uploads', upWrap((req, res) => res.status(201).json(attachments.startUpload(agents.stateRoot, shelf(req), req.body?.name, req.body?.size, {max: agents.uploadMaxBytes()}))));
   app.get('/api/host-uploads/:uploadId', upWrap((req, res) => { res.set('Cache-Control', 'private, no-store'); res.json(attachments.uploadStatus(agents.stateRoot, shelf(req), req.params.uploadId)); }));
   const partArriving = (req, res, next) => { try { admin(req); } catch (e) { return next(e); } const done = attachments.partArriving(shelf(req), String(req.params.uploadId)); res.on('close', done); res.on('finish', done); next(); };

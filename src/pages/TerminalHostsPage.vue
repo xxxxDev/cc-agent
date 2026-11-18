@@ -147,7 +147,7 @@ function subtitle(h) {
 }
 
 async function load() {
-  try { const r = await api('/hosts'); hosts.value = r.hosts || []; layout.value = r.layout || { order: [], groups: [] }; hiddenCount.value = r.hidden || 0; error.value = ''; loaded.value = true; }
+  try { const r = await api('/hosts'); if (r.available === false) { error.value = ct('Windows 不支援終端機頁'); loaded.value = true; return; } hosts.value = r.hosts || []; layout.value = r.layout || { order: [], groups: [] }; hiddenCount.value = r.hidden || 0; error.value = ''; loaded.value = true; }
   catch (e) { error.value = hostMessage(e.message); return; }
   look();
 }
