@@ -43,7 +43,10 @@ export function progressText(d, {locked = false} = {}) {
   const tool = p.detail ? 'subagent：' + p.detail : p.tool ? shortToolName(p.tool) : '';
   // The step's own time, and the turn's as Claude Code's terminal counts it (the
   // two can differ by many minutes).
-  return progressLine({tool, tools: p.tools || 0, seconds: secondsSince(p.since || lastAt), total: p.turnSince ? secondsSince(p.turnSince) : null});
+  // Thinking is counted from the chat's last message, but never from before the turn began: a
+  // start-up turn after a restart sends nothing to the chat.
+  const thinking = [lastAt, p.turnSince].filter(t => Number.isFinite(Date.parse(t || ''))).sort((a, b) => Date.parse(b) - Date.parse(a))[0];
+  return progressLine({tool, tools: p.tools || 0, seconds: secondsSince(p.since || thinking), total: p.turnSince ? secondsSince(p.turnSince) : null});
 }
 
 // What the agent last said in its terminal during this turn, shown above that line
