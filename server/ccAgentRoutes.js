@@ -333,6 +333,8 @@ app.post('/api/conversations/:id/avatar',adminOnly,own,express.raw({type:()=>tru
 app.delete('/api/conversations/:id/avatar',adminOnly,own,(req,res,next)=>{try{agents.clearAvatar(req.conversation);res.json(agents.publicView(req.conversation,true));}catch(e){next(e);}});
 app.post('/api/conversations/:id/messages',(req,res,next)=>{try{const c=agents.get(req.params.id,req.userId);const mentions=agents.mentionsFor(req.userId,req.body.mentions,req.body.text,c);const sent=agents.send(c,req.body.text,req.body.requestId,req.body.attachmentIds,{...(mentions.length?{mentions}:{}),...(req.body.replyTo!==undefined?{replyTo:req.body.replyTo}:{})});
  res.json(sent);}catch(e){next(e);}});
+// The Terminal tab: this computer's and other machines' terminals and files (server/hostRoutes.js).
+require('./hostRoutes')(app);
 // The terminal page's shell tabs (server/terminalShells.js): an admin's, for an agent of
 // their own, as the Claude terminal is. Each open and close is audited.
 const shellAgent=(req,listing=false)=>{if(req.role!=='admin')throw agents.error('Admin only',403);if(!listing&&!agents.shellTabsOn())throw agents.error('終端機分頁已在管理頁關閉',403);const c=agents.get(req.params.id,req.userId);if(c.archived)throw agents.error('找不到這個 Agent',404);if(c.mode!=='claude')throw agents.error('只有 Claude agent 有終端機',409);return c;};

@@ -47,11 +47,48 @@ const attachArgs=(session,socket=require('./agentStore').tmuxSocket)=>[...socket
  'bind-key','-T',LOCKED,'MouseDrag1Pane','if-shell','-F','#{||:#{pane_in_mode},#{mouse_any_flag}}','send-keys -M','copy-mode -M',';',
  'bind-key','-T',LOCKED,'WheelUpPane','if-shell','-F','#{||:#{alternate_on},#{pane_in_mode},#{mouse_any_flag}}','send-keys -M','copy-mode -e',';',
  'attach-session','-t',session];
-function installTerminal(server,{tmuxClient=serverTmux,ptyModule=require('node-pty'),tickMs=3000,sessionAlive:alive=sessionAlive,shells=agents.shells}={}){
+function installTerminal(server,{tmuxClient=serverTmux,ptyModule=require('node-pty'),tickMs=3000,sessionAlive:alive=sessionAlive,shells=agents.shells,hosts=require('./hostTerminal').shared()}={}){
  const wss=new WebSocketServer({noServer:true,maxPayload:65536});
  // A connection refused before anyone is known takes no sign-in to make: at most
  // thirty lines a minute of those in the audit log.
  let auditMinute=0,audited=0;const mayAudit=()=>{const m=Math.floor(Date.now()/60000);if(m!==auditMinute){if(audited>30)audit({source:'terminal',action:'refusals-not-logged',count:audited-30});auditMinute=m;audited=0;}return ++audited<=30;};
+ // A Terminal tab's terminal: the admin's own, attached as a shell tab is (no prefix, no menus).
+ async function attachHost(req,socket,head,hostId,n,reject,known){
+  const cookies=Object.fromEntries((req.headers.cookie||'').split(';').map(x=>x.trim().split('=')));const token=cookies.session_id;
+  if(!token)return reject(socket,401);
+  let decoded;try{decoded=jwt.verify(token,process.env.JWT_SECRET);}catch{return reject(socket,401);}
+  const principal=await resolveLivePrincipal(token,decoded.id);if(!principal)return reject(socket,401);known(principal);
+  if(principal.role!=='admin'||!agents.ownerIsActiveAdmin(principal.id))return reject(socket,403);
+  // This computer's own shell follows the admin page's shell-tab switch, as the agents' shell tabs do.
+  if(hostId==='local'&&!agents.shellTabsOn())return reject(socket,403);
+  if(!hosts.alive(principal.id,hostId,n))return reject(socket,404);
+  const target='host/'+principal.id+'/'+hostId+'/'+n;
+  if([...wss.clients].filter(ws=>ws.target===target).length>=2)return reject(socket,429);
+  if(socket.destroyed)return;
+  wss.handleUpgrade(req,socket,head,ws=>{
+   ws.target=target;let terminal,timer,closed=false,outBuf='',outTimer=null;
+   const sendRaw=data=>{if(ws.readyState===1){if(ws.bufferedAmount>2*1024*1024)return close();ws.send(JSON.stringify(data));}};
+   const flushData=()=>{if(outTimer!==null){clearTimeout(outTimer);outTimer=null;}if(!outBuf)return;const data=outBuf;outBuf='';sendRaw({type:'data',data});};
+   const send=data=>{flushData();sendRaw(data);};
+   const close=(dead=false)=>{if(closed)return;closed=true;flushData();clearInterval(timer);try{terminal?.kill();}catch{}if(dead)ws.terminate();else ws.close();};
+   ws.isAlive=true;ws.on('pong',()=>{ws.isAlive=true;});let ticks=0;
+   audit({source:'terminal',path:req.url,status:101,username:principal.username,role:principal.role,host:hostId,ip:resolveClientIp(req)});
+   try{terminal=ptyModule.spawn(tmuxClient(hosts.socket),attachArgs(hosts.nameOf(principal.id,hostId,n),hosts.socket),{name:'xterm-256color',cols:100,rows:30,cwd:agents.stateRoot,env:{...agentEnv(),TERM:'xterm-256color',LC_CTYPE:'en_US.UTF-8'}});}catch(e){send({type:'error',message:'無法附接終端'});return close();}
+   terminal.onData(data=>{outBuf+=data;if(outBuf.length>=65536)flushData();else if(outTimer===null)outTimer=setTimeout(flushData,12);});
+   terminal.onExit(()=>{send({type:'closed'});close();});
+   let windowStart=Date.now(),bytes=0;
+   ws.on('message',raw=>{try{if(Date.now()-windowStart>1000){windowStart=Date.now();bytes=0;}bytes+=raw.length;if(bytes>131072)return close();
+    const msg=JSON.parse(raw.toString());
+    if(msg.type==='input'&&typeof msg.data==='string'&&msg.data.length<=16000)terminal.write(msg.data);
+    else if(msg.type==='resize'&&Number.isInteger(msg.cols)&&Number.isInteger(msg.rows)&&msg.cols>=20&&msg.cols<=400&&msg.rows>=5&&msg.rows<=200)terminal.resize(msg.cols,msg.rows);
+    else close();}catch{close();}});
+   ws.on('close',()=>close());ws.on('error',()=>close(true));
+   let checking=false;timer=setInterval(async()=>{
+    if(++ticks%5===0){if(!ws.isAlive)return close(true);ws.isAlive=false;try{ws.ping();}catch{}send({type:'ping'});}
+    if(checking)return;checking=true;try{const current=await resolveLivePrincipal(token,principal.id);if(!current)close();else if(current.role!=='admin'){close();try{hosts.closeUser(principal.id);}catch{}}}catch{close();}finally{checking=false;}},tickMs);
+   send({type:'connected',host:hostId,n});
+  });
+ }
  server.on('upgrade',async(req,socket,head)=>{
   // The page's live-update socket has its own handler (liveUpdates.js).
   if((req.url||'').split('?')[0]==='/live')return;
@@ -62,6 +99,9 @@ function installTerminal(server,{tmuxClient=serverTmux,ptyModule=require('node-p
    if(!require('./siteConfig').isAllowedSocket(req))return reject(socket,403);
    // /terminal/<agent> is its Claude session; /terminal/<agent>/sh/<n> one of the shells its
    // terminal page opened in tabs (server/terminalShells.js).
+   // /terminal/host/<machine>/<n>: one of the Terminal tab's terminals (server/hostTerminal.js).
+   const hostMatch=/^\/terminal\/host\/(local|s-[a-f0-9]{12}|c-[a-f0-9]{2,128})\/([1-9]\d{0,5})$/.exec(req.url||'');
+   if(hostMatch)return attachHost(req,socket,head,hostMatch[1],Number(hostMatch[2]),reject,w=>{who=w;});
    const match=/^\/terminal\/([a-f0-9-]{36})(?:\/sh\/([1-9]\d{0,5}))?$/.exec(req.url||'');if(!match)return reject(socket,404);const shellN=match[2]?Number(match[2]):null;
    const cookies=Object.fromEntries((req.headers.cookie||'').split(';').map(x=>x.trim().split('=')));const token=cookies.session_id;
    if(!token)return reject(socket,401);

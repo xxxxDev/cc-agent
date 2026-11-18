@@ -136,6 +136,8 @@ function requireJsonContentType(req, res, next) {
   if (req.method === 'POST' && /^\/conversations\/[a-f0-9-]{36}\/(attachments|avatar)$/.test(req.path) && req.is('application/octet-stream')) return next();
   // A part of a file sent in parts (attachments.uploadPart): the same gates, PUT to its own upload only.
   if (req.method === 'PUT' && /^\/conversations\/[a-f0-9-]{36}\/uploads\/[a-f0-9-]{36}$/.test(req.path) && req.is('application/octet-stream')) return next();
+  // The same for the Terminal tab's files from the admin's device (server/hostRoutes.js).
+  if (req.method === 'PUT' && /^\/host-uploads\/[a-f0-9-]{36}$/.test(req.path) && req.is('application/octet-stream')) return next();
   if (!req.is('application/json')) {
     return res.status(415).json({ message: 'Content-Type must be application/json' });
   }

@@ -2793,6 +2793,8 @@ function sweepRetention({now=Date.now()}={}){
   const dir=path.join(usersDir,owner,'attachments');
   if(!fs.existsSync(dir))continue;
   for(const id of fs.readdirSync(dir)){
+   // The Terminal tab's shelf (attachments.HOST_SHELF) is hostTerminal.js's to clear.
+   if(id===attachments.HOST_SHELF){let shelf=[];try{shelf=fs.readdirSync(path.join(dir,id));}catch{}for(const f of shelf)try{if(fs.lstatSync(path.join(dir,id,f)).mtimeMs<now-86400000)fs.rmSync(path.join(dir,id,f),{force:true});}catch{}continue;}
    const c=state.conversations.find(x=>x.id===id);
    if(!c){try{fs.rmSync(path.join(dir,id),{recursive:true,force:true});files+=1;}catch{}continue;}
    const sent=new Set(c.messages.flatMap(m=>(m.attachments||[]).map(a=>a.id)));
@@ -2814,7 +2816,7 @@ function sweepRetention({now=Date.now()}={}){
   }
  }
  // Parts of a file never finished, or of a conversation that is gone (attachments.startUpload).
- try{files+=attachments.sweepUploads(stateRoot,new Set(state.conversations.map(x=>x.id)),now);}catch(e){console.error('[upload sweep]',e.message);}
+ try{files+=attachments.sweepUploads(stateRoot,new Set([...state.conversations.map(x=>x.id),attachments.HOST_SHELF]),now);}catch(e){console.error('[upload sweep]',e.message);}
  // Stills of a conversation that is gone (attachments.thumbsDirectory).
  for(const owner of fs.existsSync(usersDir)?fs.readdirSync(usersDir):[]){
   const dir=path.join(usersDir,owner,'thumbs');
@@ -3465,7 +3467,7 @@ function setPreferences(owner,{shellTabs,compactThreshold,handoff,subagents,auto
   try{state.agentSettings={...state.agentSettings,shellTabs};saveSettings();saved=true;}
   catch(e){console.error('shell tabs setting not written:',e.message);}
   finally{
-   if(!shellTabs){try{shells.killServer();}catch(e){closed=false;console.error('shells when switched off:',e.message);}}
+   if(!shellTabs){try{shells.killServer();}catch(e){closed=false;console.error('shells when switched off:',e.message);}try{require('./hostTerminal').shared().closeLocal();}catch(e){console.error('terminal tab when switched off:',e.message);}}
    try{require('./services/audit').audit({action:'shell-tabs',by:owner,to:shellTabs,saved,...(shellTabs?{}:{closed})});}catch(e){console.error('shell tabs audit:',e.message);}
   }
   // Said, never thrown: the switch is as asked in memory and any shells have ended already.
