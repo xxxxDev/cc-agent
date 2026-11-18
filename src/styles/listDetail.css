@@ -7,9 +7,10 @@
  * its own transition, and the conversation comes in from the right. Below that width, or with
  * the setting off, nothing here applies and the pages slide over each other as before.
  * The Groups tab does the same with its list and one room:
- * the shared rules name both pairs, and the group rows' compact look follows the agents'. */
+ * the shared rules name both pairs, and the group rows' compact look follows the agents'.
+ * The Terminal tab too: its machines and one machine. */
 @media (min-width: 1280px) {
-  html.list-detail-on :is(#view-chat, #view-groups) {
+  html.list-detail-on :is(#view-chat, #view-groups, #view-terminal) {
     --list-column: var(--list-column-set, clamp(320px, 25vw, 360px));
     --list-detail-motion: .32s cubic-bezier(.2, .8, .2, 1);
   }
@@ -17,12 +18,14 @@
    * narrowing width let the conversation arrive first and the column's buttons and row edges
    * settle a third of a second later. */
   html.list-detail-on #view-chat > .page[data-name="chats"],
-  html.list-detail-on #view-groups > .page[data-name="groups"] {
+  html.list-detail-on #view-groups > .page[data-name="groups"],
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"] {
     transition: none;
   }
   /* The column. */
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]),
-  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) {
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]),
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"]) {
     width: var(--list-column);
     transform: none;
     pointer-events: auto;
@@ -30,19 +33,22 @@
     border-right: 1px solid var(--f7-list-item-border-color, rgba(255, 255, 255, .12));
   }
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"])::after,
-  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"])::after {
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"])::after,
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"])::after {
     display: none;
   }
   /* The conversation beside it; its side panels share what is left (chatPage.css). */
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous + .page[data-name="conversation"],
-  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous + .page[data-name="group"] {
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous + .page[data-name="group"],
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous + .page[data-name="terminal-host"] {
     left: var(--list-column);
     width: calc(100% - var(--list-column));
     --transcript-inspector-width: min(500px, 45%);
     animation: list-detail-in var(--list-detail-motion) both;
   }
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous + .page[data-name="conversation"] .page-shadow-effect,
-  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous + .page[data-name="group"] .page-shadow-effect {
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous + .page[data-name="group"] .page-shadow-effect,
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous + .page[data-name="terminal-host"] .page-shadow-effect {
     display: none;
   }
 
@@ -50,13 +56,15 @@
    * column's right side only, so the rows sat further left than right;
    * the column still scrolls by wheel and trackpad. */
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .page-content,
-  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .page-content {
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .page-content,
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"]) .page-content {
     scrollbar-width: none;
   }
   /* The navbar's buttons line up with the search row and the rows, 10px from each edge
    * (Edit and + sat 6px further in than the rows). */
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .navbar,
-  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .navbar {
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .navbar,
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"]) .navbar {
     --f7-navbar-inner-padding-left: 10px;
     --f7-navbar-inner-padding-right: 10px;
   }
@@ -64,18 +72,22 @@
    * between Edit and the buttons, not on the whole column, where it ran under the buttons; a long
    * one ends in an ellipsis. */
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .navbar .navbar-inner > .title,
-  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .navbar .navbar-inner > .title {
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .navbar .navbar-inner > .title,
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"]) .navbar .navbar-inner > .title {
     position: relative; left: auto !important; transform: none !important;
     flex: 1 1 auto; min-width: 0; margin: 0 8px; text-align: center; justify-content: center;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .navbar .navbar-inner > :is(.left, .right),
-  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .navbar .navbar-inner > :is(.left, .right) {
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .navbar .navbar-inner > :is(.left, .right),
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"]) .navbar .navbar-inner > :is(.left, .right) {
     flex: 0 0 auto;
   }
   /* The search row stays under the navbar while the list scrolls, on the column's own
    * background so rows pass beneath it. */
-  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .page-content > .agent-search-row {
+  html.list-detail-on #view-chat > .page[data-name="chats"].page-previous:has(+ .page[data-name="conversation"]) .page-content > .agent-search-row,
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .page-content > .group-search-row,
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"]) .page-content > .hosts-search-row {
     position: sticky;
     /* Sticky offsets count from the page's padding, which already holds the navbar and the large
      * title: going back by the large title's height leaves the row right under the navbar. */
@@ -87,10 +99,11 @@
   /* The column's edge can be dragged (listDetail.js startListColumnResize); while it is, nothing
    * eases, so the column follows the pointer. */
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous + .page[data-name="conversation"] .list-column-divider,
-  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous + .page[data-name="group"] .list-column-divider {
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous + .page[data-name="group"] .list-column-divider,
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous + .page[data-name="terminal-host"] .list-column-divider {
     display: block;
   }
-  html.list-detail-on.list-resizing :is(#view-chat, #view-groups) > .page {
+  html.list-detail-on.list-resizing :is(#view-chat, #view-groups, #view-terminal) > .page  {
     transition: none !important;
   }
   /* Compact rows in the column: a smaller picture, the name and one line of the latest. */
@@ -229,62 +242,76 @@
 /* The Groups list as the column: rows as compact as the agents' there, the lead's face, the
  * group's name and one line of the latest; the members line is left to the room's navbar. */
 @media (min-width: 1280px) {
-  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .page-content > :is(.list.inset, .group-search-row) {
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .page-content > :is(.list.inset, .group-search-row),
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"]) .page-content > :is(.list.inset, .hosts-search-row) {
     max-width: calc(100% - 20px);
     margin-left: auto;
     margin-right: auto;
   }
-  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-search-row {
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-search-row,
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"]) .hosts-search-row {
     padding: 0;
     margin-top: 12px;
     margin-bottom: 16px;
   }
-  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list > ul > li {
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list > ul > li,
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"]) .hosts-list > ul > li {
     margin-bottom: 6px;
   }
-  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .item-content {
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .item-content,
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"]) .hosts-list .item-content {
     padding-left: 10px;
     min-height: 0;
   }
-  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .item-inner {
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .item-inner,
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"]) .hosts-list .item-inner {
     padding-top: 8px;
     padding-bottom: 8px;
     padding-right: 10px;
     min-height: 0;
   }
-  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .item-link :is(.item-inner, .item-title-row)::before {
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .item-link :is(.item-inner, .item-title-row)::before,
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"]) .hosts-list .item-link :is(.item-inner, .item-title-row)::before {
     display: none;
   }
-  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .item-title-row {
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .item-title-row,
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"]) .hosts-list .item-title-row {
     padding-right: 0;
   }
-  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .item-media {
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .item-media,
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"]) .hosts-list .item-media {
     padding-top: 0;
     align-self: center;
   }
-  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .group-avatar {
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .group-avatar,
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"]) .hosts-list .host-avatar {
     width: 36px;
     height: 36px;
   }
-  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .item-subtitle {
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .item-subtitle,
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"]) .hosts-list .item-subtitle {
     display: none;
   }
-  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .item-title {
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .item-title,
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"]) .hosts-list .item-title {
     font-size: 15px;
   }
-  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .item-text {
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list .item-text,
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"]) .hosts-list .item-text {
     -webkit-line-clamp: 1;
     line-clamp: 1;
     max-height: var(--f7-list-item-text-line-height, 21px);
     margin-right: 0;
     font-size: 13px;
   }
-  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list > ul > li.row-current {
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list > ul > li.row-current,
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"]) .hosts-list > ul > li.row-current {
     background: color-mix(in srgb, var(--f7-list-bg-color) 94%, var(--dp-color-text, #fff));
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dp-color-text, #fff) 11%, transparent);
   }
   /* Edit in the column: the rows keep the drag handle's room. */
-  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list.sortable-enabled li .item-content > .item-inner {
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list.sortable-enabled li .item-content > .item-inner,
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"]) .hosts-list.sortable-enabled li .item-content > .item-inner {
     padding-right: calc(var(--f7-sortable-handler-width) + 4px);
   }
 }
@@ -300,9 +327,10 @@
   to { opacity: 1; transform: none; }
 }
 @media (min-width: 1280px) and (prefers-reduced-motion: reduce) {
-  html.list-detail-on #view-chat > .page[data-name="chats"], html.list-detail-on #view-groups > .page[data-name="groups"] { transition: none; }
+  html.list-detail-on #view-chat > .page[data-name="chats"], html.list-detail-on #view-groups > .page[data-name="groups"], html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"] { transition: none; }
   html.list-detail-on #view-chat > .page[data-name="chats"].page-previous + .page[data-name="conversation"],
-  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous + .page[data-name="group"] { animation: none; }
+  html.list-detail-on #view-groups > .page[data-name="groups"].page-previous + .page[data-name="group"],
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous + .page[data-name="terminal-host"] { animation: none; }
 }
 
 /* The drag handle at the conversation's left edge; shown only beside the column (above). It looks
@@ -333,4 +361,18 @@
 }
 .list-column-divider:hover::after, html.list-resizing .list-column-divider::after {
   opacity: .8;
+}
+
+/* On a phone the search row of the Agents, Groups and Terminal lists stays under the navbar too
+ * while the list scrolls, as in the column above. */
+@media (max-width: 767px) {
+  #view-chat > .page[data-name="chats"] > .page-content > .agent-search-row,
+  #view-groups > .page[data-name="groups"] > .page-content > .group-search-row,
+  #view-terminal > .page[data-name="terminal-hosts"] > .page-content > .hosts-search-row {
+    position: sticky;
+    top: calc(-1 * var(--f7-navbar-large-title-height, 52px));
+    z-index: 3;
+    background: var(--f7-page-bg-color);
+    box-shadow: 0 -12px 0 var(--f7-page-bg-color), 0 10px 0 var(--f7-page-bg-color);
+  }
 }

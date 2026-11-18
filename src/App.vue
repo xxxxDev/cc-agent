@@ -46,7 +46,7 @@
                     >
                       <div class="item-content">
                         <div class="item-media">
-                          <i class="icon left-panel__menu-icon" :class="tb.iconClass">{{ tb.icon }}</i>
+                          <i v-if="tb.svg" class="icon left-panel__menu-icon" v-html="tb.svg"></i><i v-else class="icon left-panel__menu-icon" :class="tb.iconClass">{{ tb.icon }}</i>
                           <span v-if="tb.id === 'view-chat' && unreadTotal" class="menu-unread-dot"></span>
                         </div>
                         <div class="item-inner">
@@ -95,13 +95,13 @@
         <!-- A phone held sideways: a rail of its own on the right, with the same tabs; the
              bottom bar below stays exactly as it is, only hidden there, so turning upright
              gives it back untouched. -->
-        <nav v-show="!embedded&&!(active==='view-chat' && (workspace.selected.value||workspace.atStart.value))&&!(active==='view-groups' && viewingGroup)" ref="railRef" class="landscape-rail" @pointerdown="railDown" @pointermove="railMove" @pointerup="railUp" @pointercancel="railCancel">
+        <nav v-show="!embedded&&!(active==='view-chat' && (workspace.selected.value||workspace.atStart.value))&&!(active==='view-groups' && viewingGroup)&&!(active==='view-terminal' && viewingHost && !listDetailActive)" ref="railRef" class="landscape-rail" @pointerdown="railDown" @pointermove="railMove" @pointerup="railUp" @pointercancel="railCancel">
           <a v-for="tb in tabs" :key="tb.id" class="landscape-rail-tab" :class="{ active: (railHover || active) === tb.id }" :data-rail-tab="tb.id" href="#" :aria-label="t(tb.labelKey)" @click.prevent>
-            <i class="icon" :class="tb.iconClass">{{ tb.icon }}</i>
+            <i v-if="tb.svg" class="icon" v-html="tb.svg"></i><i v-else class="icon" :class="tb.iconClass">{{ tb.icon }}</i>
             <span v-if="tb.id === 'view-chat' && unreadTotal" class="badge color-red rail-unread">{{ unreadLabel(unreadTotal) }}</span>
           </a>
         </nav>
-        <div v-show="!embedded&&!(active==='view-chat' && (workspace.selected.value||workspace.atStart.value))&&!(active==='view-groups' && viewingGroup)" class="toolbar-layout-wrapper toolbar-menu">
+        <div v-show="!embedded&&!(active==='view-chat' && (workspace.selected.value||workspace.atStart.value))&&!(active==='view-groups' && viewingGroup)&&!(active==='view-terminal' && viewingHost && !listDetailActive)" class="toolbar-layout-wrapper toolbar-menu">
           <div class="toolbar-views__toolbar-sticky__bg"></div>
           <div class="toolbar-views__toolbar-sticky__gradient-bg"></div>
           <div
@@ -117,7 +117,7 @@
               :data-tab="'#' + tb.id"
               @click="selectTab(tb.id)"
             >
-              <i class="icon" :class="tb.iconClass">{{ tb.icon }}</i>
+              <i v-if="tb.svg" class="icon" v-html="tb.svg"></i><i v-else class="icon" :class="tb.iconClass">{{ tb.icon }}</i>
               <span v-if="tb.id === 'view-chat' && unreadTotal" class="badge color-red tab-unread">{{ unreadLabel(unreadTotal) }}</span>
               <span class="tabbar-label">{{ t(tb.labelKey) }}</span>
             </a>
@@ -128,6 +128,7 @@
         <f7-view id="view-chat" main tab :tab-active="active === 'view-chat'" url="/start/" />
         <!-- A conversation opened by a notification: the list under it is not shown first. -->
         <div v-if="workspace.directOpening.value && active === 'view-chat'" class="direct-cover" aria-hidden="true"><f7-preloader :size="28"/></div>
+        <f7-view v-if="isAdmin" id="view-terminal" tab :tab-active="active === 'view-terminal'" url="/terminal-hosts/" />
         <f7-view v-if="isAdmin" id="view-groups" tab :tab-active="active === 'view-groups'" url="/groups/" />
         <f7-view id="view-schedules" tab :tab-active="active === 'view-schedules'" url="/schedules/" />
         <f7-view id="view-settings" tab :tab-active="active === 'view-settings'" url="/settings/" />
@@ -157,6 +158,7 @@ import { resubscribeIfRotated, setPushAccount } from './js/push.js';
 import { activeTab, setActiveTab } from './js/tab-session.js';
 import { addressFor, screenFor } from './js/appUrl.js';
 import { viewingGroup } from './js/groups.js';
+import { viewingHost } from './js/hostView.js';
 import { scheduleFocus } from './js/schedules.js';
 import {useTheme} from './theme.js';
 const {theme,applyTheme}=useTheme();
@@ -175,6 +177,7 @@ import UsageMeters from './components/UsageMeters.vue';
 import { ct } from './js/agent-i18n.js';
 import { sidebarFolded, sidebarAuto, sidebarRail, sidebarNarrow, setSidebarFolded, peekSidebar } from './js/sidebarState.js';
 import { forceAppUpdate } from './js/pwa-update.js';
+import { TERMINAL_ICON } from './js/terminalIcon.js';
 import { listDetailActive, listColumnWidth } from './js/listDetail.js';
 
 const ls = (k) => {
@@ -223,6 +226,8 @@ const ALL_TABS = [
   // Group chats, beside Agents and apart from them, an admin's.
   { id: 'view-groups', labelKey: 'tabGroups', icon: 'person_3_fill', iconClass: 'f7-icons', admin: true },
   { id: 'view-schedules', labelKey: 'tabSchedules', icon: 'calendar', iconClass: 'f7-icons' },
+  // This computer's and other machines' terminals and files, an admin's, between Schedules and Settings.
+  { id: 'view-terminal', labelKey: 'tabTerminal', svg: TERMINAL_ICON, admin: true },
   { id: 'view-settings', labelKey: 'tabSettings', icon: 'gear_alt_fill', iconClass: 'f7-icons' },
   // After Settings.
   { id: 'view-admin', labelKey: 'tabAdmin', icon: 'shield_lefthalf_fill', iconClass: 'f7-icons', admin: true },
@@ -307,7 +312,7 @@ const presenceHeartbeat = createPresenceHeartbeat({
 // Someone who is not an admin never stays on the Admin tab, whether it was remembered
 // from an admin's session in this browser or named by an address.
 watch([currentUser, activeTab], ([user, tab]) => {
-  if (user && (tab === 'view-admin' || tab === 'view-groups') && user.role !== 'admin') setActiveTab('view-chat');
+  if (user && (tab === 'view-admin' || tab === 'view-groups' || tab === 'view-terminal') && user.role !== 'admin') setActiveTab('view-chat');
 }, { immediate: true });
 
 watch(currentUser, (user) => {
@@ -361,7 +366,7 @@ watch(currentUser, (user) => {
   const screen = pendingScreen;
   pendingScreen = null;
   const stack = screen && !(screen.admin && user.role !== 'admin') ? screen.stack : [];
-  if (screen) setActiveTab((screen.tab === 'view-admin' || screen.tab === 'view-groups') && user.role !== 'admin' ? 'view-chat' : screen.tab);
+  if (screen) setActiveTab((screen.tab === 'view-admin' || screen.tab === 'view-groups' || screen.tab === 'view-terminal') && user.role !== 'admin' ? 'view-chat' : screen.tab);
   // The page opens the schedule a proposal's notification named once it has it.
   if (screen?.schedule) scheduleFocus.value = screen.schedule;
   nextTick(() => whenRouter(activeTab.value, async (router) => {

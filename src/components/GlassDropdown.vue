@@ -19,7 +19,7 @@
                  the selected one's icon ringed. The ring sits outside the icon, so every
                  name lines up. -->
             <li v-for="item in ordered" :key="item.value" class="no-chevron">
-              <a class="item-link" href="#" :data-value="item.value" @click.prevent="select(item)">
+              <a class="item-link" :class="{ 'dropdown-danger': item.danger }" href="#" :data-value="item.value" @click.prevent="select(item)">
                 <div class="item-content">
                   <div v-if="item.icon" class="item-media">
                     <img class="search-apps-ui__sources-list__source-icon" :class="{'source-selected': item.value === selected}" :src="item.icon" alt=""/>
@@ -160,3 +160,7 @@ function select(item) {
   close();
 }
 </script>
+<style>
+/* A destructive choice (the Terminal tab's Delete): red, its icon too. */
+.dropdown-content .item-link.dropdown-danger .item-title, .dropdown-content .item-link.dropdown-danger .icon { color: var(--f7-color-red, #ff3b30); }
+</style>

@@ -11,7 +11,8 @@ const EDGE = 60, SCROLL_STEP = 8;
 function blocksOf(rows) {
   const blocks = [];
   for (const row of rows) {
-    if (row.classList.contains('agent-group-row')) blocks.push({id: row.dataset.group, rows: [row]});
+    // The Terminal tab's categories move the same way (TerminalHostsPage.vue).
+    if (row.classList.contains('agent-group-row') || row.classList.contains('host-group-row')) blocks.push({id: row.dataset.group, rows: [row]});
     else if (blocks.length) blocks.at(-1).rows.push(row);
   }
   for (const block of blocks) {

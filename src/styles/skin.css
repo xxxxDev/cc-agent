@@ -1030,3 +1030,10 @@ html .ios .toast.toast-top .toast-content {
  * row's, not a margin each link takes from the one before it in the page's source. */
 .chat-page .navbar .navbar-inner > .right { gap: 16px; }
 .chat-page .navbar .navbar-inner > .right > .link { margin-left: 0 !important; }
+
+
+/* The Terminal tab's drawn icon (js/terminalIcon.js) sits as a font icon does: a block of 1em
+   in an icon box of the same size, not on a text line, which left it taller and pushed its name
+   down in the phone's bottom bar. */
+i.icon:has(> svg.terminal-icon-svg) { display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
+svg.terminal-icon-svg { display: block; width: 1em; height: 1em; flex: 0 0 auto; }

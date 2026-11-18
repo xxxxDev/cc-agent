@@ -52,7 +52,7 @@ export function setListColumnWidth(width) {
   try { width == null ? localStorage.removeItem(WIDTH_KEY) : localStorage.setItem(WIDTH_KEY, String(Math.round(width))); } catch {}
 }
 export function startListColumnResize(event) {
-  const view = event.currentTarget?.closest?.('#view-chat, #view-groups');
+  const view = event.currentTarget?.closest?.('#view-chat, #view-groups, #view-terminal');
   if (!view) return;
   event.preventDefault();
   const handle = event.currentTarget, box = view.getBoundingClientRect();

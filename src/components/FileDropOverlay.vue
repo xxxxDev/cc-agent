@@ -27,8 +27,9 @@
       <div class="file-drop-frame"></div>
       <div class="file-drop-box">
         <div class="file-drop-icon"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg></div>
-        <div class="file-drop-title">{{ ct('放開即可附加') }}</div>
-        <div v-if="name" class="file-drop-sub">{{ ct('附加到給 {name} 的訊息，送出前可以再刪').replace('{name}', name) }}</div>
+        <div class="file-drop-title">{{ title || ct('放開即可附加') }}</div>
+        <div v-if="sub" class="file-drop-sub">{{ sub }}</div>
+        <div v-else-if="name" class="file-drop-sub">{{ ct('附加到給 {name} 的訊息，送出前可以再刪').replace('{name}', name) }}</div>
         <div v-if="count" class="file-drop-count">{{ ct('{count} 個檔案').replace('{count}', count) }}</div>
       </div>
     </div>
@@ -41,7 +42,8 @@ import {ct} from '../js/agent-i18n.js';
 import {computed} from 'vue';
 // split: the terminal's column ({width, top} in px, at the page's right) when it is beside the
 // chat; over: the part under the pointer; terminalOk: whether the terminal takes files.
-const props = defineProps({show: Boolean, name: String, count: Number, split: Object, over: String, terminalOk: Boolean});
+// title, sub: other words for the single drop, as the Terminal tab's.
+const props = defineProps({show: Boolean, name: String, count: Number, split: Object, over: String, terminalOk: Boolean, title: String, sub: String});
 const to = computed(() => props.over === 'terminal' && props.terminalOk ? 'terminal' : 'chat');
 </script>
 

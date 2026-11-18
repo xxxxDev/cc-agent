@@ -25,8 +25,8 @@ export function formatBytes(n) {
 }
 
 // onProgress(fraction) as the bytes go; resolves with the attachment ({id, name, size}).
-export async function uploadInParts(conversationId, file, name, {onProgress} = {}) {
-  const base = '/conversations/' + conversationId + '/uploads';
+// `base` sends it elsewhere with the same parts: the Terminal tab's /host-uploads.
+export async function uploadInParts(conversationId, file, name, {onProgress, base = '/conversations/' + conversationId + '/uploads'} = {}) {
   const start = await api(base, {method: 'POST', body: JSON.stringify({name, size: file.size})});
   const id = start.uploadId, size = file.size, step = partBytes(size, start.chunkBytes);
   let at = start.received || 0, tries = 0, slowed = 0;

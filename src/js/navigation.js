@@ -10,7 +10,7 @@ export const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 // Every tab, and the one a stored tab that is no longer there falls back to.
 // A stored tab id that is not in this list falls back to chat.
 // 'view-admin' is an admin's only; App.vue moves anyone else off it.
-export const TAB_IDS = ['view-chat', 'view-groups', 'view-schedules', 'view-admin', 'view-settings'];
+export const TAB_IDS = ['view-chat', 'view-groups', 'view-schedules', 'view-terminal', 'view-admin', 'view-settings'];
 export const HOME_TAB = 'view-chat';
 // The tab that holds Manage Users (pages/UsersPage.vue opens an account in it).
 export const ADMIN_TAB = 'view-admin';
@@ -19,6 +19,13 @@ export const ADMIN_TAB = 'view-admin';
 // Settings pages. The admin's pages moved from Settings to their own tab;
 // their old /settings/... addresses still open them (oldPath).
 export const TAB_PAGES = {
+  // The Terminal tab: machines, and one machine's SSH or
+  // SFTP pushed on a phone (pages/TerminalHostsPage.vue, pages/TerminalHostPage.vue).
+  'view-terminal': [
+    {route: '/terminal-hosts/', path: '/terminal', admin: true},
+    // A ~/.ssh/config machine's id is its name in hex, longer than ID allows for a long name.
+    {route: '/terminal-host/', path: '/terminal/:id', id: '(?:local|s-[a-f0-9]{12}|c-[a-f0-9]{2,128})', parent: '/terminal-hosts/', admin: true},
+  ],
   // Group chats: the list, and one group.
   'view-groups': [
     {route: '/groups/', path: '/groups'},

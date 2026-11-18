@@ -2,6 +2,8 @@ import ChatListPage from './agent-pages/ChatListPage.vue';
 import ConversationPage from './agent-pages/ConversationPage.vue';
 import StartPage from './agent-pages/StartPage.vue';
 import SchedulesPage from './pages/SchedulesPage.vue';
+import TerminalHostsPage from './pages/TerminalHostsPage.vue';
+import TerminalHostPage from './pages/TerminalHostPage.vue';
 import GroupsPage from './pages/GroupsPage.vue';
 import GroupRoomPage from './pages/GroupRoomPage.vue';
 import SettingsPage from './pages/SettingsPage.vue';
@@ -34,6 +36,9 @@ export default [
   { path: '/groups/', component: GroupsPage },
   { path: '/group/', component: GroupRoomPage },
   { path: '/schedules/', component: SchedulesPage },
+  // The Terminal tab: machines, and one pushed on a phone.
+  { path: '/terminal-hosts/', component: TerminalHostsPage },
+  { path: '/terminal-host/', component: TerminalHostPage },
 
 
   { path: '/settings/', component: SettingsPage },

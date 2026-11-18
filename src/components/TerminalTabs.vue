@@ -1,7 +1,8 @@
 <template><section ref="root" class="terminal-tabs" :class="['layout-'+layout,{tight,split:split2}]">
- <!-- The terminal page's tabs: Claude's own first, then shells opened with ＋
-      (server/terminalShells.js). On a computer with room, two of them side by side or one
-      above the other. -->
+ <!-- The terminal page's tabs: Claude's own first, then shells opened with ＋ in the agent's
+      folder (server/terminalShells.js). On a computer with room, two of them side by side or
+      one above the other. Given a host, the Terminal tab's terminals of that machine instead
+      (server/hostTerminal.js), with no Claude tab. -->
  <div class="terminal-tabbar" role="tablist" :aria-label="ct('終端機分頁')">
   <div class="terminal-tablist">
    <div class="terminal-tablist-track">
@@ -27,9 +28,10 @@
   <template v-for="(key,i) in shownPanes" :key="key">
    <div v-if="i===1" class="terminal-split-divider" role="separator" :aria-orientation="layout==='rows'?'horizontal':'vertical'" :aria-label="ct('拖曳調整大小')" :title="ct('拖曳調整大小，按兩下恢復')" @pointerdown.prevent="startDrag" @dblclick="split=.5;write('cc-terminal-split',.5)"/>
    <div class="terminal-tabs-cell" :class="{focused:split2&&paneIndex(key)===focused}" @pointerdown.capture="focusPane(key)" @focusin="focusPane(key)">
-    <TerminalPane :ref="el=>setPane(key,el)" :conversation-id="conversationId" :shell="shellOf(key)" :label="tabOf(key)?.label" :path="key==='claude'?folder:tabOf(key)?.cwd" :focused="split2&&paneIndex(key)===focused" :choosable="split2" @choose="(e)=>openChoice(key,e)" :autofocus="!split2||paneIndex(key)===focused" :accept-files="acceptFiles" @files="(f)=>emit('files',f)"/>
+    <TerminalPane :ref="el=>setPane(key,el)" :conversation-id="host?undefined:conversationId" :shell="host?null:shellOf(key)" :host="host?host.id+'/'+shellOf(key):undefined" :label="tabOf(key)?.label" :path="key==='claude'?folder:tabOf(key)?.cwd" :focused="split2&&paneIndex(key)===focused" :choosable="split2" @choose="(e)=>openChoice(key,e)" :autofocus="!split2||paneIndex(key)===focused" :accept-files="acceptFiles" @files="(f)=>emit('files',f)"/>
    </div>
   </template>
+  <div v-if="host&&!shownPanes.length" class="terminal-tabs-empty"><f7-preloader v-if="opening||(!loaded&&!error)" :size="22"/><template v-else-if="error">{{error}}</template><f7-button v-else fill round small @click="openShell()">{{ct('開一個終端機')}}</f7-button></div>
  </div>
  <GlassDropdown :open="choiceOpen" :point="choicePoint" :items="choiceItems" :selected="choiceFor" @close="choiceOpen=false" @select="(v)=>{choiceOpen=false;showIn(choiceFor,v);}"/>
 </section></template>
@@ -42,12 +44,15 @@ import SpinnerIcon from './SpinnerIcon.vue';
 import GlassDropdown from './GlassDropdown.vue';
 import {ct} from '../js/agent-i18n.js';
 import {api} from '../js/api.js';
+import {hostMessage} from '../js/hostText.js';
 
-const props=defineProps({conversationId:String,acceptFiles:Boolean,avatar:String,agentState:String});
+const props=defineProps({conversationId:String,acceptFiles:Boolean,avatar:String,agentState:String,host:Object});
 const emit=defineEmits(['files']);
 const root=ref(null),body=ref(null);
-const shells=ref([]),available=ref(true),folder=ref(''),opening=ref(false);
-const tabs=computed(()=>[{key:'claude',label:'Claude',state:props.agentState||'offline'},...shells.value.map(s=>({key:'sh'+s.n,n:s.n,label:shellLabel(s)||ct('終端機')+' '+s.n,cwd:s.cwd,state:s.busy?'working':'online'}))]);
+const shells=ref([]),available=ref(true),folder=ref(''),opening=ref(false),loaded=ref(false),error=ref('');
+// A machine's terminal is named by what runs in it, else by the machine (this computer's by number).
+const hostLabel=s=>shellLabel(s)||(props.host.kind==='local'?ct('終端機')+' '+s.n:props.host.name+(shells.value.length>1?' '+s.n:''));
+const tabs=computed(()=>props.host?shells.value.map(s=>({key:'sh'+s.n,n:s.n,label:hostLabel(s),cwd:s.cwd,state:s.busy?'working':'online'})):[{key:'claude',label:'Claude',state:props.agentState||'offline'},...shells.value.map(s=>({key:'sh'+s.n,n:s.n,label:shellLabel(s)||ct('終端機')+' '+s.n,cwd:s.cwd,state:s.busy?'working':'online'}))]);
 // A shell's tab is named after the folder it is in now, as a terminal app's tab is, read
 // every few seconds with the list.
 // While a program runs, its tab is named as a terminal app names it: the title the program
@@ -69,11 +74,12 @@ const shellOf=key=>/^sh[1-9]\d{0,5}$/.test(key)?Number(key.slice(2)):null;
 const tabOf=key=>tabs.value.find(t=>t.key===key);
 
 // What each pane shows, and which one typing goes to; kept per agent in this browser.
-const STORE='cc-terminal-tabs:'+props.conversationId;
+const STORE=props.host?'cc-host-tabs:'+props.host.id:'cc-terminal-tabs:'+props.conversationId;
+const FIRST=props.host?[]:['claude'];
 const read=(k,fallback)=>{try{const v=JSON.parse(localStorage.getItem(k));return v??fallback;}catch{return fallback;}};
 const write=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}};
 const saved=read(STORE,{});
-const panes=ref(Array.isArray(saved.panes)&&saved.panes.length?saved.panes.slice(0,2):['claude']);
+const panes=ref(Array.isArray(saved.panes)&&saved.panes.length?saved.panes.slice(0,2):[...FIRST]);
 const focused=ref(saved.focused===1&&panes.value.length>1?1:0);
 const layout=ref(read('cc-terminal-layout','single'));
 const split=ref(read('cc-terminal-split',0.5));
@@ -93,7 +99,7 @@ const effective=computed(()=>layout.value==='columns'&&canColumns.value?'columns
 // split button does not stay lit with Claude's tab alone.
 const shownLayout=computed(()=>split2.value?effective.value:'single');
 const split2=computed(()=>effective.value!=='single'&&panes.value.length>1);
-const shownPanes=computed(()=>split2.value?panes.value:[panes.value[focused.value]||'claude']);
+const shownPanes=computed(()=>split2.value?panes.value:[panes.value[focused.value]||FIRST[0]].filter(Boolean));
 const paneIndex=key=>panes.value.indexOf(key);
 
 const paneEls=new Map();
@@ -126,27 +132,35 @@ async function setLayout(next){
  if(panes.value.length<2){const other=tabs.value.find(t=>!panes.value.includes(t.key));if(other)panes.value.push(other.key);else await openShell(true);}
 }
 
+const base=()=>props.host?'/hosts/'+encodeURIComponent(props.host.id)+'/tabs':'/conversations/'+props.conversationId+'/shells';
 async function load(){
- try{const r=await api('/conversations/'+props.conversationId+'/shells');shells.value=r.shells||[];available.value=r.available!==false;folder.value=r.folder||'';}
- catch{return;}
+ try{
+  if(props.host){const r=await api('/hosts');shells.value=(r.hosts||[]).find(x=>x.id===props.host.id)?.tabs||[];error.value='';}
+  else{const r=await api('/conversations/'+props.conversationId+'/shells');shells.value=r.shells||[];available.value=r.available!==false;folder.value=r.folder||'';}
+ }catch(e){if(props.host)error.value=hostMessage(e.message);return;}
+ const first=!loaded.value;loaded.value=true;
  // Claude's tab alone: back to one pane, as chosen.
- if(!shells.value.length&&layout.value!=='single'){layout.value='single';write('cc-terminal-layout','single');}
+ if(!props.host&&!shells.value.length&&layout.value!=='single'){layout.value='single';write('cc-terminal-layout','single');}
+ // A machine opened for SSH with no terminal yet gets one, once.
+ if(props.host&&first&&!shells.value.length){openShell();return;}
  // A shell that exited, or was closed, leaves its pane to a tab not shown yet, if any,
  // as an editor's pane does; else the pane goes.
  const known=new Set(tabs.value.map(t=>t.key));
+ // A machine's terminals with none shown yet: the first one.
+ if(props.host&&!panes.value.length&&tabs.value.length){panes.value=[tabs.value[0].key];focused.value=0;return;}
  if(panes.value.every(k=>known.has(k)))return;
  const spare=tabs.value.map(t=>t.key).filter(k=>!panes.value.includes(k));
  const next=panes.value.map(k=>known.has(k)?k:spare.shift()).filter(Boolean);
- panes.value=next.length?next:['claude'];if(focused.value>=panes.value.length)focused.value=0;
+ panes.value=next.length?next:[...FIRST];if(focused.value>=panes.value.length)focused.value=0;
 }
 async function openShell(second=false){
  if(opening.value)return;opening.value=true;
- try{const s=await api('/conversations/'+props.conversationId+'/shells',{method:'POST'});await load();const key='sh'+s.n;
+ try{const s=await api(base(),{method:'POST',body:'{}'});await load();const key='sh'+s.n;
   if(second&&panes.value.length<2){panes.value.push(key);focused.value=1;}else pick(key);
- }catch(e){f7.dialog.alert(ct(e.message));}finally{opening.value=false;}
+ }catch(e){if(props.host&&!shells.value.length)error.value=hostMessage(e.message);else f7.dialog.alert(hostMessage(e.message));}finally{opening.value=false;}
 }
 function closeShell(t){
- const go=async()=>{try{await api('/conversations/'+props.conversationId+'/shells/'+t.n,{method:'DELETE'});}catch(e){if(e.status!==404)return f7.dialog.alert(ct(e.message));}await load();};
+ const go=async()=>{try{await api(base()+'/'+t.n,{method:'DELETE'});}catch(e){if(e.status!==404)return f7.dialog.alert(hostMessage(e.message));}await load();};
  // A program still running in it ends with it: asked first.
  if(t.state==='working')f7.dialog.confirm(ct('裡面正在執行的程式會一起結束。'),ct('關閉')+' '+t.label+'？',go);else go();
 }
@@ -161,7 +175,9 @@ function startDrag(e){
 
 // What the page pastes (a dropped file's path) goes to the pane typing goes to.
 function paste(text){return paneEls.get(shownPanes.value[split2.value?focused.value:0])?.paste(text)??false;}
-defineExpose({paste});
+// The folder of the pane typing goes to, as its tab shows it (a machine's terminal, '' when unknown).
+function currentCwd(){return tabOf(shownPanes.value[split2.value?focused.value:0])?.cwd||'';}
+defineExpose({paste,currentCwd});
 
 let observer,timer;
 const visible=()=>{if(!document.hidden)load();};
@@ -218,4 +234,5 @@ onUnmounted(()=>{observer?.disconnect();clearInterval(timer);document.removeEven
 /* No grip drawn: the gap itself drags. */
 .layout-rows .terminal-split-divider {cursor:row-resize;}
 .terminal-tabs-cell :deep(.terminal-bar) {border-bottom:1px solid rgba(255,255,255,.06);}
+.terminal-tabs-empty {flex:1;display:flex;align-items:center;justify-content:center;padding:20px;color:rgba(255,255,255,.6);text-align:center;}
 </style>
