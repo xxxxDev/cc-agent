@@ -10,7 +10,7 @@
 // covers a third of the distance in its first tenth: over 300px of region that
 // reads as a snap followed by a settle, not as being carried.
 const ease=t=>t<=0?0:t>=1?1:t*t*t*(t*(t*6-15)+10);
-import {visibleHeight} from './visibleHeight.js';
+import {visibleHeight,shortKeyboard} from './visibleHeight.js';
 const REGION_MS=340;
 export function bindConversationViewport(page,{viewport=window.visualViewport}={}) {
   if(!page||!viewport)return ()=>{};
@@ -87,10 +87,11 @@ export function bindConversationViewport(page,{viewport=window.visualViewport}={
   function sync(){
     if(viewport.scale!==1)return;
     if(!page.clientHeight){hidden=true;return;}
-    keyboard=(Boolean(input())||keyboard)&&baseline-visibleHeight(viewport,Boolean(input()))>100;
+    const seen=(input()&&shortKeyboard(viewport))||visibleHeight(viewport,Boolean(input()));
+    keyboard=(Boolean(input())||keyboard)&&baseline-seen>100;
     if(!input()&&!keyboard)baseline=window.innerHeight;
 
-    const height=Math.min(visibleHeight(viewport,Boolean(input())),page.clientHeight);
+    const height=Math.min(seen,page.clientHeight);
     // The composer must track the keyboard boundary immediately; only the history
     // gets the eased resize.
     page.classList.toggle('conversation-keyboard',keyboard);
