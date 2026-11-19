@@ -103,6 +103,7 @@ This is the full tour. The [README](../README.md) is the short version.
 
 - **Group chats.** Put several agents in one room and choose a lead.
 - **Who answers.** A message goes to the members it opens with `@`, to everyone with `@All`, or otherwise to the lead. What members send one another shows in the group too.
+- **Reply in a group.** A message of the room can be replied to as in an agent's chat: the reply button, a swipe or the long-press menu. The members it goes to are told which message you answer, with its first words.
 - **Notifications.** You are notified only when a member calls on you with `@` in the group, once it has a result.
 
 <p align="center">

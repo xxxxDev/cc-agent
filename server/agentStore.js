@@ -1832,7 +1832,7 @@ function groupNamed(x,text){
  for(const c of members){const re=mentionOf(c.title);if(re.test(rest)){named.push(c.id);rest=rest.replace(mentionOf(c.title),'$1 ');}}
  return named;
 }
-function sendToGroup(owner,id,text,key,mentionIds){
+function sendToGroup(owner,id,text,key,mentionIds,replyTo){
  adminGroups(owner);
  const x=groupFor(id,owner);
  if(typeof text!=='string'||!text.trim()||text.length>16000)throw error('請輸入 1–16000 字的訊息');
@@ -1844,10 +1844,21 @@ function sendToGroup(owner,id,text,key,mentionIds){
  const picked=mentionsFor(owner,mentionIds,text).filter(m=>x.members.includes(m.id)).map(m=>m.id);
  const leading=groupLeading(x,text.trim()),all=[...new Set([...leading,...picked,...groupNamed(x,text.trim())])];
  const named=leading,targets=named.length?named:[x.lead];
- const m=groupStore.addMessage(x,{role:'user',text:text.trim(),requestId:key,targets,named:named.length>0,mentions:all.map(i=>({id:i,title:groupMembers(x).find(a=>a.id===i)?.title||''})),deliveries:Object.fromEntries(targets.map(t=>[t,{status:'waiting'}]))});
+ // A reply to an earlier message of this group: kept only
+ // when it names one shown there; an unknown one is dropped, not refused, as in an agent's chat.
+ const quoted=typeof replyTo==='string'?x.messages.find(y=>y.id===replyTo&&y.role!=='system'):null;
+ const reply=quoted?{replyTo:quoted.id,replyPreview:replyPreviewOf(quoted)}:{};
+ const m=groupStore.addMessage(x,{role:'user',text:text.trim(),requestId:key,...reply,targets,named:named.length>0,mentions:all.map(i=>({id:i,title:groupMembers(x).find(a=>a.id===i)?.title||''})),deliveries:Object.fromEntries(targets.map(t=>[t,{status:'waiting'}]))});
  x.relayCount=0;x.relayStopped=false;
  groupStore.save();deliverGroups();
  return groupMessageView(m);
+}
+// The quoted message as this member's own chat holds it, for its channel event's reply_to:
+// the owner's earlier group message as delivered to it, or its own answer there.
+function groupReplyFor(x,m,c){
+ const q=m.replyTo&&x.messages.find(y=>y.id===m.replyTo);if(!q)return {};
+ const own=q.role==='user'?q.deliveries?.[c.id]?.messageId:q.agentId===c.id?q.sourceId:null;
+ return own&&c.messages.some(y=>y.id===own)?{replyTo:own}:{};
 }
 // Each waiting delivery: sent once the agent takes messages; a stopped one is
 // started for it (the owner just asked for it), unless its owner paused it, and
@@ -1866,7 +1877,7 @@ function deliverGroups(now=Date.now()){
    if(c.mode==='claude')reconcile(c,{fresh:true});
    const g=active(c);
    if(takesMessages(c,g)){
-    try{const sent=send(c,m.text,('group-'+m.id).slice(0,80),[],{group:{id:x.id,name:x.name,messageId:m.id}});d.status='sent';d.messageId=sent.id;d.at=new Date(now).toISOString();changed=true;}
+    try{const sent=send(c,m.text,('group-'+m.id).slice(0,80),[],{group:{id:x.id,name:x.name,messageId:m.id},...groupReplyFor(x,m,c)});d.status='sent';d.messageId=sent.id;d.at=new Date(now).toISOString();changed=true;}
     catch(e){fail(e.message);}
     continue;
    }
@@ -1916,7 +1927,10 @@ function groupNote(c,m){
  // Who else it went to, and who is only mentioned (with @All, every member got it).
  const sent=new Set(gm?.targets||[]),tag=y=>'@'+clean(y.title),rest=(gm?.mentions||[]).filter(y=>y.id!==c.id);
  const also=rest.filter(y=>sent.has(y.id)).map(tag),others=rest.filter(y=>!sent.has(y.id)).map(tag);
- return `[Group chat "${clean(x.name)}" in CC Agent, members: ${names}. The owner wrote this in the group ${named?'and named you':'and it came to you as the lead'}. Answer with reply to this message_id; the group sees it. While you work for this group, your checklist tools keep the group's checklists, beside the room. To bring in another member, send it a cross-session message by its name; what members send one another is shown in the group. The owner is not notified of what is said in the group: once the group has its result, post it in the group with @owner in the text, which notifies the owner; use @owner only for that. Answer what is addressed to you, then stop.${also.length?' '+also.join(', ')+' got this message too; do not forward it to them.':''}${others.length?' '+others.join(', ')+' '+(others.length>1?'are':'is')+' only mentioned and did not get this message; bring them in yourself if the owner asks you to.':''}]\n`;
+ const q=gm?.replyTo&&x.messages.find(y=>y.id===gm.replyTo);
+ const quoteWho=q?(q.role==='user'?'the owner':q.agentId===c.id?'you':'@'+clean(state.conversations.find(a=>a.id===q.agentId)?.title||q.agentTitle||'a member')):'';
+ const replying=q?` It is a reply to ${quoteWho==='you'?'your':quoteWho+"'s"} earlier group message, which began: "${clean(replyPreviewOf(q))}".`:'';
+ return `[Group chat "${clean(x.name)}" in CC Agent, members: ${names}. The owner wrote this in the group ${named?'and named you':'and it came to you as the lead'}.${replying} Answer with reply to this message_id; the group sees it. While you work for this group, your checklist tools keep the group's checklists, beside the room. To bring in another member, send it a cross-session message by its name; what members send one another is shown in the group. The owner is not notified of what is said in the group: once the group has its result, post it in the group with @owner in the text, which notifies the owner; use @owner only for that. Answer what is addressed to you, then stop.${also.length?' '+also.join(', ')+' got this message too; do not forward it to them.':''}${others.length?' '+others.join(', ')+' '+(others.length>1?'are':'is')+' only mentioned and did not get this message; bring them in yourself if the owner asks you to.':''}]\n`;
 }
 // The group chat an agent is working for now, if any.
 function workingGroup(c){const ctx=c.groupContext;if(!ctx||Date.now()-ctx.at>GROUP_CONTEXT_MS)return null;const x=groupStore.get(ctx.id);return x&&x.owner===c.owner?x:null;}
@@ -2299,7 +2313,7 @@ function bridge(c,action,data={}) {
    const r=add(c,'assistant',data.text,{replyKey:data.replyKey,inReplyTo:target.id,final,...(target.loginNotice&&final||target.wrapUp&&final&&WRAP_UP_DONE.test(data.text)?{notifyPending:false,quiet:true}:{notifyPending:true}),...(files.length?{attachments:files}:{})});
    // An answer to a group's message is shown in the group, and pushed from there.
    const gx=m.group&&groupStore.get(m.group.id);
-   if(gx&&gx.members.includes(c.id)){r.notifyPending=false;groupStore.addMessage(gx,{role:'assistant',agentId:c.id,text:data.text,final,inReplyTo:m.group.messageId,...(files.length?{attachments:files,attachmentsFrom:c.id}:{}),...groupPush(gx,c,data.text)});groupStore.save();}
+   if(gx&&gx.members.includes(c.id)){r.notifyPending=false;groupStore.addMessage(gx,{role:'assistant',agentId:c.id,text:data.text,final,inReplyTo:m.group.messageId,sourceId:r.id,...(files.length?{attachments:files,attachmentsFrom:c.id}:{}),...groupPush(gx,c,data.text)});groupStore.save();}
    g.lastError='';
    if(final){target.delivery='completed';armWrapUp(c,g,target);try{peerReply(c,target,r);}catch(e){console.error('peer reply:',e.message);}}
    // The others this same answer completes, each linked to it.

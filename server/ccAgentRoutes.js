@@ -213,7 +213,7 @@ app.post('/api/groups',(req,res,next)=>{try{res.status(201).json(agents.createGr
 app.get('/api/groups/:id',(req,res,next)=>{try{const x=agents.groupFor(req.params.id,req.userId);if(req.query.viewing==='1')agents.markViewing(req.userId,x.id);const limit=Number.parseInt(req.query.limit,10);res.json(agents.groupView(x,true,{limit:Number.isInteger(limit)?limit:undefined}));}catch(e){next(e);}});
 app.patch('/api/groups/:id',(req,res,next)=>{try{res.json(agents.updateGroup(req.userId,req.params.id,req.body||{}));}catch(e){next(e);}});
 app.delete('/api/groups/:id',(req,res,next)=>{try{agents.removeGroup(req.userId,req.params.id);res.json({ok:true});}catch(e){next(e);}});
-app.post('/api/groups/:id/messages',(req,res,next)=>{try{agents.sendToGroup(req.userId,req.params.id,req.body?.text,req.body?.requestId,req.body?.mentions);res.json(agents.groupView(agents.groupFor(req.params.id,req.userId),true));}catch(e){next(e);}});
+app.post('/api/groups/:id/messages',(req,res,next)=>{try{agents.sendToGroup(req.userId,req.params.id,req.body?.text,req.body?.requestId,req.body?.mentions,req.body?.replyTo);res.json(agents.groupView(agents.groupFor(req.params.id,req.userId),true));}catch(e){next(e);}});
 app.post('/api/groups/:id/checklist',(req,res,next)=>{try{res.json(agents.updateGroupChecklist(req.userId,req.params.id,req.body||{}));}catch(e){next(e);}});
 // A member's terminal command, from the group: the terminal is an admin's.
 app.post('/api/groups/:id/command',(req,res,next)=>{try{if(req.role!=='admin')throw agents.error('Admin only',403);res.json(agents.commandInGroup(req.userId,req.params.id,req.body?.agentId,req.body?.command));}catch(e){next(e);}});

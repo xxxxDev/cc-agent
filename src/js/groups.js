@@ -23,8 +23,8 @@ export async function createGroup(body) { const r = await api('/groups', {method
 export async function updateGroup(id, body) { const r = await api('/groups/' + encodeURIComponent(id), {method: 'PATCH', body: JSON.stringify(body)}); if (room.value?.id === id) room.value = r; await loadGroups(); return r; }
 export async function reorderGroups(ids) { const r = await api('/groups/reorder', {method: 'POST', body: JSON.stringify({ids})}); groups.value = r.groups || groups.value; return groups.value; }
 export async function removeGroup(id) { await api('/groups/' + encodeURIComponent(id), {method: 'DELETE'}); if (room.value?.id === id) room.value = null; await loadGroups(); }
-export async function sendToGroup(id, text, mentions = []) {
-  const r = await api('/groups/' + encodeURIComponent(id) + '/messages', {method: 'POST', body: JSON.stringify({text, mentions, requestId: 'g-' + crypto.randomUUID()})});
+export async function sendToGroup(id, text, mentions = [], replyTo = null) {
+  const r = await api('/groups/' + encodeURIComponent(id) + '/messages', {method: 'POST', body: JSON.stringify({text, mentions, requestId: 'g-' + crypto.randomUUID(), ...(replyTo ? {replyTo} : {})})});
   if (room.value?.id === id) room.value = r;
   return r;
 }

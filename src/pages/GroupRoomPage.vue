@@ -15,14 +15,14 @@
     <f7-link v-if="isAdmin" icon-only icon-f7="chevron_left_slash_chevron_right" class="group-terminal" :aria-label="ct('開啟成員的終端機')" @click="openTerminalMenu"/>
    </f7-nav-right>
   </f7-navbar>
-  <ChatComposer :highlights="[...mention.current.value.map(m=>'@'+m.title),'@All']" v-if="room" v-model:value="draft" :placeholder="ct('輸入訊息，@ 點名成員…')" @keydown="keydown">
+  <ChatComposer :highlights="[...mention.current.value.map(m=>'@'+m.title),'@All']" v-if="room" v-model:value="draft" :placeholder="ct('輸入訊息，@ 點名成員…')" :reply="replyDraft" @cancel-reply="replyDraft=null" @keydown="keydown">
    
    <template #inner-end><f7-link icon-only icon-f7="arrow_up" :class="{disabled:!canSend}" :aria-disabled="!canSend" :aria-label="ct('送出訊息')" @click="send"/></template>
   </ChatComposer>
   <div ref="scroll" class="page-content messages-content" @scroll.passive="onScroll">
    <f7-block v-if="error" role="alert">{{error}}</f7-block>
    <MessageList v-if="room" :messages="bubbles" :conversation-id="room.members[0]?.id" :has-older="false" :found-id="foundId" :typing="!!working" :typing-text="working"
-    :empty-text="ct('@ 點名成員，或直接說話交給主負責。')" @preview="previewFile=$event" @open-peer="openAgent"/>
+    :empty-text="ct('@ 點名成員，或直接說話交給主負責。')" replyable @preview="previewFile=$event" @open-peer="openAgent" @reply="startReply"/>
    <f7-block v-else-if="!error" class="group-loading"><f7-preloader/></f7-block>
   </div>
   <SlashMenu v-if="room&&slash.items.value.length" :items="slash.items.value" :active="slash.active.value" @hover="slash.active.value=$event" @pick="slash.complete"/>
@@ -96,6 +96,14 @@ const toGroups=()=>w.toGroups();
 const isAdmin=computed(()=>w.user.value?.role==='admin');
 const scroll=ref(null),draft=ref(''),error=ref(''),sending=ref(false),previewFile=ref(null),foundId=ref(null),searchText=ref('');
 const panel=ref(null),settingsOpen=ref(false);
+// Replying to a message of the room, as in an agent's chat:
+// the button beside copy, a swipe or the long-press menu; the line over the box until sent.
+const replyDraft=ref(null);
+function startReply(quote){
+ if(!quote?.id)return;
+ replyDraft.value=quote;
+ nextTick(()=>{const editor=page()?.querySelector('.chat-editor');if(editor&&!f7.device?.ios&&!f7.device?.android)editor.focus();});
+}
 const sidePanel=computed(()=>w.wideScreen.value&&room.value?.id===id.value?panel.value:null);
 const popup=computed(()=>!w.wideScreen.value?panel.value:null);
 const toggle=name=>{panel.value=panel.value===name?null:name;};
@@ -154,7 +162,8 @@ async function send(){
   // or anything else goes to it as a message, as in its own chat.
   const target=slashTarget.value;
   if(target&&isAdmin.value&&await slash.resolveTerminal(slashDraft.value)){await commandInGroup(id.value,target.member.id,slashDraft.value.trim());draft.value='';terminalFor.value=target.member;return;}
-  await sendToGroup(id.value,text,mention.current.value.map(m=>m.id));draft.value='';toBottom();
+  const quote=replyDraft.value;
+  await sendToGroup(id.value,text,mention.current.value.map(m=>m.id),quote?.id);draft.value='';if(replyDraft.value===quote)replyDraft.value=null;toBottom();
  }
  catch(e){f7.dialog.alert(ct(e.message),ct('傳送失敗'));}
  finally{sending.value=false;}
@@ -181,7 +190,7 @@ const drafts=new Map();
 function follow(route){
  const next=route?.path==='/group/'?route.query?.id:null;
  if(!next||next===id.value)return;
- drafts.set(id.value,draft.value);draft.value=drafts.get(next)||'';
+ drafts.set(id.value,{text:draft.value,reply:replyDraft.value});const kept=drafts.get(next);draft.value=kept?.text||'';replyDraft.value=kept?.reply||null;
  id.value=next;viewingGroup.value=next;room.value=null;error.value='';foundId.value=null;searchText.value='';terminalFor.value=null;
  refresh(true).then(toBottom);
 }
