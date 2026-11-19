@@ -243,7 +243,7 @@
  * group's name and one line of the latest; the members line is left to the room's navbar. */
 @media (min-width: 1280px) {
   html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .page-content > :is(.list.inset, .group-search-row),
-  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"]) .page-content > :is(.list.inset, .hosts-search-row) {
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"]) .page-content > :is(.list.inset, .hosts-search-row, .hosts-edit-row) {
     max-width: calc(100% - 20px);
     margin-left: auto;
     margin-right: auto;
@@ -253,6 +253,14 @@
     padding: 0;
     margin-top: 12px;
     margin-bottom: 16px;
+  }
+  /* Edit's row of buttons as the Agents column's (.select-all-row): its right end over the cards';
+   * a category's title in the Agents column's size. */
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"]) .hosts-edit-row {
+    margin-bottom: -16px;
+  }
+  html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"]) .host-group-title {
+    font-size: 14px;
   }
   html.list-detail-on #view-groups > .page[data-name="groups"].page-previous:has(+ .page[data-name="group"]) .group-list > ul > li,
   html.list-detail-on #view-terminal > .page[data-name="terminal-hosts"].page-previous:has(+ .page[data-name="terminal-host"]) .hosts-list > ul > li {

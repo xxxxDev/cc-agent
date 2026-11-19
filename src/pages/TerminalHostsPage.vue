@@ -22,7 +22,7 @@
     <f7-block v-else-if="error" class="hosts-error">{{ error }}</f7-block>
     <f7-list inset media-list sortable :sortable-enabled="editMode && !query && !savingLayout" :sortable-move-elements="false" class="hosts-list no-chevron" :class="{ editing: editMode }" @sortable:sort="reorder">
       <template v-for="row in rows" :key="row.kind + ':' + row.id">
-        <li v-if="row.kind === 'group'" class="host-group-row" :class="{ 'host-group-block': editMode, 'group-end': editMode && row.empty }" :data-group="row.id">
+        <li v-if="row.kind === 'group'" class="host-group-row" :class="{ 'host-group-block': editMode }" :data-group="row.id">
           <div class="host-group-title">
             <input v-if="editMode && renaming === row.id" v-focus class="host-group-name-input" :value="row.name" maxlength="40" :aria-label="ct('分類名稱')" @keydown.enter.prevent="$event.target.blur()" @keydown.esc.prevent="renaming = ''" @blur="finishRename(row, $event.target.value)" />
             <span v-else-if="editMode" class="host-group-name" role="button" tabindex="0" :title="ct('點一下改名')" @click="renaming = row.id" @keydown.enter="renaming = row.id">{{ row.name }}</span>
@@ -206,9 +206,10 @@ function moveGroups(ids) {
   saveLayout({ ...layout.value, groups: ids.map((id) => byId.get(id)).filter(Boolean) });
 }
 function addGroup() {
+  // A new category goes first among them, as a new group does on the Agents list.
   f7.dialog.prompt(ct('分類名稱'), ct('新增分類'), (name) => {
     name = String(name || '').trim(); if (!name) return;
-    saveLayout({ order: layout.value.order.length ? layout.value.order : rows.value.filter((r) => r.kind === 'host' && !r.group).map((r) => r.id), groups: [...layout.value.groups, { name, hosts: [] }] });
+    saveLayout({ order: layout.value.order.length ? layout.value.order : rows.value.filter((r) => r.kind === 'host' && !r.group).map((r) => r.id), groups: [{ name, hosts: [] }, ...layout.value.groups] });
   });
 }
 function finishRename(row, value) {
@@ -284,7 +285,10 @@ function remove(h) {
 .host-form-popup :deep(.list) { --f7-list-margin-vertical: 10px; }
 .hosts-search-row { padding: 0 var(--f7-list-inset-side-margin, 16px); margin: var(--f7-list-margin-vertical, 32px) 0; }
 @media (min-width: 1024px) { .hosts-search-row { max-width: min(828px, calc(100% - 32px)); margin-left: auto; margin-right: auto; padding: 0; } }
-.hosts-edit-row { display: flex; justify-content: flex-end; margin: -16px max(var(--f7-list-inset-side-margin, 16px), calc((100% - 828px) / 2)) 8px; }
+/* Placed as the Agents list's row of buttons in Edit (ChatListPage.vue .select-all-row): its right
+   end lines up with the cards, which sit 10px in while editing, not with the search box. */
+.hosts-edit-row { display: flex; justify-content: flex-end; gap: 6px; box-sizing: border-box; margin: 0 var(--f7-list-inset-side-margin, 16px) -8px; padding: 4px 10px; }
+@media (min-width: 1024px) { .hosts-edit-row { max-width: min(828px, calc(100% - 32px)); margin-left: auto; margin-right: auto; } }
 .hosts-edit-row :deep(.button) { display: inline-flex; gap: 6px; width: auto; padding: 0 12px; }
 /* A category's title is a row of the list, so a machine can be dragged past it, as on the Agents
    list (ChatListPage.vue): no card, the look of a block title; editing, a dashed line goes round
@@ -308,12 +312,20 @@ function remove(h) {
 .list.hosts-list.editing > ul > li:not(.host-group-row):not(.in-group):not(.host-group-slot) { margin-left: 10px; margin-right: 10px; }
 .list.hosts-list > ul > li.in-group { margin-left: 10px; margin-right: 10px; overflow: visible; position: relative; }
 .list.hosts-list > ul > li.host-group-block::before,
-.list.hosts-list > ul > li.in-group::before { content: ''; position: absolute; z-index: -1; pointer-events: none; left: -10px; right: -10px; top: 0; bottom: -10px; border: 1px dashed color-mix(in srgb, currentColor 30%, transparent); border-top: 0; border-bottom: 0; background: color-mix(in srgb, currentColor 4%, transparent); }
+.list.hosts-list > ul > li.in-group::before { content: ''; position: absolute; z-index: -1; pointer-events: none; left: -10px; right: -10px; top: 0; bottom: -10px; border: 1px dashed color-mix(in srgb, currentColor 30%, transparent); border-top: 0; border-bottom: 0; background: color-mix(in srgb, currentColor 4%, var(--f7-page-bg-color)); }
+/* As on the Agents list (ChatListPage.vue): each stretch 1px into the next, the fill solid, so no
+   seams between rows a fraction of a pixel tall on an iPhone; an empty category's slot drawn from
+   outside its own border. */
+.list.hosts-list > ul > li.in-group:not(.group-end)::before, .list.hosts-list > ul > li.host-group-block:not(.group-end)::before { bottom: -11px; }
+.list.hosts-list > ul > li.host-group-slot::before { top: -1px; left: -11px; right: -11px; bottom: -11px; }
 .list.hosts-list > ul > li.host-group-block::before { top: -2px; border-top: 1px dashed color-mix(in srgb, currentColor 30%, transparent); border-radius: 20px 20px 0 0; }
 .list.hosts-list > ul > li.group-end::before { border-bottom: 1px dashed color-mix(in srgb, currentColor 30%, transparent); border-bottom-left-radius: 20px; border-bottom-right-radius: 20px; }
 .list.hosts-list > ul > li.host-group-block.group-end::before { border-radius: 20px; }
 .list.hosts-list > ul > li.sorting::before { display: none; }
-.list.hosts-list > ul > li.host-group-slot { display: flex; align-items: center; justify-content: center; min-height: 64px; margin-bottom: 10px; border: 1px dashed color-mix(in srgb, currentColor 18%, transparent); border-radius: 16px; box-sizing: border-box; background: none; color: var(--dp-color-text-secondary); font-size: 14px; }
+.list.hosts-list > ul > li.host-group-slot { display: flex; align-items: center; justify-content: center; min-height: 64px; margin-bottom: 10px; border: 1px dashed color-mix(in srgb, currentColor 18%, transparent); border-radius: 16px; box-sizing: border-box; background: none; }
+/* Its words grey, not the slot itself: the frame's fill and line are drawn in the slot's colour, as
+   the title's are, so the two halves of an empty category are one shade. */
+.list.hosts-list > ul > li.host-group-slot p { margin: 0; color: var(--dp-color-text-secondary); font-size: 14px; }
 .host-group-block .host-group-name { cursor: text; }
 .host-group-delete { margin-left: auto; margin-right: -8px; }
 .list.hosts-list > ul > li.host-group-row.host-group-block { padding-right: 54px; }
