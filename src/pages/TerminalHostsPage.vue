@@ -274,7 +274,7 @@ function remove(h) {
     try { await api(`/hosts/${encodeURIComponent(h.id)}`, { method: 'DELETE' }); } catch (e) { return f7.dialog.alert(hostMessage(e.message)); }
     // The machine open beside the list: the column stays, saying to pick another; over the list
     // (a phone), back to the list.
-    if (viewingHost.value === h.id) { const router = f7.views?.get('#view-terminal')?.router; if (listDetailActive.value && router?.currentRoute?.path === '/terminal-host/') router.updateCurrentUrl('/terminal-host/?id='); else closeHost(); }
+    if (viewingHost.value === h.id) { const router = f7.views?.get('#view-terminal')?.router; if (listDetailActive.value && router?.currentRoute?.path === '/terminal-host/') router.updateCurrentUrl('/terminal-host/?id=&mode='); else closeHost(); }
     load();
   });
 }

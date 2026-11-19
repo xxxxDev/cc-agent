@@ -9,7 +9,10 @@ export const viewingHost = ref(null);
 
 export function openHost(h, mode = '') {
   const router = f7.views?.get('#view-terminal')?.router; if (!router) return;
-  const url = '/terminal-host/?id=' + encodeURIComponent(h.id) + (mode ? '&mode=' + mode : '');
+  // The mode always written, empty too: an address updated in place keeps the query keys it does
+  // not name (Framework7 merges them), so a machine opened by its SSH button left the next one
+  // tapped connecting at once.
+  const url = '/terminal-host/?id=' + encodeURIComponent(h.id) + '&mode=' + mode;
   const cur = router.currentRoute;
   if (cur.path === '/terminal-host/') {
     if (cur.query?.id === h.id && (cur.query?.mode || '') === mode) return;
