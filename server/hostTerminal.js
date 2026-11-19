@@ -13,7 +13,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
-const net = require('node:net');
 const crypto = require('node:crypto');
 const {execFileSync, spawn} = require('node:child_process');
 const agentEnv = require('../channel/agentEnv.cjs');
@@ -322,28 +321,22 @@ function create({stateRoot, run = execFileSync, spawnFn = spawn, pty = null, hom
     for (const name of out.split('\n')) if (/^h-[^-]+-local-\d+$/.test(name)) { try { tmux(['kill-session', '-t', '=' + name]); } catch {} }
   }
 
-  // ---- reachability: a connection to its port, or unknown behind a proxy.
-  // Whether a machine answers on its SSH port, kept a minute per address: each look opens and drops
-  // a connection, which a server's log, and a fail2ban or CrowdSec there, sees;
-  // pages open at once share one look.
-  const reached = new Map();
-  function reach(h) {
+  // ---- connected: whether this computer holds a signed-in SSH connection to the machine now: the light
+  // tells of a live connection, not of a port that answers.
+  // Its terminals and SFTP share one master connection (ControlMaster), which `ssh -O check` asks
+  // about over the local control socket alone: nothing goes to the machine, a proxy is not started,
+  // and a machine never connected to answers at once. Without the control socket (its path too
+  // long), a terminal whose ssh still runs stands for it. This computer is always on.
+  function reach(h, userId = '', out = null) {
     if (h.kind === 'local') return Promise.resolve('online');
-    if (h.proxy) return Promise.resolve('unknown');
-    const key = h.host + ':' + (h.port || 22), kept = reached.get(key);
-    if (kept && now() - kept.at < 60000) return kept.value;
-    const value = probe(h);
-    reached.set(key, {at: now(), value});
-    if (reached.size > 500) reached.delete(reached.keys().next().value);
-    return value;
-  }
-  function probe(h) {
+    if (!controlOk) return Promise.resolve(userId && tabs(userId, h.id, out ?? sessions()).some((t) => !t.running) ? 'online' : 'offline');
     return new Promise((resolve) => {
-      const s = net.connect({host: h.host, port: h.port || 22});
-      const done = (v) => { s.destroy(); resolve(v); };
-      s.setTimeout(1500, () => done('offline'));
-      s.once('connect', () => done('online'));
-      s.once('error', () => done('offline'));
+      let child;
+      try { child = spawnFn(SSH, ['-O', 'check', ...common(), ...hostOptions(h), '--', destination(h)], {env: env(), cwd: home, stdio: 'ignore'}); }
+      catch { return resolve('offline'); }
+      const timer = setTimeout(() => { try { child.kill('SIGKILL'); } catch {} resolve('offline'); }, 3000);
+      child.once('error', () => { clearTimeout(timer); resolve('offline'); });
+      child.once('exit', (code) => { clearTimeout(timer); resolve(code === 0 ? 'online' : 'offline'); });
     });
   }
 

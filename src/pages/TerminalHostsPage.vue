@@ -153,16 +153,14 @@ async function load() {
   catch (e) { error.value = hostMessage(e.message); return; }
   look();
 }
-// Whether each machine answers: when the tab opens or comes back, at most once a minute (the
-// server keeps the answer as long), never on the list's own refresh, which only reads tmux here.
-let lookedAt = 0;
+// Which machines this computer is connected to now (green), read here only, nothing sent to
+// them: when the tab opens or comes back, and with the list's own refresh.
 async function look() {
-  if (Date.now() - lookedAt < 60000) return;
-  lookedAt = Date.now();
   try { const r = await api('/hosts/status'); status.value = r.status || {}; } catch {}
 }
 async function refresh() {
   try { const r = await api('/hosts'); hosts.value = r.hosts || []; layout.value = r.layout || { order: [], groups: [] }; hiddenCount.value = r.hidden || 0; } catch {}
+  look();
 }
 // Kept current while the tab is in front, as the Groups list is: what runs in a machine's
 // terminals, and whether it can be reached, every so often.

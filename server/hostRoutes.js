@@ -25,7 +25,8 @@ module.exports = function installHostRoutes(app, {hosts = require('./hostTermina
   app.put('/api/hosts-layout', wrap((req, res) => { const l = hosts.setLayout(req.userId, req.body || {}); note(req, 'host-layout', {groups: l.groups.length}); res.json(l); }));
   app.get('/api/hosts/status', wrap(async (req, res) => {
     const all = hosts.list(req.userId);
-    const states = await Promise.all(all.map((h) => hosts.reach(h)));
+    const out = hosts.sessions();
+    const states = await Promise.all(all.map((h) => hosts.reach(h, req.userId, out)));
     res.json({status: Object.fromEntries(all.map((h, i) => [h.id, states[i]]))});
   }));
   app.post('/api/hosts', wrap((req, res) => { const h = hosts.add(req.userId, req.body || {}); note(req, 'host-add', {host: h.id}); res.json(view(req.userId, {...h, kind: 'saved'})); }));
