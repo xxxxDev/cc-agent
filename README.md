@@ -100,6 +100,14 @@ Open an agent's profile to set its job, memory, model and what it may touch. Swi
   <img src=".github/assets/screens/desktop-transcript-dark.png" alt="The transcript inspector with tool calls, tokens and cost">
 </p>
 
+## Your other machines, too
+
+Admins get a **Terminal** tab: this computer's own shell, and the machines you add or keep in `~/.ssh/config`, each with SSH terminals side by side and a two-sided SFTP view to move files between this computer, the machine and your device. Order them and put them in categories; a green light means this computer is connected to that machine now ([details](docs/FEATURES.md#the-terminal-tab-ssh-and-sftp-admins)).
+
+<p align="center">
+  <img src=".github/assets/anim/hosts-desktop-dark.svg" alt="On a computer: a machine opened beside the list, two SSH terminals side by side, then SFTP and a file dragged across with its progress">
+</p>
+
 ## Requirements
 
 A Mac with Apple silicon, where CC Agent is built and used. For other systems, see [Limits](#limits).
@@ -151,7 +159,7 @@ Most of the product's own values (storage keys, labels, settings) live in `serve
 
 - **Tested on macOS with Apple silicon only.** On another system, check it yourself: the notes below are a starting point, and an issue saying what you had to change is welcome.
 - **Linux:** install a C++ build toolchain before `npm install`. node-pty, used by the terminal view, ships no prebuilt binary for Linux and is compiled on install. Scoped agents also need `bubblewrap` and `socat` for Claude Code's sandbox.
-- **Windows (experimental):** it runs natively on Windows 11 with [psmux](https://psmux.pages.dev) in place of tmux (`scoop install psmux` puts a `tmux.exe` on your PATH), or inside WSL. Natively you need a native `claude.exe` installation; the npm `claude.cmd` alone cannot start an agent. You also need [Git for Windows](https://git-scm.com/download/win): Claude Code runs its shell tool through Git's `bash.exe`, which CC Agent finds by itself (or set `CLAUDE_CODE_GIT_BASH_PATH`). The difference there: only **full-access** agents run, and a new agent starts with full access. Claude Code has no sandbox on Windows, so a scoped agent refuses to start and says why.
+- **Windows (experimental):** it runs natively on Windows 11 with [psmux](https://psmux.pages.dev) in place of tmux (`scoop install psmux` puts a `tmux.exe` on your PATH), or inside WSL. Natively you need a native `claude.exe` installation; the npm `claude.cmd` alone cannot start an agent. You also need [Git for Windows](https://git-scm.com/download/win): Claude Code runs its shell tool through Git's `bash.exe`, which CC Agent finds by itself (or set `CLAUDE_CODE_GIT_BASH_PATH`). The difference there: only **full-access** agents run, and a new agent starts with full access. Claude Code has no sandbox on Windows, so a scoped agent refuses to start and says why. The **Terminal** tab is not available on Windows.
 - **macOS-only parts:** background scripts in schedules run only on macOS, in its sandbox. The Claude usage meter reads Claude Code's login from the macOS Keychain, or on Windows from `~/.claude/.credentials.json`; on Linux it is not available.
 
 ## Documentation

@@ -100,6 +100,14 @@ CC Agent 跑在你自己的 Mac 上。你建立的每個 agent，都是 tmux 裡
   <img src=".github/assets/screens/desktop-transcript-dark.png" alt="Transcript 檢視：工具使用、token 與費用">
 </p>
 
+## 你的其他機器也在這裡
+
+管理員多一個「終端機」分頁：這台電腦自己的 shell，以及你新增或 `~/.ssh/config` 裡的機器。每台都能開多個 SSH 終端機並排，也有左右兩欄的 SFTP，在這台電腦、那台機器和你的裝置之間搬檔案。可以排順序、分類；綠燈表示這台電腦現在跟它連著（[詳細說明](docs/FEATURES.zh-TW.md#終端機頁ssh-與-sftp管理員)）。
+
+<p align="center">
+  <img src=".github/assets/anim/hosts-desktop-dark.svg" alt="電腦上：在清單旁打開一台機器，兩個 SSH 終端機並排，接著切到 SFTP 把檔案拖過去並顯示進度">
+</p>
+
 ## 需求
 
 一台 Apple 晶片的 Mac，CC Agent 就是在上面開發與使用的。其他系統見[限制](#限制)。
@@ -151,7 +159,7 @@ npm start
 
 - **只在 Apple 晶片的 macOS 上測試過。** 在其他系統上請自行確認：下面幾點可以當起點，也歡迎開 issue 說明你改了哪些地方。
 - **Linux：** `npm install` 之前先裝好 C++ 編譯工具。終端機檢視用的 node-pty 沒有 Linux 的現成版本，安裝時會現場編譯。限定範圍的 agent 另外需要 `bubblewrap` 和 `socat`，Claude Code 的沙盒要用到。
-- **Windows（實驗性）：** 可以在 Windows 11 原生執行，用 [psmux](https://psmux.pages.dev) 取代 tmux（`scoop install psmux` 會把 `tmux.exe` 放進 PATH），也可以在 WSL 裡執行。原生執行需要原生安裝的 `claude.exe`，只有 npm 的 `claude.cmd` 無法啟動 agent。另外還需要 [Git for Windows](https://git-scm.com/download/win)：Claude Code 的 shell 工具要透過 Git 的 `bash.exe` 執行，CC Agent 會自己找到它（也可以用 `CLAUDE_CODE_GIT_BASH_PATH` 指定）。Windows 上的差異：只能執行**完整權限**的 agent，新建的 agent 也預設完整權限。Windows 上的 Claude Code 沒有沙盒，限定範圍的 agent 會拒絕啟動並說明原因。
+- **Windows（實驗性）：** 可以在 Windows 11 原生執行，用 [psmux](https://psmux.pages.dev) 取代 tmux（`scoop install psmux` 會把 `tmux.exe` 放進 PATH），也可以在 WSL 裡執行。原生執行需要原生安裝的 `claude.exe`，只有 npm 的 `claude.cmd` 無法啟動 agent。另外還需要 [Git for Windows](https://git-scm.com/download/win)：Claude Code 的 shell 工具要透過 Git 的 `bash.exe` 執行，CC Agent 會自己找到它（也可以用 `CLAUDE_CODE_GIT_BASH_PATH` 指定）。Windows 上的差異：只能執行**完整權限**的 agent，新建的 agent 也預設完整權限。Windows 上的 Claude Code 沒有沙盒，限定範圍的 agent 會拒絕啟動並說明原因。「終端機」分頁在 Windows 上不能用。
 - **只能在 macOS 用的部分：** 排程的背景腳本只在 macOS 上執行，用它的沙盒。Claude 用量從 macOS 鑰匙圈讀 Claude Code 的登入，Windows 上改讀 `~/.claude/.credentials.json`；Linux 上沒有這項。
 
 ## 文件
