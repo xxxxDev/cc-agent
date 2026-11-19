@@ -276,7 +276,7 @@ function remove(h) {
 </script>
 
 <style scoped>
-.hosts-search-row { padding: 0 16px; margin: var(--f7-list-margin-vertical, 32px) 0; }
+.hosts-search-row { padding: 0 var(--f7-list-inset-side-margin, 16px); margin: var(--f7-list-margin-vertical, 32px) 0; }
 @media (min-width: 1024px) { .hosts-search-row { max-width: min(828px, calc(100% - 32px)); margin-left: auto; margin-right: auto; padding: 0; } }
 .hosts-edit-row { display: flex; justify-content: flex-end; margin: -16px max(var(--f7-list-inset-side-margin, 16px), calc((100% - 828px) / 2)) 8px; }
 .hosts-edit-row :deep(.button) { display: inline-flex; gap: 6px; width: auto; padding: 0 12px; }

@@ -102,7 +102,7 @@ watch(activeTab, (tab) => { if (tab === 'view-groups') load(); });
 </script>
 
 <style scoped>
-.group-search-row { padding: 0 16px; margin: var(--f7-list-margin-vertical, 32px) 0; }
+.group-search-row { padding: 0 var(--f7-list-inset-side-margin, 16px); margin: var(--f7-list-margin-vertical, 32px) 0; }
 @media (min-width: 1024px) { .group-search-row { max-width: min(828px, calc(100% - 32px)); margin-left: auto; margin-right: auto; padding: 0; } }
 .group-state, .group-empty { color: var(--cc-color-text-secondary); line-height: 1.5; }
 .list.group-list > ul > li.swipeout { border-radius: var(--cc-radius-card); }
