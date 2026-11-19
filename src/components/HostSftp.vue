@@ -33,19 +33,28 @@
           <div v-if="state[p.key].loading && !state[p.key].entries.length" class="sftp-note"><f7-preloader :size="20" /></div>
           <div v-else-if="state[p.key].error" class="sftp-note sftp-error">{{ state[p.key].error }}</div>
           <div v-else-if="!state[p.key].entries.length" class="sftp-note">{{ ct('這個資料夾是空的') }}</div>
-          <div v-for="e in state[p.key].entries" :key="e.name" class="sftp-row sftp-item"
-            :class="{ selected: selected[p.key].has(e.name), 'drop-folder': dropFolder === p.key + '/' + e.name, ticks: touch || narrow }"
+          <!-- On a touch screen a row is drawn left to the long press's actions as round buttons, as
+               a machine is on the list. -->
+          <ul class="sftp-items">
+          <li v-for="e in state[p.key].entries" :key="e.name" class="sftp-item"
+            :class="{ swipeout: touch, selected: selected[p.key].has(e.name), 'drop-folder': dropFolder === p.key + '/' + e.name }"
             :draggable="!touch" @dragstart="dragStart(p.key, e, $event)" @dragend="dragEnd"
             @dragover.prevent.stop="e.dir && dragOverFolder(p.key, e, $event)" @drop.prevent.stop="dropped(p.key, e.dir ? e : null, $event)"
             @click="clicked(p.key, e, $event)" @dblclick="open(p.key, e)" @contextmenu.prevent.stop="menuFor(p.key, e, $event)"
             @touchstart.passive="pressStart(p.key, e, $event)" @touchend="pressEnd($event)" @touchmove.passive="pressEnd($event)">
+            <div class="sftp-row" :class="{ 'swipeout-content': touch, ticks: touch || narrow }">
             <!-- On a touch screen a tick picks several, as Edit on the Agents list does. -->
             <f7-button v-if="touch || narrow" class="sftp-select" :icon-f7="selected[p.key].has(e.name) ? 'checkmark_circle_fill' : 'circle'" role="checkbox" :aria-checked="String(selected[p.key].has(e.name))" :aria-label="ct('選取') + ' ' + e.name" @click.stop="toggle(p.key, e)" />
             <span class="sftp-name"><i class="icon f7-icons" :class="e.dir ? 'is-dir' : 'is-file'">{{ e.dir ? 'folder_fill' : e.link ? 'link' : 'doc' }}</i><span class="sftp-text">{{ e.name }}</span></span>
             <span v-if="!narrow" class="sftp-meta">{{ when(e.modified) }}</span>
             <span v-if="!narrow" class="sftp-meta">{{ e.dir ? '—' : size(e.size) }}</span>
             <span v-else class="sftp-meta">{{ e.dir ? '' : size(e.size) + ' · ' }}{{ when(e.modified) }}</span>
-          </div>
+            </div>
+            <div v-if="touch" class="swipeout-actions-right sftp-swipe">
+              <a v-for="x in rowActions(p.key, e)" :key="x.value" href="#" class="swipe-round" :class="x.danger ? 'delete' : 'edit'" :aria-label="x.label + ' ' + e.name" @click.prevent.stop="swiped(p.key, e, x.value, $event)"><span class="swipe-circle"><i class="icon f7-icons">{{ x.f7 }}</i></span></a>
+            </div>
+          </li>
+          </ul>
         </div>
         <div v-if="dropOn === p.key" class="sftp-drop-tip">{{ dropTip(p.key) }}</div>
       </section>
@@ -122,6 +131,9 @@ function open(key, e) { if (e.dir) load(key, join(key, state[key].path, e.name))
 const anchor = { local: '', remote: '' };
 function toggle(key, e) { const set = new Set(selected[key]); set.has(e.name) ? set.delete(e.name) : set.add(e.name); selected[key] = set; anchor[key] = e.name; }
 function clicked(key, e, ev) {
+  // A row drawn open: a tap on it closes it, as on the machine list.
+  const li = ev.currentTarget?.closest?.('.swipeout');
+  if (li?.classList.contains('swipeout-opened')) { try { f7.swipeout.close(li); } catch {} return; }
   if (touch || props.narrow) { if (selected[key].size > 1) return toggle(key, e); if (e.dir) return open(key, e); selected[key] = new Set([e.name]); return; }
   // Shift picks the run from the last one clicked, as a file manager does.
   if (ev.shiftKey && anchor[key]) {
@@ -256,6 +268,18 @@ async function op(key, body) {
   catch (e) { f7.dialog.alert(hostMessage(e.message)); }
   load(key);
 }
+// A row's own actions, the long press's for it (menuItems) less those about the whole folder.
+const ROW_ONLY = new Set(['refresh', 'mkdir', 'upload']);
+function rowActions(key, e) {
+  const across = key === 'local' ? fmt('傳到 {name}', { name: props.host.name }) : ct('傳到本機');
+  return [{ value: 'send', label: across, f7: key === 'local' ? 'arrow_right' : 'arrow_left' }, e.dir ? { value: 'open', label: ct('打開'), f7: 'folder' } : { value: 'device', label: ct('下載到這台裝置'), f7: 'arrow_down_doc' }, { value: 'rename', label: ct('重新命名'), f7: 'pencil' }, ...(e.link ? [] : [{ value: 'chmod', label: ct('修改權限'), f7: 'lock' }]), { value: 'delete', label: ct('刪除'), f7: 'trash', danger: true }].filter((x) => !ROW_ONLY.has(x.value));
+}
+function swiped(key, e, value, ev) {
+  try { f7.swipeout.close(ev.currentTarget.closest('.swipeout')); } catch {}
+  selected[key] = new Set([e.name]);
+  menu.value = { key, entry: e };
+  choose(value);
+}
 function choose(value) {
   const m = menu.value; menu.value = null; if (!m) return;
   const { key, entry: e } = m;
@@ -320,6 +344,19 @@ onUnmounted(() => { clearTimeout(poll); clearTimeout(pressTimer); });
 .narrow .sftp-row.ticks { grid-template-columns: auto minmax(0, 1fr) auto; }
 .sftp-colhead { color: var(--f7-list-item-subtitle-text-color, #8e8e93); font-size: 12px; font-weight: 600; border-top: none; padding-top: 4px; padding-bottom: 6px; }
 .sftp-list { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; }
+.sftp-items { list-style: none; margin: 0; padding: 0; }
+/* A swiped row's face is solid, the pane's own see-through card colour laid on the page's, so the
+   buttons stay under it until it slides. */
+.sftp-item.swipeout { --sftp-card: linear-gradient(var(--f7-list-bg-color, #1c1c1e), var(--f7-list-bg-color, #1c1c1e)); }
+.sftp-item.swipeout .swipeout-content { background: var(--sftp-card), var(--dp-color-page, #121212); }
+.sftp-item.swipeout.selected { background: transparent; }
+.sftp-item.swipeout.selected .swipeout-content { background: linear-gradient(color-mix(in srgb, var(--f7-theme-color) 22%, transparent), color-mix(in srgb, var(--f7-theme-color) 22%, transparent)), var(--sftp-card), var(--dp-color-page, #121212); }
+.sftp-swipe { display: flex; align-items: center; gap: 8px; padding: 0 10px 0 4px; background: transparent; }
+.sftp-swipe > a.swipe-round { background: transparent; padding: 0; min-width: 0; width: auto; height: auto; }
+.sftp-swipe .swipe-circle { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 17px; color: #fff; }
+.sftp-swipe .swipe-circle .icon { font-size: 16px; }
+.sftp-swipe .edit .swipe-circle { background: #8e8e93; }
+.sftp-swipe .delete .swipe-circle { background: #ff3b30; }
 .sftp-item { cursor: default; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .sftp-item.selected { background: color-mix(in srgb, var(--f7-theme-color) 22%, transparent); }
 .sftp-item.drop-folder { background: color-mix(in srgb, var(--f7-theme-color) 35%, transparent); }
