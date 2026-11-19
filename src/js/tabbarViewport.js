@@ -21,8 +21,14 @@ export function bindTabbarViewport({viewport=window.visualViewport}={}) {
     if(!bar||viewport.scale!==1)return;
     const parent=bar.offsetParent;
     if(!parent)return;
-    const overflow=Math.max(0,parent.getBoundingClientRect().bottom-(viewport.offsetTop+height()));
+    // A keyboard of ours up (a field in use, the screen short by more than a home bar): the bar
+    // stays at the foot behind it, as an iPhone app's tab bar does, rather than riding over the
+    // list on the keyboard's top. Toasts above still follow the keyboard.
+    const keyboard=typing()&&window.innerHeight-height()>STALE_SHORTFALL;
+    const overflow=keyboard?0:Math.max(0,parent.getBoundingClientRect().bottom-(viewport.offsetTop+height()));
     if(bar.style.bottom!==`${overflow}px`)bar.style.bottom=`${overflow}px`;
+    const hide=keyboard?'hidden':'';
+    if(bar.style.visibility!==hide)bar.style.visibility=hide;
   });};
   viewport.addEventListener('resize',sync);viewport.addEventListener('scroll',sync);
   window.addEventListener('resize',sync);
@@ -35,5 +41,5 @@ export function bindTabbarViewport({viewport=window.visualViewport}={}) {
   const observer=new MutationObserver(sync);
   observer.observe(document.getElementById('app'),{childList:true,subtree:true});
   sync();
-  return ()=>{cancelAnimationFrame(frame);later.forEach(clearTimeout);document.removeEventListener('visibilitychange',shown);window.removeEventListener('pageshow',again);window.removeEventListener('focus',again);document.removeEventListener('focusout',again);observer.disconnect();viewport.removeEventListener('resize',sync);viewport.removeEventListener('scroll',sync);window.removeEventListener('resize',sync);const bar=document.querySelector('.toolbar-layout-wrapper');if(bar)bar.style.bottom='';document.documentElement.style.removeProperty('--viewport-overflow');};
+  return ()=>{cancelAnimationFrame(frame);later.forEach(clearTimeout);document.removeEventListener('visibilitychange',shown);window.removeEventListener('pageshow',again);window.removeEventListener('focus',again);document.removeEventListener('focusout',again);observer.disconnect();viewport.removeEventListener('resize',sync);viewport.removeEventListener('scroll',sync);window.removeEventListener('resize',sync);const bar=document.querySelector('.toolbar-layout-wrapper');if(bar){bar.style.bottom='';bar.style.visibility='';}document.documentElement.style.removeProperty('--viewport-overflow');};
 }
