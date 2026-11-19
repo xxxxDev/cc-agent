@@ -11,8 +11,8 @@ import {ref, computed} from 'vue';
 import {PRODUCT} from './productConfig.js';
 import {embedded, splitView} from './embed.js';
 
-// The list column (320-360px) and the conversation with a side panel open still fit:
-// 1280 less the open sidebar (260) and the column leaves the conversation about 700px.
+// The list column (380-420px) and the conversation with a side panel open still fit:
+// 1280 less the open sidebar (260) and the column leaves the conversation about 640px.
 export const LIST_DETAIL_WIDE = '(min-width: 1280px)';
 const KEY = PRODUCT.storageKeys.listDetail;
 // On unless switched off on this device: no key yet, or no

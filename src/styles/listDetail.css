@@ -11,7 +11,9 @@
  * The Terminal tab too: its machines and one machine. */
 @media (min-width: 1280px) {
   html.list-detail-on :is(#view-chat, #view-groups, #view-terminal) {
-    --list-column: var(--list-column-set, clamp(320px, 25vw, 360px));
+    /* Wide enough by default for a machine's user@address in the Terminal tab; dragged, the
+     * width set is kept. */
+    --list-column: var(--list-column-set, clamp(380px, 28vw, 420px));
     --list-detail-motion: .32s cubic-bezier(.2, .8, .2, 1);
   }
   /* The list takes its column at once, with the conversation's own entrance as the motion: a
