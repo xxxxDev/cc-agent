@@ -168,7 +168,9 @@ async function refresh() {
 // terminals, and whether it can be reached, every so often.
 let timer = 0;
 watch(activeTab, (tab) => { if (tab === 'view-terminal') load(); });
-onMounted(() => { timer = setInterval(() => { if (activeTab.value === 'view-terminal' && !document.hidden && !editMode.value) refresh(); }, 8000); });
+// A list newly mounted (the tab built again, after signing in) has no machine open over it:
+// a mark left from before would keep the bottom bar hidden here.
+onMounted(() => { viewingHost.value = null; timer = setInterval(() => { if (activeTab.value === 'view-terminal' && !document.hidden && !editMode.value) refresh(); }, 8000); });
 onBeforeUnmount(() => clearInterval(timer));
 // Framework7 hides the page under the current one from assistive technology; as the column it is in use.
 function onPosition() { nextTick(() => { const el = document.querySelector('#view-terminal > .page[data-name="terminal-hosts"]'); if (listIsColumn(el, 'terminal-host')) el.removeAttribute('aria-hidden'); }); }
