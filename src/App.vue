@@ -121,7 +121,7 @@
               <span v-if="tb.id === 'view-chat' && unreadTotal" class="badge color-red tab-unread">{{ unreadLabel(unreadTotal) }}</span>
               <span class="tabbar-label">{{ t(tb.labelKey) }}</span>
             </a>
-            <span class="segmented-highlight"></span>
+            <span class="segmented-highlight" :class="{ 'highlight-settle': highlightSettle }" :style="{ '--f7-segmented-highlight-active': String(activeIndex) }"></span>
           </div>
         </div>
 
@@ -391,6 +391,19 @@ onUnmounted(() => {
   desktopQuery?.removeEventListener?.('change', onDesktopChange);
 });
 
+// The pill under the active tab follows the active tab by binding, so nothing can leave it on
+// another one: now and then the tapped tab's icon lit while the
+// pill stayed on the page before. Each time the bar comes back into view (it is hidden over an
+// open conversation, group or machine, and behind the keyboard) it is put in place without its
+// slide, as iOS could leave a slide begun while the bar was hidden undrawn.
+const activeIndex = computed(() => Math.max(0, tabs.value.findIndex((tb) => tb.id === active.value)));
+const highlightSettle = ref(false);
+function settleHighlight() { highlightSettle.value = true; requestAnimationFrame(() => requestAnimationFrame(() => { highlightSettle.value = false; })); }
+if (typeof document !== 'undefined') { document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') settleHighlight(); }); window.addEventListener('pageshow', settleHighlight); }
+// The bar shown again (v-show takes its display away and gives it back).
+let barObserver = null;
+onMounted(() => { const bar = segRef.value?.closest?.('.toolbar-layout-wrapper'); if (!bar || typeof MutationObserver === 'undefined') return; let hidden = bar.style.display === 'none'; barObserver = new MutationObserver(() => { const now = bar.style.display === 'none'; if (hidden && !now) settleHighlight(); hidden = now; }); barObserver.observe(bar, { attributes: true, attributeFilter: ['style'] }); });
+onUnmounted(() => barObserver?.disconnect());
 function positionHighlight() {
   const seg = segRef.value;
   if (!seg) return;

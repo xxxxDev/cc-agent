@@ -643,6 +643,10 @@ img[src$="/sources/anthropic-native.svg"] {
   height: 53px;
   box-shadow: none;
 }
+/* Put in place without its slide as the bar comes back into view (App.vue settleHighlight). */
+.cc-app .toolbar-views-ui__segmented-toolbar .segmented-highlight.highlight-settle {
+  transition: none;
+}
 
 @media (min-width: 1024px) {
   .cc-app .toolbar-layout-wrapper {
