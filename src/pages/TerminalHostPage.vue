@@ -8,10 +8,10 @@
     <f7-navbar>
       <f7-nav-left><f7-link class="back" icon-only :data-animate="listDetailActive ? 'false' : null" :aria-label="t('back')" @click="closeHost"><i class="icon icon-back" /></f7-link></f7-nav-left>
       <f7-nav-title sliding><span class="nav-agent-name">{{ host ? host.name : '' }}</span></f7-nav-title>
-      <f7-nav-right v-if="host && host.kind !== 'local' && mode">
+      <f7-nav-right v-if="host && mode">
         <div class="host-switch segmented segmented-strong">
-          <a class="button" :class="{ 'button-active': mode === 'ssh' }" href="#" aria-label="SSH" @click.prevent="mode = 'ssh'"><i class="icon" v-html="TERMINAL_ICON"></i><span class="host-switch-label">SSH</span></a>
-          <a class="button" :class="{ 'button-active': mode === 'sftp' }" href="#" aria-label="SFTP" @click.prevent="mode = 'sftp'"><i class="icon f7-icons">folder</i><span class="host-switch-label">SFTP</span></a>
+          <a class="button" :class="{ 'button-active': mode === 'ssh' }" href="#" :aria-label="host.kind === 'local' ? ct('終端機') : 'SSH'" @click.prevent="mode = 'ssh'"><i class="icon" v-html="TERMINAL_ICON"></i><span class="host-switch-label">{{ host.kind === 'local' ? ct('終端機') : 'SSH' }}</span></a>
+          <a class="button" :class="{ 'button-active': mode === 'sftp' }" href="#" :aria-label="host.kind === 'local' ? ct('檔案') : 'SFTP'" @click.prevent="mode = 'sftp'"><i class="icon f7-icons">folder</i><span class="host-switch-label">{{ host.kind === 'local' ? ct('檔案') : 'SFTP' }}</span></a>
           <span class="segmented-highlight"></span>
         </div>
       </f7-nav-right>

@@ -1,12 +1,12 @@
 <template>
   <!-- One machine on the right of the Terminal tab, or the whole page on a phone: its SSH
-       terminals or its files, switched at the top (this computer has its terminal only). -->
+       terminals or its files, switched at the top (this computer: its terminal and its own files). -->
   <div class="host-panel" :class="{ narrow }">
     <header v-if="!bare" class="host-panel-head">
       <span class="host-panel-title">{{ host.name }}</span>
-      <div v-if="host.kind !== 'local'" class="host-panel-switch segmented segmented-strong">
-        <a class="button" :class="{ 'button-active': mode === 'ssh' }" href="#" @click.prevent="$emit('mode', 'ssh')"><i class="icon" v-html="TERMINAL_ICON"></i> SSH</a>
-        <a class="button" :class="{ 'button-active': mode === 'sftp' }" href="#" @click.prevent="$emit('mode', 'sftp')"><i class="icon f7-icons">folder</i> SFTP</a>
+      <div class="host-panel-switch segmented segmented-strong">
+        <a class="button" :class="{ 'button-active': mode === 'ssh' }" href="#" @click.prevent="$emit('mode', 'ssh')"><i class="icon" v-html="TERMINAL_ICON"></i> {{ host.kind === 'local' ? ct('終端機') : 'SSH' }}</a>
+        <a class="button" :class="{ 'button-active': mode === 'sftp' }" href="#" @click.prevent="$emit('mode', 'sftp')"><i class="icon f7-icons">folder</i> {{ host.kind === 'local' ? ct('檔案') : 'SFTP' }}</a>
       </div>
     </header>
     <div class="host-panel-body">
@@ -18,10 +18,10 @@
         <div v-if="host.tabs && host.tabs.length" class="host-overview-sub">{{ fmt(ct('{n} 個終端機開著'), { n: host.tabs.length }) }}</div>
         <div class="host-overview-buttons">
           <f7-button fill round large @click="$emit('mode', 'ssh')"><i class="icon" v-html="TERMINAL_ICON"></i>{{ host.kind === 'local' ? ct('開啟終端機') : ct('SSH 連線') }}</f7-button>
-          <f7-button v-if="host.kind !== 'local'" tonal round large @click="$emit('mode', 'sftp')"><i class="icon f7-icons">folder</i>{{ ct('SFTP 檔案') }}</f7-button>
+          <f7-button tonal round large @click="$emit('mode', 'sftp')"><i class="icon f7-icons">folder</i>{{ host.kind === 'local' ? ct('瀏覽檔案') : ct('SFTP 檔案') }}</f7-button>
         </div>
       </div>
-      <HostSftp v-else-if="mode === 'sftp' && host.kind !== 'local'" :host="host" :narrow="narrow" :local-name="localName" />
+      <HostSftp v-else-if="mode === 'sftp'" :host="host" :narrow="narrow" :local-name="localName" />
       <HostSsh v-else :host="host" />
     </div>
   </div>

@@ -3,7 +3,7 @@
        right, side by side; a file goes across by dragging it, or from its menu (right click,
        or a long press on a touch screen). On a phone one side at a time, switched above. -->
   <div class="sftp" :class="{ narrow }">
-    <div v-if="narrow" class="sftp-switch segmented segmented-strong">
+    <div v-if="narrow && !solo" class="sftp-switch segmented segmented-strong">
       <a class="button" :class="{ 'button-active': side === 'local' }" href="#" @click.prevent="side = 'local'">{{ ct('本機') }}</a>
       <a class="button" :class="{ 'button-active': side === 'remote' }" href="#" @click.prevent="side = 'remote'">{{ host.name }}</a>
       <span class="segmented-highlight"></span>
@@ -95,7 +95,9 @@ const blank = () => ({ path: '', display: '', parent: null, entries: [], loading
 const state = reactive({ local: blank(), remote: blank() });
 const selected = reactive({ local: new Set(), remote: new Set() });
 const panes = [{ key: 'local' }, { key: 'remote' }];
-const shownPanes = computed(() => (props.narrow ? panes.filter((p) => p.key === side.value) : panes));
+// This computer itself: its own files alone, one pane, nothing to send across.
+const solo = computed(() => props.host.kind === 'local');
+const shownPanes = computed(() => (solo.value ? panes.slice(0, 1) : props.narrow ? panes.filter((p) => p.key === side.value) : panes));
 const idOf = (key) => (key === 'local' ? 'local' : props.host.id);
 const otherOf = (key) => (key === 'local' ? 'remote' : 'local');
 
@@ -260,7 +262,7 @@ const menuItems = computed(() => {
   const m = menu.value; if (!m) return [];
   const across = m.key === 'local' ? fmt('傳到 {name}', { name: props.host.name }) : ct('傳到本機');
   return m.entry
-    ? [{ value: 'send', label: across, f7: m.key === 'local' ? 'arrow_right' : 'arrow_left' }, ...(m.entry.dir ? [{ value: 'open', label: ct('打開'), f7: 'folder' }] : [{ value: 'device', label: ct('下載到這台裝置'), f7: 'arrow_down_doc' }]), { value: 'rename', label: ct('重新命名'), f7: 'pencil' }, { value: 'delete', label: ct('刪除'), f7: 'trash', danger: true }, { value: 'refresh', label: ct('重新整理'), f7: 'arrow_clockwise' }, { value: 'mkdir', label: ct('新增資料夾'), f7: 'folder_badge_plus' }, ...(m.entry.link ? [] : [{ value: 'chmod', label: ct('修改權限'), f7: 'lock' }])]
+    ? [...(solo.value ? [] : [{ value: 'send', label: across, f7: m.key === 'local' ? 'arrow_right' : 'arrow_left' }]), ...(m.entry.dir ? [{ value: 'open', label: ct('打開'), f7: 'folder' }] : [{ value: 'device', label: ct('下載到這台裝置'), f7: 'arrow_down_doc' }]), { value: 'rename', label: ct('重新命名'), f7: 'pencil' }, { value: 'delete', label: ct('刪除'), f7: 'trash', danger: true }, { value: 'refresh', label: ct('重新整理'), f7: 'arrow_clockwise' }, { value: 'mkdir', label: ct('新增資料夾'), f7: 'folder_badge_plus' }, ...(m.entry.link ? [] : [{ value: 'chmod', label: ct('修改權限'), f7: 'lock' }])]
     : [{ value: 'upload', label: ct('從這台裝置上傳'), f7: 'arrow_up_doc' }, { value: 'refresh', label: ct('重新整理'), f7: 'arrow_clockwise' }, { value: 'mkdir', label: ct('新增資料夾'), f7: 'folder_badge_plus' }];
 });
 async function op(key, body) {
@@ -272,7 +274,7 @@ async function op(key, body) {
 const ROW_ONLY = new Set(['refresh', 'mkdir', 'upload']);
 function rowActions(key, e) {
   const across = key === 'local' ? fmt('傳到 {name}', { name: props.host.name }) : ct('傳到本機');
-  return [{ value: 'send', label: across, f7: key === 'local' ? 'arrow_right' : 'arrow_left' }, e.dir ? { value: 'open', label: ct('打開'), f7: 'folder' } : { value: 'device', label: ct('下載到這台裝置'), f7: 'arrow_down_doc' }, { value: 'rename', label: ct('重新命名'), f7: 'pencil' }, ...(e.link ? [] : [{ value: 'chmod', label: ct('修改權限'), f7: 'lock' }]), { value: 'delete', label: ct('刪除'), f7: 'trash', danger: true }].filter((x) => !ROW_ONLY.has(x.value));
+  return [{ value: 'send', label: across, f7: key === 'local' ? 'arrow_right' : 'arrow_left' }, e.dir ? { value: 'open', label: ct('打開'), f7: 'folder' } : { value: 'device', label: ct('下載到這台裝置'), f7: 'arrow_down_doc' }, { value: 'rename', label: ct('重新命名'), f7: 'pencil' }, ...(e.link ? [] : [{ value: 'chmod', label: ct('修改權限'), f7: 'lock' }]), { value: 'delete', label: ct('刪除'), f7: 'trash', danger: true }].filter((x) => !ROW_ONLY.has(x.value) && !(solo.value && x.value === 'send'));
 }
 function swiped(key, e, value, ev) {
   try { f7.swipeout.close(ev.currentTarget.closest('.swipeout')); } catch {}
@@ -312,7 +314,7 @@ function pressEnd(ev) { clearTimeout(pressTimer); if (ev?.type === 'touchmove') 
 const size = (n) => { if (!Number.isFinite(n)) return ''; if (n < 1024) return n + ' B'; const u = ['KB', 'MB', 'GB', 'TB']; let i = -1; do { n /= 1024; i += 1; } while (n >= 1024 && i < u.length - 1); return (n >= 10 ? Math.round(n) : n.toFixed(1)) + ' ' + u[i]; };
 const when = (m) => { if (!m) return ''; if (!/^\d{4}-/.test(m)) return m; const d = new Date(m); const pad = (x) => String(x).padStart(2, '0'); return `${d.getFullYear() === new Date().getFullYear() ? '' : d.getFullYear() + '/'}${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 
-function start() { state.local = blank(); state.remote = blank(); trail.local = freshTrail(); trail.remote = freshTrail(); load('local', '~'); load('remote', ''); refreshTransfers(); }
+function start() { state.local = blank(); state.remote = blank(); trail.local = freshTrail(); trail.remote = freshTrail(); load('local', '~'); if (!solo.value) load('remote', ''); refreshTransfers(); }
 watch(() => props.host.id, start);
 onMounted(start);
 onUnmounted(() => { clearTimeout(poll); clearTimeout(pressTimer); });

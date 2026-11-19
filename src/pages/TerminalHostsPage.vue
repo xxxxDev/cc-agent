@@ -57,7 +57,7 @@
           <template v-if="!editMode" #content-end>
             <span class="host-actions" @click.stop>
               <a href="#" class="host-action" :aria-label="row.host.kind === 'local' ? ct('終端機') : 'SSH'" :title="row.host.kind === 'local' ? ct('終端機') : 'SSH'" @click.prevent.stop="openHost(row.host, 'ssh')"><i class="icon" v-html="TERMINAL_ICON"></i></a>
-              <a v-if="row.host.kind !== 'local'" href="#" class="host-action" aria-label="SFTP" title="SFTP" @click.prevent.stop="openHost(row.host, 'sftp')"><i class="icon f7-icons">folder</i></a>
+              <a href="#" class="host-action" :aria-label="row.host.kind === 'local' ? ct('檔案') : 'SFTP'" :title="row.host.kind === 'local' ? ct('檔案') : 'SFTP'" @click.prevent.stop="openHost(row.host, 'sftp')"><i class="icon f7-icons">folder</i></a>
             </span>
           </template>
           <f7-swipeout-actions v-if="!editMode && row.host.kind !== 'local'" right>
