@@ -27,7 +27,7 @@ const english = {
 "分類太多了":"Too many categories",
 "分類名稱要 1 到 40 個字":"A category name must be 1 to 40 characters",
 "SSH 連線":"Connect with SSH",
-"SFTP 檔案":"SFTP files","瀏覽檔案":"Browse files","檔案":"Files",
+"SFTP 檔案":"SFTP files","瀏覽檔案":"Browse files","檔案":"Files","從左邊選一台機器":"Choose a machine on the left",
 "{n} 個終端機開著":"{n} terminals open",
 "還原成 ~/.ssh/config 的設定":"Reset to the ~/.ssh/config settings",
 "這台來自 ~/.ssh/config（{alias}）。改過的設定存在這頁，~/.ssh/config 不會被改；之後刪掉這頁的設定就回到原本的。":"This machine comes from ~/.ssh/config ({alias}). Your changes are kept on this page and ~/.ssh/config is not changed; restore it to go back to the original.",

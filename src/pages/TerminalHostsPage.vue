@@ -104,7 +104,7 @@ import { ct } from '../js/agent-i18n.js';
 import { TERMINAL_ICON } from '../js/terminalIcon.js';
 import GlassDropdown from '../components/GlassDropdown.vue';
 import { hostMessage } from '../js/hostText.js';
-import { listIsColumn } from '../js/listDetail.js';
+import { listIsColumn, listDetailActive } from '../js/listDetail.js';
 import { startGroupDrag } from '../js/groupDrag.js';
 import { viewingHost, openHost, closeHost } from '../js/hostView.js';
 import { sheetSwipe } from '../js/sheetSwipe.js';
@@ -143,7 +143,8 @@ const rows = computed(() => {
 });
 const busyOf = (h) => (h.tabs || []).some((x) => x.busy);
 function subtitle(h) {
-  if (h.kind === 'local') return h.user + ' · ' + ct('CC Agent 所在的電腦，不用登入');
+  // Short on its row: the longer words were cut off; its page says it in full.
+  if (h.kind === 'local') return h.user + ' · ' + ct('本機');
   const who = (h.user ? h.user + '@' : '') + (h.host || h.name) + (h.port && h.port !== 22 ? ':' + h.port : '');
   return who + (h.identityFile ? ' · ' + ct('指定金鑰') : '');
 }
@@ -271,7 +272,9 @@ function remove(h) {
   const what = h.kind === 'config' ? fmt('從清單刪掉「{name}」？~/.ssh/config 不會被改，之後可以在 Edit 找回。開著的終端機也會關掉。', { name: h.name }) : null;
   f7.dialog.confirm(what || (h.from ? fmt('「{name}」回到 ~/.ssh/config 的設定？開著的終端機也會關掉。', { name: h.name }) : fmt('刪除「{name}」？開著的終端機也會關掉。', { name: h.name })), h.from ? ct('還原') : ct('刪除主機'), async () => {
     try { await api(`/hosts/${encodeURIComponent(h.id)}`, { method: 'DELETE' }); } catch (e) { return f7.dialog.alert(hostMessage(e.message)); }
-    if (viewingHost.value === h.id) closeHost();
+    // The machine open beside the list: the column stays, saying to pick another; over the list
+    // (a phone), back to the list.
+    if (viewingHost.value === h.id) { const router = f7.views?.get('#view-terminal')?.router; if (listDetailActive.value && router?.currentRoute?.path === '/terminal-host/') router.updateCurrentUrl('/terminal-host/?id='); else closeHost(); }
     load();
   });
 }

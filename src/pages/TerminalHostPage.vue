@@ -18,6 +18,8 @@
     </f7-navbar>
     <div class="terminal-host-body">
       <HostPanel v-if="host" :key="host.id" :host="host" :mode="mode" :narrow="!listDetailActive" bare :local-name="localName" :status="status" @mode="mode = $event" />
+      <!-- The machine shown beside the list deleted: the column stays, with what to do here. -->
+      <p v-else-if="!id" class="host-hint">{{ ct('從左邊選一台機器') }}</p>
       <f7-block v-else-if="error" class="host-error">{{ error }}</f7-block>
       <f7-block v-else><f7-preloader /></f7-block>
     </div>
@@ -45,7 +47,7 @@ const mode = ref(pick(props.f7route?.query?.mode));
 const host = computed(() => hosts.value.find((h) => h.id === id.value) || null);
 const localName = computed(() => hosts.value.find((h) => h.kind === 'local')?.name || '');
 async function load() {
-  try { const r = await api('/hosts'); hosts.value = r.hosts || []; error.value = host.value ? '' : ct('找不到這台主機'); }
+  try { const r = await api('/hosts'); hosts.value = r.hosts || []; error.value = host.value || !id.value ? '' : ct('找不到這台主機'); }
   catch (e) { error.value = hostMessage(e.message); }
   // The title came after the navbar laid itself out: centred again for its real width.
   await nextTick(); try { document.querySelectorAll('.terminal-host-page .navbar').forEach((el) => f7.navbar.size(el)); } catch {}
@@ -81,6 +83,8 @@ onBeforeUnmount(() => { unbindViewport?.(); props.f7router?.off('routeUrlUpdate'
 @media (max-width: 599px) { .host-switch-label { display: none; } .host-switch .button { padding: 0 12px; } }
 .terminal-host-body { flex: 1; min-height: 0; padding: 8px 10px 10px; display: flex; flex-direction: column; }
 .host-error { color: var(--f7-color-red, #ff453a); }
+/* As the split view's empty pane says to pick an agent (SplitView.vue .split-empty). */
+.host-hint { margin: auto; color: var(--dp-color-text-secondary, #999); }
 </style>
 
 <style>
