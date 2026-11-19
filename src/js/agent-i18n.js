@@ -76,7 +76,7 @@ const english = {
 "CC Agent 不存密碼也不存金鑰：用這台電腦現有的 ssh 金鑰；要密碼的主機，在 SSH 分頁自己輸入。第一次連一台新主機時，終端機會問要不要信任它的指紋。":"CC Agent keeps no password or key: it uses this computer's own ssh keys, and for a machine that asks for a password you type it in its SSH tab. The first time you connect to a new machine, the terminal asks whether to trust its fingerprint.",
 "CC Agent 所在的電腦，不用登入":"The computer CC Agent runs on, no sign-in",
 "{n} 個項目":"{n} items",
-"上一層":"Up",
+"上一層":"Up","上一頁":"Back","下一頁":"Forward",
 "主機位址":"Address",
 "例如 公司伺服器":"e.g. Office server",
 "修改時間":"Modified",

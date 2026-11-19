@@ -21,7 +21,11 @@
           </span>
         </header>
         <div class="sftp-crumbs">
-          <a href="#" class="link sftp-up" :class="{ disabled: !state[p.key].parent }" :aria-label="ct('上一層')" @click.prevent="up(p.key)"><i class="icon f7-icons">chevron_left</i></a>
+          <!-- Back and forward through the folders this pane has shown, and up to the folder above,
+               as a file browser has them -->
+          <a href="#" class="link sftp-step" :class="{ disabled: !trail[p.key].back.length }" :aria-label="ct('上一頁')" :title="ct('上一頁')" @click.prevent="step(p.key, -1)"><i class="icon f7-icons">chevron_left</i></a>
+          <a href="#" class="link sftp-step" :class="{ disabled: !trail[p.key].forward.length }" :aria-label="ct('下一頁')" :title="ct('下一頁')" @click.prevent="step(p.key, 1)"><i class="icon f7-icons">chevron_right</i></a>
+          <a href="#" class="link sftp-step" :class="{ disabled: !state[p.key].parent }" :aria-label="ct('上一層')" :title="ct('上一層')" @click.prevent="up(p.key)"><i class="icon f7-icons">arrow_up</i></a>
           <span class="sftp-path" :title="state[p.key].path">{{ state[p.key].display || '…' }}</span>
         </div>
         <div v-if="!narrow" class="sftp-row sftp-colhead"><span>{{ ct('名稱') }}</span><span>{{ ct('修改時間') }}</span><span>{{ ct('大小') }}</span></div>
@@ -86,19 +90,34 @@ const shownPanes = computed(() => (props.narrow ? panes.filter((p) => p.key === 
 const idOf = (key) => (key === 'local' ? 'local' : props.host.id);
 const otherOf = (key) => (key === 'local' ? 'remote' : 'local');
 
-async function load(key, at) {
+// The folders each pane has been in: back pops the last, forward undoes a back; a new folder
+// opened clears what lay ahead, as a browser does. A refresh is no move.
+const freshTrail = () => ({ back: [], forward: [] });
+const trail = reactive({ local: freshTrail(), remote: freshTrail() });
+const turns = { local: 0, remote: 0 };
+async function load(key, at, move = 'go') {
   const s = state[key];
   s.loading = true; s.error = '';
+  const from = s.path, turn = ++turns[key];
   try {
     const r = await api(`/hosts/${encodeURIComponent(idOf(key))}/files?path=${encodeURIComponent(at ?? s.path ?? '')}`);
+    // Two taps in quick succession: only the last answer is shown and counted.
+    if (turn !== turns[key]) return;
+    if (from && r.path !== from) {
+      const t = trail[key];
+      if (move === 'back') { t.back.pop(); t.forward.push(from); }
+      else if (move === 'forward') { t.forward.pop(); t.back.push(from); }
+      else { if (t.back[t.back.length - 1] !== from) t.back.push(from); t.forward = []; }
+    }
     Object.assign(s, { path: r.path, display: r.display, parent: r.parent, entries: sortEntries(r.entries || []) });
     selected[key] = new Set();
-  } catch (e) { s.error = hostMessage(e.message) || ct('讀取失敗'); }
-  finally { s.loading = false; }
+  } catch (e) { if (turn === turns[key]) s.error = hostMessage(e.message) || ct('讀取失敗'); }
+  finally { if (turn === turns[key]) s.loading = false; }
 }
 const sortEntries = (list) => list.slice().sort((a, b) => (b.dir - a.dir) || a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
 const join = (key, dir, name) => (key === 'local' || dir.endsWith('/') ? (dir.endsWith('/') ? dir + name : dir + '/' + name) : dir + '/' + name);
 function up(key) { if (state[key].parent) load(key, state[key].parent); }
+function step(key, by) { const t = trail[key], list = by < 0 ? t.back : t.forward; if (list.length && !state[key].loading) load(key, list[list.length - 1], by < 0 ? 'back' : 'forward'); }
 function open(key, e) { if (e.dir) load(key, join(key, state[key].path, e.name)); }
 const anchor = { local: '', remote: '' };
 function toggle(key, e) { const set = new Set(selected[key]); set.has(e.name) ? set.delete(e.name) : set.add(e.name); selected[key] = set; anchor[key] = e.name; }
@@ -269,7 +288,7 @@ function pressEnd(ev) { clearTimeout(pressTimer); if (ev?.type === 'touchmove') 
 const size = (n) => { if (!Number.isFinite(n)) return ''; if (n < 1024) return n + ' B'; const u = ['KB', 'MB', 'GB', 'TB']; let i = -1; do { n /= 1024; i += 1; } while (n >= 1024 && i < u.length - 1); return (n >= 10 ? Math.round(n) : n.toFixed(1)) + ' ' + u[i]; };
 const when = (m) => { if (!m) return ''; if (!/^\d{4}-/.test(m)) return m; const d = new Date(m); const pad = (x) => String(x).padStart(2, '0'); return `${d.getFullYear() === new Date().getFullYear() ? '' : d.getFullYear() + '/'}${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 
-function start() { state.local = blank(); state.remote = blank(); load('local', '~'); load('remote', ''); refreshTransfers(); }
+function start() { state.local = blank(); state.remote = blank(); trail.local = freshTrail(); trail.remote = freshTrail(); load('local', '~'); load('remote', ''); refreshTransfers(); }
 watch(() => props.host.id, start);
 onMounted(start);
 onUnmounted(() => { clearTimeout(poll); clearTimeout(pressTimer); });
@@ -289,8 +308,11 @@ onUnmounted(() => { clearTimeout(poll); clearTimeout(pressTimer); });
 .sftp-tools { display: flex; gap: 14px; }
 .sftp-tools .icon { font-size: 19px; }
 .sftp-crumbs { display: flex; align-items: center; gap: 6px; padding: 2px 14px 8px; font-size: 13px; color: var(--f7-list-item-subtitle-text-color, #ebebf599); min-width: 0; }
-.sftp-up.disabled { opacity: .3; pointer-events: none; }
-.sftp-up .icon { font-size: 15px; }
+.sftp-step.disabled { opacity: .3; pointer-events: none; }
+/* Room enough for a finger, close together as a browser's. */
+.sftp-step { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 28px; margin: -4px -2px; }
+.sftp-step .icon { font-size: 16px; }
+.sftp-step + .sftp-path { margin-left: 6px; }
 .sftp-path { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sftp-row { display: grid; grid-template-columns: minmax(0, 1fr) 104px 72px; gap: 8px; padding: 8px 14px; font-size: 14px; align-items: center; border-top: 1px solid rgba(255, 255, 255, .06); }
 .narrow .sftp-row { grid-template-columns: minmax(0, 1fr) auto; }
