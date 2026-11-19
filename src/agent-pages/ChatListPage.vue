@@ -240,7 +240,14 @@ import {inject,ref,computed,nextTick} from "vue";import {listIsColumn} from "../
 .list.conversation-list > ul > li.in-group {margin-left:10px;margin-right:10px;overflow:visible;}
 .list.conversation-list > ul > li.agent-group-block::before,
 .list.conversation-list > ul > li.in-group::before {content:'';position:absolute;z-index:-1;pointer-events:none;left:-10px;right:-10px;top:0;bottom:-10px;
-  border:1px dashed color-mix(in srgb,currentColor 30%,transparent);border-top:0;border-bottom:0;background:color-mix(in srgb,currentColor 4%,transparent);}
+  border:1px dashed color-mix(in srgb,currentColor 30%,transparent);border-top:0;border-bottom:0;background:color-mix(in srgb,currentColor 4%,var(--f7-page-bg-color));}
+/* Each stretch reaches 1px into the next one's, and the fill is solid: on an iPhone the rows are
+   fractions of a pixel tall, and pieces that only touch left thin light or dark seams between them.
+   An empty group's slot draws its stretch from outside its own border, so the line and the fill
+   meet the title's. */
+.list.conversation-list > ul > li.in-group:not(.group-end)::before {bottom:-11px;}
+.list.conversation-list > ul > li.agent-group-block:not(.group-end)::before {bottom:-11px;}
+.list.conversation-list > ul > li.agent-group-slot::before {top:-1px;left:-11px;right:-11px;bottom:-11px;}
 .list.conversation-list > ul > li.agent-group-block::before {top:-2px;border-top:1px dashed color-mix(in srgb,currentColor 30%,transparent);border-radius:20px 20px 0 0;}
 .list.conversation-list > ul > li.group-end::before {border-bottom:1px dashed color-mix(in srgb,currentColor 30%,transparent);border-bottom-left-radius:20px;border-bottom-right-radius:20px;}
 .list.conversation-list > ul > li.agent-group-block.group-end::before {border-radius:20px;}
