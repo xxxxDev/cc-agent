@@ -6,6 +6,7 @@
     <div v-if="narrow" class="sftp-switch segmented segmented-strong">
       <a class="button" :class="{ 'button-active': side === 'local' }" href="#" @click.prevent="side = 'local'">{{ ct('本機') }}</a>
       <a class="button" :class="{ 'button-active': side === 'remote' }" href="#" @click.prevent="side = 'remote'">{{ host.name }}</a>
+      <span class="segmented-highlight"></span>
     </div>
     <div class="sftp-panes">
       <section v-for="p in shownPanes" :key="p.key" class="sftp-pane" :class="{ 'drop-target': dropOn === p.key }"
@@ -276,7 +277,8 @@ onUnmounted(() => { clearTimeout(poll); clearTimeout(pressTimer); });
 
 <style scoped>
 .sftp { display: flex; flex-direction: column; height: 100%; min-height: 0; gap: 10px; }
-.sftp-switch { margin: 0 4px; flex: 0 0 auto; }
+/* Across the page, so both names have room, and the lit side shown as on the SSH／SFTP switch. */
+.sftp-switch { margin: 0 4px; flex: 0 0 auto; align-self: stretch; width: auto; }
 .sftp-switch .button { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
 .sftp-panes { flex: 1; min-height: 0; display: flex; gap: 10px; }
 .sftp-pane { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--f7-list-bg-color, #1c1c1e); border-radius: 18px; overflow: hidden; outline: 2px dashed transparent; outline-offset: -2px; transition: outline-color .15s, background-color .15s; }

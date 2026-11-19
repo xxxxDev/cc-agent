@@ -3,7 +3,7 @@
        ways in, then its SSH terminals or its files. Over the list on a phone, beside it as the
        Groups tab's room is on a wide computer window (listDetail.js); the title small in the
        navbar. -->
-  <f7-page ref="pageRef" name="terminal-host" class="terminal-host-page" @page:afterin="load">
+  <f7-page ref="pageRef" name="terminal-host" class="terminal-host-page" @page:beforein="markShown" @page:afterin="load">
     <div v-if="listDetailActive" class="list-column-divider" role="separator" aria-orientation="vertical" :aria-label="ct('拖曳調整清單寬度')" :title="ct('拖曳調整清單寬度，按兩下恢復')" @pointerdown.stop="startListColumnResize" @dblclick="setListColumnWidth(null)" @mousedown.stop @touchstart.stop></div>
     <f7-navbar>
       <f7-nav-left><f7-link class="back" icon-only :data-animate="listDetailActive ? 'false' : null" :aria-label="t('back')" @click="closeHost"><i class="icon icon-back" /></f7-link></f7-nav-left>
@@ -63,9 +63,13 @@ function follow(route) {
 }
 // The soft keyboard handled as on an agent's terminal page: the page marked while it is up (the
 // terminal's keyboard button reads that) and the content kept above it (chatPage.css).
+// Marked open again each time this page comes in front.
+const markShown = () => { viewingHost.value = id.value; };
 let unbindViewport = null;
 onMounted(() => { viewingHost.value = id.value; load(); props.f7router?.on('routeUrlUpdate', follow); unbindViewport = bindConversationViewport(pageRef.value?.$el || null); });
-onBeforeUnmount(() => { unbindViewport?.(); props.f7router?.off('routeUrlUpdate', follow); if (viewingHost.value === id.value) viewingHost.value = null; });
+// A page of this machine going while another of it is the one shown (opened again before the
+// old one was taken away) leaves it marked open: the bottom bar stays hidden for the one shown.
+onBeforeUnmount(() => { unbindViewport?.(); props.f7router?.off('routeUrlUpdate', follow); if (viewingHost.value === id.value && props.f7router?.currentRoute?.path !== '/terminal-host/') viewingHost.value = null; });
 </script>
 
 <style scoped>
