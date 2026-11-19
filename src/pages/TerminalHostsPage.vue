@@ -234,7 +234,7 @@ const justSwiped = (e) => Date.now() - lastSwipe < 400 || !!e?.currentTarget?.cl
 function menuFor(h, ev) { const r = ev.currentTarget?.getBoundingClientRect?.(); menuPoint.value = { clientX: ev.clientX || (r ? r.left + r.width / 2 : 0), clientY: ev.clientY || (r ? r.top + r.height / 2 : 0) }; menu.value = h; }
 const menuItems = computed(() => {
   const h = menu.value; if (!h) return [];
-  if (h.kind === 'local') return [{ value: 'ssh', label: ct('開啟終端機'), svg: TERMINAL_ICON, f7: 'chevron_right_square' }];
+  if (h.kind === 'local') return [{ value: 'ssh', label: ct('開啟終端機'), svg: TERMINAL_ICON, f7: 'chevron_right_square' }, { value: 'sftp', label: ct('瀏覽檔案'), f7: 'folder' }];
   return [
     { value: 'ssh', label: ct('SSH 連線'), f7: 'chevron_right_square' },
     { value: 'sftp', label: ct('SFTP 檔案'), f7: 'folder' },

@@ -122,7 +122,13 @@ async function load(key, at, move = 'go') {
     }
     Object.assign(s, { path: r.path, display: r.display, parent: r.parent, entries: sortEntries(r.entries || []) });
     selected[key] = new Set();
-  } catch (e) { if (turn === turns[key]) s.error = hostMessage(e.message) || ct('讀取失敗'); }
+  } catch (e) {
+    if (turn !== turns[key]) return;
+    s.error = hostMessage(e.message) || ct('讀取失敗');
+    // A folder gone since it was visited: dropped from the way back or forward, so the button
+    // does not keep landing on it.
+    if (move === 'back') trail[key].back.pop(); else if (move === 'forward') trail[key].forward.pop();
+  }
   finally { if (turn === turns[key]) s.loading = false; }
 }
 const sortEntries = (list) => list.slice().sort((a, b) => (b.dir - a.dir) || a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
@@ -276,11 +282,11 @@ function rowActions(key, e) {
   const across = key === 'local' ? fmt('傳到 {name}', { name: props.host.name }) : ct('傳到本機');
   return [{ value: 'send', label: across, f7: key === 'local' ? 'arrow_right' : 'arrow_left' }, e.dir ? { value: 'open', label: ct('打開'), f7: 'folder' } : { value: 'device', label: ct('下載到這台裝置'), f7: 'arrow_down_doc' }, { value: 'rename', label: ct('重新命名'), f7: 'pencil' }, ...(e.link ? [] : [{ value: 'chmod', label: ct('修改權限'), f7: 'lock' }]), { value: 'delete', label: ct('刪除'), f7: 'trash', danger: true }].filter((x) => !ROW_ONLY.has(x.value) && !(solo.value && x.value === 'send'));
 }
+// The row slides shut first: picking it changes its classes, which Vue writes whole and would cut
+// Framework7's closing short.
 function swiped(key, e, value, ev) {
   try { f7.swipeout.close(ev.currentTarget.closest('.swipeout')); } catch {}
-  selected[key] = new Set([e.name]);
-  menu.value = { key, entry: e };
-  choose(value);
+  setTimeout(() => { selected[key] = new Set([e.name]); menu.value = { key, entry: e }; choose(value); }, 320);
 }
 function choose(value) {
   const m = menu.value; menu.value = null; if (!m) return;
