@@ -69,13 +69,14 @@
     </f7-list>
     <f7-block v-if="loaded && query && !rows.length" class="hosts-empty">{{ ct('沒有符合的主機') }}</f7-block>
 
-    <f7-popup class="host-form-popup" :opened="formOpen" push @popup:closed="formOpen = false">
+    <!-- A pushed card on a phone with its grabber, pulled down to close, as 新增 agent is
+         (AgentOverlays.vue): close at the left, the title, a tick to save at the right. -->
+    <f7-popup class="host-form-popup" :class="{ 'sheet-swipe': sheetSwipe }" :opened="formOpen" :swipe-to-close="sheetSwipe" :push="sheetSwipe" @popup:closed="formOpen = false"><div v-if="sheetSwipe" class="sheet-grabber" aria-hidden="true" /><f7-view>
       <f7-page>
-        <!-- Laid out as the group form is (GroupForm.vue): close at the left, the title, save at the right. -->
         <f7-navbar>
           <f7-nav-left><f7-link icon-only icon-f7="xmark" popup-close :aria-label="ct('關閉')" /></f7-nav-left>
           <f7-nav-title>{{ form.id ? ct('編輯主機') : ct('新增主機') }}</f7-nav-title>
-          <f7-nav-right><f7-link :class="{ disabled: saving }" @click="saveForm">{{ form.id ? ct('保存') : ct('新增') }}</f7-link></f7-nav-right>
+          <f7-nav-right><f7-link icon-only icon-f7="checkmark_alt" class="host-form-save" :class="{ disabled: saving || !form.host.trim() }" :aria-label="form.id ? ct('保存') : ct('新增')" :title="form.id ? ct('保存') : ct('新增')" @click="!saving && form.host.trim() && saveForm()" /></f7-nav-right>
         </f7-navbar>
         <f7-list inset strong-ios>
           <f7-list-input :label="ct('名稱')" type="text" :placeholder="ct('例如 公司伺服器')" :value="form.name" @input="form.name = $event.target.value" />
@@ -88,7 +89,7 @@
         <f7-block class="host-form-note">{{ ct('CC Agent 不存密碼也不存金鑰：用這台電腦現有的 ssh 金鑰；要密碼的主機，在 SSH 分頁自己輸入。第一次連一台新主機時，終端機會問要不要信任它的指紋。') }}</f7-block>
         <f7-block v-if="formError" class="hosts-error">{{ formError }}</f7-block>
       </f7-page>
-    </f7-popup>
+    </f7-view></f7-popup>
     <GlassDropdown :open="!!menu" :point="menuPoint" :items="menuItems" @close="menu = null" @select="choose" />
   </f7-page>
 </template>
@@ -106,6 +107,7 @@ import { hostMessage } from '../js/hostText.js';
 import { listIsColumn } from '../js/listDetail.js';
 import { startGroupDrag } from '../js/groupDrag.js';
 import { viewingHost, openHost, closeHost } from '../js/hostView.js';
+import { sheetSwipe } from '../js/sheetSwipe.js';
 
 const vFocus = { mounted: (el) => el.focus() };
 const fmt = (text, vars) => ct(text).replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
@@ -276,6 +278,8 @@ function remove(h) {
 </script>
 
 <style scoped>
+/* Its cards as close together as 新增 agent's (AgentOverlays.vue). */
+.host-form-popup :deep(.list) { --f7-list-margin-vertical: 10px; }
 .hosts-search-row { padding: 0 var(--f7-list-inset-side-margin, 16px); margin: var(--f7-list-margin-vertical, 32px) 0; }
 @media (min-width: 1024px) { .hosts-search-row { max-width: min(828px, calc(100% - 32px)); margin-left: auto; margin-right: auto; padding: 0; } }
 .hosts-edit-row { display: flex; justify-content: flex-end; margin: -16px max(var(--f7-list-inset-side-margin, 16px), calc((100% - 828px) / 2)) 8px; }
