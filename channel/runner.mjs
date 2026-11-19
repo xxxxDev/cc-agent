@@ -500,7 +500,8 @@ const paneOf=()=>(platform.isWin&&config.tmux)||process.env.TMUX_PANE;
 const tmuxAt=(...a)=>execFileSync('tmux',['-L',tmuxSocket,...a],{encoding:'utf8',timeout:1000});
 // The channel counts as gone after ten seconds without a poll, as the heartbeat reports it.
 let channelQuietMs=0;
-const watch=consentWatcher({cwd:config.cwd,startupUntil:startupDeadline,channelGone:()=>channelQuietMs>=10000,onStarting:()=>bridge(config,'starting').catch(()=>{}),
+const watch=consentWatcher({cwd:config.cwd,addedDirs:full?[]:[...new Set([...allowDirs,...referenceDirs,...readOnlyDirs,...tmpFileDirs].flatMap(x=>{try{return [x,fs.realpathSync(x)];}catch{return [x];}}))],home:process.env.HOME||'',startupUntil:startupDeadline,channelGone:()=>channelQuietMs>=10000,onStarting:()=>bridge(config,'starting').catch(()=>{}),
+ onAddedStuck:screen=>{console.error('added folder question not answered; screen:\n'+String(screen).slice(-3000));bridge(config,'error',{message:'Claude Code 啟動時問要不要信任開放給這個 agent 的資料夾，自動回答沒有成功。請打開這個 agent 的終端機，選「Yes, add it」再按 Enter，或按重新連線。'}).catch(()=>{});},
  onStuck:()=>bridge(config,'error',{message:'Claude Code 的開發頻道確認畫面跟預期的樣子不同，沒有自動按下。請打開這個 agent 的終端機看一下，確認是這個畫面就按 Enter，或按重新連線。'}).catch(()=>{}),
  capture:()=>paneOf()?tmuxAt('capture-pane',...platform.CAPTURE,paneOf()):null,
  keys:k=>tmuxAt('send-keys','-t',paneOf(),k)});
