@@ -340,6 +340,29 @@ function create({stateRoot, run = execFileSync, spawnFn = spawn, pty = null, hom
     });
   }
 
+  // Every machine of an account at once, for the list's lights: a check per machine on each
+  // page's 8-second refresh would be hundreds of processes with a long ~/.ssh/config. No
+  // connection's socket in the folder answers every one grey without running anything (the usual
+  // case); otherwise four checks at a time, and pages asking within three seconds share one round.
+  const statusRuns = new Map();
+  function statusAll(userId) {
+    const kept = statusRuns.get(userId);
+    if (kept && now() - kept.at < 3000) return kept.value;
+    const value = (async () => {
+      const all = list(userId), out = sessions();
+      let open = true;
+      if (controlOk) { try { open = fs.readdirSync(ctl).length > 0; } catch { open = false; } }
+      const states = new Array(all.length);
+      let next = 0;
+      const work = async () => { while (next < all.length) { const i = next++; const h = all[i]; states[i] = h.kind === 'local' ? 'online' : open ? await reach(h, userId, out) : 'offline'; } };
+      await Promise.all(Array.from({length: Math.min(4, all.length)}, work));
+      return Object.fromEntries(all.map((h, i) => [h.id, states[i]]));
+    })();
+    statusRuns.set(userId, {at: now(), value});
+    if (statusRuns.size > 50) statusRuns.delete(statusRuns.keys().next().value);
+    return value;
+  }
+
   // ---- files
   const friendly = (text) => {
     const t = String(text || '');
@@ -548,7 +571,7 @@ function create({stateRoot, run = execFileSync, spawnFn = spawn, pty = null, hom
     return publicTransfer(t);
   }
 
-  return {socket, receive, fetchFile, fetched, localFile, sessions, layout, setLayout, hidden, restoreHidden, list, find, add, update, remove, tabs, alive, openTab, closeTab, closeAll, closeUser, accountOff, closeLocal, nameOf, reach, listFiles, fileOp, listTransfers, startTransfer, cancelTransfer, sshArgs};
+  return {socket, receive, fetchFile, fetched, localFile, sessions, layout, setLayout, hidden, restoreHidden, list, find, add, update, remove, tabs, alive, openTab, closeTab, closeAll, closeUser, accountOff, closeLocal, nameOf, reach, statusAll, listFiles, fileOp, listTransfers, startTransfer, cancelTransfer, sshArgs};
 }
 
 let instance = null;

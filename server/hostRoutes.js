@@ -24,10 +24,7 @@ module.exports = function installHostRoutes(app, {hosts = require('./hostTermina
   app.delete('/api/hosts-layout/hidden', wrap((req, res) => { hosts.restoreHidden(req.userId); note(req, 'host-restore-hidden'); res.json({ok: true}); }));
   app.put('/api/hosts-layout', wrap((req, res) => { const l = hosts.setLayout(req.userId, req.body || {}); note(req, 'host-layout', {groups: l.groups.length}); res.json(l); }));
   app.get('/api/hosts/status', wrap(async (req, res) => {
-    const all = hosts.list(req.userId);
-    const out = hosts.sessions();
-    const states = await Promise.all(all.map((h) => hosts.reach(h, req.userId, out)));
-    res.json({status: Object.fromEntries(all.map((h, i) => [h.id, states[i]]))});
+    res.json({status: await hosts.statusAll(req.userId)});
   }));
   app.post('/api/hosts', wrap((req, res) => { const h = hosts.add(req.userId, req.body || {}); note(req, 'host-add', {host: h.id}); res.json(view(req.userId, {...h, kind: 'saved'})); }));
   app.put('/api/hosts/:id', wrap((req, res) => { const h = hosts.update(req.userId, req.params.id, req.body || {}); note(req, 'host-edit', {host: h.id}); res.json(view(req.userId, {...h, kind: 'saved'})); }));
