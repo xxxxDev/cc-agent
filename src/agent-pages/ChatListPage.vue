@@ -22,14 +22,14 @@
     <button type="button" class="presence-choose" :class="{active:chosenByPresence(true)}" data-presence="online" @click="chooseByPresence(true)"><span class="tag-dot online"></span>{{ct('在線')}}</button>
     <button type="button" class="presence-choose" :class="{active:chosenByPresence(false)}" data-presence="offline" @click="chooseByPresence(false)"><span class="tag-dot"></span>{{ct('未上線')}}</button>
    </template>
-   <span v-if="!search&&!mixedList" class="agent-group-add"><f7-button small round tonal icon-f7="folder_badge_plus" :aria-label="ct('新增群組')" :title="ct('新增群組')" @click="addGroup"><span class="row-button-label">{{ct('新增群組')}}</span></f7-button></span>
+   <span v-if="!search&&listSource!=='recent'" class="agent-group-add"><f7-button small round tonal icon-f7="folder_badge_plus" :aria-label="ct('新增群組')" :title="ct('新增群組')" @click="addGroup"><span class="row-button-label">{{ct('新增群組')}}</span></f7-button></span>
    <span v-if="filtered.length" class="pin-chosen"><f7-button small round tonal :icon-f7="chosenPinned?'pin_fill':'pin'" :disabled="!chosenList.length||pinBusy" :aria-label="ct(chosenPinned?'取消釘選':'釘選')" :title="ct(chosenPinned?'取消釘選':'釘選')" @click="togglePins"><span class="row-button-label">{{ct(chosenPinned?'取消釘選':'釘選')}}</span></f7-button></span>
    <span class="mark-all-read"><f7-button small round tonal icon-f7="checkmark" :disabled="!unreadTotal||markingAllRead" :aria-label="ct('全部已讀')" :title="ct('全部已讀')" @click="markAllRead"><span class="row-button-label">{{ct('全部已讀')}}</span></f7-button></span>
   </div>
   <!-- Groups, titled like the sections of Settings.
        In All, dragging stays within each source (src/js/sourceFence.js); New group
-       is left to a source's own list, which says whose group it is. Recent keeps
-       its activity order and has no dragging.
+       is there and in a source's own list. Recent keeps its activity order, has no
+       dragging and no New group.
        One sortable list with each group's title as a row in it, so an agent can be
        dragged past a title into that group, or into an empty one. -->
   <f7-list inset media-list sortable :class="{editing:editMode}" :sortable-enabled="editMode&&!search&&!orderBusy&&listSource!=='recent'&&(!autoSort||listGroups.length>0)" :sortable-move-elements="false" @sortable:sort="reorderChats" class="conversation-list">
