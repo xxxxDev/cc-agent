@@ -8,6 +8,7 @@ This is the full tour. The [README](../README.md) is the short version.
 
 - **Create an agent.** Give it a name, what it is for, what it should remember long-term, a model and an effort level, and a working folder. Only an admin creates agents, for themselves or for another account.
 - **Agent Profile.** Every agent has a profile: what it is for, its boundaries and its current state. The agent keeps it up to date itself, and you see each change as a card in the chat. Its long-term memory sits beside it.
+- **Memory by section.** An agent can update one `##` section of its long-term memory and leave the rest as it is.
 - **Carry on an existing session.** An admin can enter a local Claude Code session ID, and the new agent carries on that conversation. A session can also write a short JSON about itself, which you paste to fill in the create form.
 - **Start, pause, restart.** Pausing interrupts a reply in progress and keeps the chat. Restarting resumes the same session. The list can pause or restart every agent at once.
 - **Starts without a model call.** A Claude agent starting or restarting makes no model call until its first message, which brings its handoff, reference folder and open to-dos. If that message has not reached Claude a minute later, the agent goes back to the start-up turn for a week and the message goes again once the old process has gone. `CC_AGENT_QUIET_START=0` in `server/.env` gives every agent the start-up turn.

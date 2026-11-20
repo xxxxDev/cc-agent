@@ -2051,6 +2051,26 @@ function wakeFailed(c,g){if(!g.wokenBySend)return;delete g.wokenBySend;for(const
 const STARTUP_TURN_GRACE_MS=20_000;
 const STARTUP_REMINDER='[CC Agent: your start-up did not finish. Before answering, call mcp__executive__bootstrap to load your agent profile, memory and handoff; this note is from CC Agent, not the owner.]\n\n';
 const QUIET_READY_MS=2000,QUIET_CHECK_MS=60_000;
+// The memory with one "## <name>" section replaced, added or (empty text) removed.
+function memorySection(memory,name,text){
+ if(typeof name!=='string'||!/^[^\n#]{1,80}$/.test(name.trim()))throw error('Invalid section: a name of 1 to 80 characters on one line, no #',400);
+ name=name.trim();
+ // Headings outside code fences only; a section runs to the next heading of level 1 or 2.
+ const lines=memory.split('\n'),heads=[];let fence=false;
+ lines.forEach((l,i)=>{if(/^\s*(```|~~~)/.test(l)){fence=!fence;return;}if(!fence&&/^#{1,2}[ \t]/.test(l))heads.push({i,level:/^##/.test(l)?2:1,name:l.replace(/^#{1,2}[ \t]+/,'').trim()});});
+ const at=heads.find(h=>h.level===2&&h.name===name);
+ const body=text.replace(/^\n+|\n+$/g,''),block=body?['## '+name,body]:[];
+ if(!at)return body?(memory.replace(/\n+$/,'')+(memory.trim()?'\n\n':'')+block.join('\n')+'\n'):memory;
+ const next=heads.find(h=>h.i>at.i);let end=next?next.i:lines.length;
+ // The blank lines before the next heading stay with it.
+ while(end>at.i+1&&lines[end-1].trim()==='')end--;
+ if(block.length)return [...lines.slice(0,at.i),...block,...lines.slice(end)].join('\n');
+ // Removed: one blank line where it was, between what comes before and after.
+ let start=at.i;while(start>0&&lines[start-1].trim()==='')start--;
+ let from=end;while(from<lines.length&&lines[from].trim()==='')from++;
+ const before=lines.slice(0,start),after=lines.slice(from);
+ return [...before,...(before.length&&after.length?['']:[]),...after].join('\n');
+}
 // What bootstrap gives beyond profileMessage's profile and memory: the handoff, the reference
 // folder and the checklists, each only when there is one.
 function startupContext(c){
@@ -2381,7 +2401,12 @@ function bridge(c,action,data={}) {
   }
  }
  else if(action==='memory'){
-  if(typeof data.text!=='string'||data.text.length>20000)throw error('Invalid memory');c.memory=data.text;c.profileVersion=(c.profileVersion||0)+1;
+  if(typeof data.text!=='string'||data.text.length>20000)throw error('Invalid memory');
+  // One section only (the whole memory was rewritten each time): the block under "## <section>" is replaced, added at the end when
+  // there is none, and removed by empty text; the rest stays as it is.
+  const next=data.section===undefined?data.text:memorySection(c.memory||'',data.section,data.text);
+  if(next.length>20000)throw error('Invalid memory: over 20000 characters');
+  c.memory=next;c.profileVersion=(c.profileVersion||0)+1;save(c);return {ok:true,length:next.length};
  }
  // The agent keeps its own Agent Profile description current: each change shows in the chat as a card, before and after.
  else if(action==='describe'){
