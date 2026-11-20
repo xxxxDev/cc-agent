@@ -397,7 +397,11 @@ if(ownStatusLine)writeFresh(path.join(controlDir,'status-own'),'1');else fs.rmSy
 // A scoped agent reads no settings.local.json (--setting-sources project --settings), so
 // when it compacts is handed to it in its environment instead: the same checked value,
 // set only by CC Agent (issue #12).
-const env={...agentEnv(),TMPDIR:agentTmp+'/',CLAUDE_CODE_TMPDIR:agentTmp,...(platform.isWin?{TEMP:agentTmp,TMP:agentTmp}:{}),...(full?{}:{GIT_CONFIG_GLOBAL:gitConfig,TMPPREFIX:path.join(sandboxTmp,'zsh'),CLAUDE_CODE_PLUGIN_DIRS:''}),...(ownerConfig?{DISCORD_STATE_DIR:noDiscord}:{}),...(noConnectors?{ENABLE_CLAUDEAI_MCP_SERVERS:'false'}:{}),...(!full&&subagentEnv[AUTO_COMPACT_KEY]?{[AUTO_COMPACT_KEY]:subagentEnv[AUTO_COMPACT_KEY]}:{})};
+// Claude Code reminds a turn that has not written to the person for a while. With a number
+// of seconds it reminds only after that long without a word, instead of every few turns; each
+// reminder costs a progress message. The person's own setting, if any, wins.
+const SILENT_REMINDER={CLAUDE_CODE_SILENT_TURN_REMINDER_SECONDS:'600'};
+const env={...SILENT_REMINDER,...agentEnv(),TMPDIR:agentTmp+'/',CLAUDE_CODE_TMPDIR:agentTmp,...(platform.isWin?{TEMP:agentTmp,TMP:agentTmp}:{}),...(full?{}:{GIT_CONFIG_GLOBAL:gitConfig,TMPPREFIX:path.join(sandboxTmp,'zsh'),CLAUDE_CODE_PLUGIN_DIRS:''}),...(ownerConfig?{DISCORD_STATE_DIR:noDiscord}:{}),...(noConnectors?{ENABLE_CLAUDEAI_MCP_SERVERS:'false'}:{}),...(!full&&subagentEnv[AUTO_COMPACT_KEY]?{[AUTO_COMPACT_KEY]:subagentEnv[AUTO_COMPACT_KEY]}:{})};
 
 const transcript=path.join(platform.isWin?homeDir:env.HOME,'.claude','projects',config.cwd.replace(/[^a-zA-Z0-9]/g,'-'),config.sessionId+'.jsonl');
 const resumed=config.resume||fs.existsSync(transcript)||fs.existsSync(path.join(controlDir,'started.marker'));
