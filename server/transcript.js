@@ -1411,4 +1411,49 @@ function subagents(stateRoot, conversation) {
   return out;
 }
 
-module.exports = {sessionFileExists, transcriptMark, unreceived, terminalEvents, typedSettings, turnEndedSince, workedSince, subagents, lastCompaction, usage, progress, currentWork, quotaReset, waiting, skills, connectors, relays, segment, history, messageCost, priceOf, PRICES, WEB_SEARCH_USD};
+// Messages this session sent to other agents since `mark` (a transcriptMark): another Claude
+// session through SendMessage (its result names a session), or CC Agent's peer_send and
+// group_post. For the Stop hook's check of promises made in them, which otherwise live only in
+// that message. Returns {to: [names], mark}; a mark from another session, inode or a longer file
+// starts afresh from the end, so nothing is counted twice and a rewrite is never read as new.
+const SENT_MAX = 16 * 1024 * 1024;
+const PEER_TOOLS = /^mcp__executive__(peer_send|group_post)(_[0-9a-f]+)?$/;
+function sentToAgentsSince(stateRoot, conversation, mark) {
+  const now = transcriptMark(stateRoot, conversation);
+  if (!now) return {to: [], mark: null};
+  if (!mark || mark.session !== now.session || (mark.ino !== undefined && mark.ino !== now.ino) || mark.at > now.at || !Number.isInteger(mark.at)) return {to: [], mark: now};
+  const file = locateNow(path.join(stateRoot, 'workspaces', conversation.id, 'g' + (conversation.runs || []).at(-1).number), now.session);
+  let text = '';
+  try {
+    const fd = fs.openSync(file, 'r');
+    try {
+      const from = Math.max(mark.at, now.at - SENT_MAX), buf = Buffer.alloc(now.at - from);
+      fs.readSync(fd, buf, 0, buf.length, from); text = buf.toString('utf8');
+    } finally { fs.closeSync(fd); }
+  } catch { return {to: [], mark: now}; }
+  const uses = new Map(), to = [];
+  for (const line of text.split('\n')) {
+    if (!line.includes('tool_')) continue;
+    let r; try { r = JSON.parse(line); } catch { continue; }
+    // Only the conversation's own records: Claude Code also writes copies of earlier messages
+    // (api-request-blob), which would bring an old send back as new.
+    if (r?.type !== 'assistant' && r?.type !== 'user') continue;
+    const content = Array.isArray(r?.message?.content) ? r.message.content : [];
+    for (const b of content) {
+      if (b?.type === 'tool_use' && (b.name === 'SendMessage' || PEER_TOOLS.test(b.name || ''))) uses.set(b.id, b);
+      else if (b?.type === 'tool_result' && uses.has(b.tool_use_id)) {
+        const u = uses.get(b.tool_use_id), out = typeof b.content === 'string' ? b.content : JSON.stringify(b.content || '');
+        if (b.is_error) continue;
+        const input = u.input || {};
+        if (u.name === 'SendMessage') {
+          // Only another session: a subagent of this one is not someone who waits on a promise.
+          if (!/another Claude session|Remote Control|cloud session/i.test(out) || !String(input.message || '').trim()) continue;
+          to.push(String(input.to || '').slice(0, 80));
+        } else if (String(input.text || '').trim()) to.push(String(input.to || input.group_id || u.name.replace(/^mcp__executive__|_[0-9a-f]+$/g, '')).slice(0, 80));
+      }
+    }
+  }
+  return {to: [...new Set(to)], mark: now};
+}
+
+module.exports = {sentToAgentsSince, sessionFileExists, transcriptMark, unreceived, terminalEvents, typedSettings, turnEndedSince, workedSince, subagents, lastCompaction, usage, progress, currentWork, quotaReset, waiting, skills, connectors, relays, segment, history, messageCost, priceOf, PRICES, WEB_SEARCH_USD};

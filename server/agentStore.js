@@ -2212,7 +2212,9 @@ function bridge(c,action,data={}) {
   // agent then sends that group's members shows there.
   const named=pending.mentions?.find(m=>m.group&&groupStore.get(m.id)?.owner===c.owner);
   if(!pending.wrapUp)c.groupContext=pending.group?{id:pending.group.id,at:Date.now()}:named?{id:named.id,at:Date.now()}:null;const skipped=g.startupSkipped&&!g.bootstrapped;if(skipped)g.bootstrapped=true;const quietFirst=!!g.startupContextDue;if(quietFirst){delete g.startupContextDue;if(!g.hookWaitFrom)g.hookWaitFrom=Date.now();}
-  const text=(skipped?STARTUP_REMINDER:'')+(pending.quietResent?QUIET_RESENT:'')+(quietFirst?startupContext(c):'')+profileMessage(c,g,pending.peer?peerWrap(c,pending,neutralSender(attachments.channelText(stateRoot,c,pending))):scheduleNote(pending)+limitResumeNote(pending)+wrapUpNote(pending)+groupNote(c,pending)+mentionNote(pending)+neutralSender(attachments.channelText(stateRoot,c,pending)));pending.delivery='delivered';pending.deliveredAt=new Date().toISOString();{const mark=c.mode==='claude'?transcript.transcriptMark(stateRoot,c):null;if(mark)pending.transcriptMark=mark;else delete pending.transcriptMark;}g.deliveryEpoch=(g.deliveryEpoch||0)+1;g.phase='busy';if(quietFirst)pending.quietCheck=true;save(c);if(quietFirst)quietCheckLater(c,g,pending);return {message:{id:pending.id,text,...senderOf(c,pending),...replyMeta(pending)},rotate:c.pendingRotation};}
+  const text=(skipped?STARTUP_REMINDER:'')+(pending.quietResent?QUIET_RESENT:'')+(quietFirst?startupContext(c):'')+profileMessage(c,g,pending.peer?peerWrap(c,pending,neutralSender(attachments.channelText(stateRoot,c,pending))):scheduleNote(pending)+limitResumeNote(pending)+wrapUpNote(pending)+groupNote(c,pending)+mentionNote(pending)+neutralSender(attachments.channelText(stateRoot,c,pending)));pending.delivery='delivered';pending.deliveredAt=new Date().toISOString();{const mark=c.mode==='claude'?transcript.transcriptMark(stateRoot,c):null;if(mark)pending.transcriptMark=mark;else delete pending.transcriptMark;
+   // Where the look for messages to other agents starts: this turn, or the session's start.
+   if(!g.sentMark)g.sentMark=mark||{session:g.sessionId,at:0};}g.deliveryEpoch=(g.deliveryEpoch||0)+1;g.phase='busy';if(quietFirst)pending.quietCheck=true;save(c);if(quietFirst)quietCheckLater(c,g,pending);return {message:{id:pending.id,text,...senderOf(c,pending),...replyMeta(pending)},rotate:c.pendingRotation};}
   return {rotate:c.pendingRotation};
  }
  // An agent sets up a long-running schedule the owner agreed to in its conversation;
@@ -2534,6 +2536,19 @@ function bridge(c,action,data={}) {
     if(fresh.length){
      g.bgReminded=[...(g.bgReminded||[]),...fresh.map(keyOf)].slice(-50);
      const response={ok:true,decision:'block',reason:backgroundReminder(fresh,ownerLanguage(c.owner))};
+     if(stopKey)g.stopReceipt={key:stopKey,epoch:g.deliveryEpoch||0,ids:[],response};
+     g.phase='busy';save(c);
+     return response;
+    }
+   }
+   // Messages sent to other agents this turn: what was promised in them is asked for once, to go
+   // on the checklist where the owner sees it. The mark moves at each look, so a send is asked
+   // about once.
+   if(data.checkFinal===true&&data.stopHookActive!==true&&c.mode==='claude'){
+    let sent={to:[],mark:null};try{sent=transcript.sentToAgentsSince(stateRoot,c,g.sentMark);}catch{}
+    g.sentMark=sent.mark;
+    if(sent.to.length){
+     const response={ok:true,decision:'block',reason:promiseReminder(sent.to,ownerLanguage(c.owner))};
      if(stopKey)g.stopReceipt={key:stopKey,epoch:g.deliveryEpoch||0,ids:[],response};
      g.phase='busy';save(c);
      return response;
@@ -4099,6 +4114,12 @@ function commandReminder(commands,language,now){
  const lines=commands.map(job=>{const at=Date.parse(job.since||''),minutes=Number.isFinite(at)?Math.max(0,Math.round((now-at)/60000)):null;const what=job.description||(zh?'（沒有說明的指令）':'a command with no description');return '- '+what+(minutes===null?'':zh?`（已跑 ${minutes} 分鐘）`:` (running for ${minutes} min)`);});
  return zh?`CC Agent 自動提醒（不是擁有者說的）：你還有 ${commands.length} 個背景指令在跑：\n${lines.join('\n')}\n不再需要的請用 TaskStop 關掉；要留著的，請在回覆裡簡短說明為什麼留著。`
   :`An automatic reminder from CC Agent, not the owner: you still have ${commands.length} background command${commands.length===1?'':'s'} running:\n${lines.join('\n')}\nStop the ones you no longer need with TaskStop; for any you keep, say briefly in your reply why.`;
+}
+function promiseReminder(to,language){
+ const names=to.map(n=>n||'?').join(language==='en'?', ':'、');
+ return language==='en'
+  ?`An automatic reminder from CC Agent, not the owner: this turn you sent messages to ${names}. If you promised anything to do later in them (a report, a recheck, a follow-up), put it on a checklist now with the checklist tool, so the owner sees it; if you promised nothing, just end the turn.`
+  :`CC Agent 自動提醒（不是擁有者說的）：你這回合寄了訊息給 ${names}。如果訊息裡答應了之後要做的事（回報、複查、補做），現在用 checklist 工具放進待辦清單，讓擁有者看得到；沒有答應什麼，就直接結束。`;
 }
 function backgroundReminder(jobs,language,now=Date.now()){
  const zh=language!=='en';

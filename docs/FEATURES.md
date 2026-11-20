@@ -76,6 +76,7 @@ This is the full tour. The [README](../README.md) is the short version.
 - **Finished to-dos.** By default every list is kept. An admin can have a list whose every item is done deleted 1, 3, 7, 14 or 30 days after its last change, with **Keep finished to-dos** in the Admin tab's Wrap-up group. A list with anything still to do, in progress or blocked is never deleted, and neither are a deleted agent's lists.
 - **Wrap-up check (optional).** It is off until an admin turns it on in the Admin tab. Then an agent that has finished a task and sat idle for 10 minutes (the admin can change the wait) is asked to make sure its work is saved and its notes are current. It is not asked after a turn that only read or answered, and it is not asked while the agent still has background commands or subagents running. The admin can change the text it sends, and an agent can be left out by turning off **Automatic wrap-up check** in its Agent Profile.
 - **Fewer reminders to write.** Claude Code reminds an agent to write to you only after ten minutes without a word, instead of every few turns. A value of your own for `CLAUDE_CODE_SILENT_TURN_REMINDER_SECONDS` wins.
+- **Promises to other agents.** A Claude agent that sent messages to other agents in a turn is asked once, when the turn ends, to put anything it promised in them (a report, a recheck, a follow-up) on its to-do list, where you see it.
 
 
 <p align="center">
