@@ -742,6 +742,16 @@ function tailHash(file, at) {
   try { const buf = Buffer.alloc(n); fs.readSync(fd, buf, 0, n, at - n); return crypto.createHash('sha256').update(buf).digest('hex').slice(0, 32); }
   finally { fs.closeSync(fd); }
 }
+// Whether the session's transcript exists anywhere under Claude Code's projects, not only at the
+// exact path (a working folder under a symlink is written under its real path): not finding it at
+// the exact path is not knowing that nothing was written.
+function sessionFileExists(stateRoot, conversation) {
+  const run = (conversation?.runs || []).at(-1);
+  if (conversation?.mode !== 'claude' || !run) return false;
+  // A miss remembered from an earlier look (before Claude wrote its first line) must not hide it.
+  if (located.get(run.sessionId) && !located.get(run.sessionId).file) located.delete(run.sessionId);
+  return !!locate(path.join(stateRoot, 'workspaces', conversation.id, 'g' + run.number), run.sessionId);
+}
 function transcriptMark(stateRoot, conversation) {
   const run = (conversation?.runs || []).at(-1);
   if (conversation?.mode !== 'claude' || !run) return null;
@@ -1401,4 +1411,4 @@ function subagents(stateRoot, conversation) {
   return out;
 }
 
-module.exports = {transcriptMark, unreceived, terminalEvents, typedSettings, turnEndedSince, workedSince, subagents, lastCompaction, usage, progress, currentWork, quotaReset, waiting, skills, connectors, relays, segment, history, messageCost, priceOf, PRICES, WEB_SEARCH_USD};
+module.exports = {sessionFileExists, transcriptMark, unreceived, terminalEvents, typedSettings, turnEndedSince, workedSince, subagents, lastCompaction, usage, progress, currentWork, quotaReset, waiting, skills, connectors, relays, segment, history, messageCost, priceOf, PRICES, WEB_SEARCH_USD};
