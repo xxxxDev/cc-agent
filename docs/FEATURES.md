@@ -8,6 +8,7 @@ This is the full tour. The [README](../README.md) is the short version.
 
 - **Create an agent.** Give it a name, what it is for, what it should remember long-term, a model and an effort level, and a working folder. Only an admin creates agents, for themselves or for another account.
 - **Agent Profile.** Every agent has a profile: what it is for, its boundaries and its current state. The agent keeps it up to date itself, and you see each change as a card in the chat. Its long-term memory sits beside it.
+- **Called by your name.** Your messages carry the display name you set in Settings, and agents call you by it in their replies, to-dos, memory and notes rather than "owner". A new display name applies from your next message, and the wording of the instructions from an agent's next start.
 - **Memory by section.** An agent can update one `##` section of its long-term memory and leave the rest as it is.
 - **Carry on an existing session.** An admin can enter a local Claude Code session ID, and the new agent carries on that conversation. A session can also write a short JSON about itself, which you paste to fill in the create form.
 - **Start, pause, restart.** Pausing interrupts a reply in progress and keeps the chat. Restarting resumes the same session. The list can pause or restart every agent at once.
