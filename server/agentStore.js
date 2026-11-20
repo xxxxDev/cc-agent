@@ -2032,10 +2032,13 @@ const owedRelays=c=>c.messages.filter(m=>m.role==='relay'&&m.relay?.direction===
 // A message one answer may close along with another: the owner's own web message in
 // this generation. One from a group, another machine or an outside chat is answered
 // where it came from, so it takes a reply of its own.
-function linkable(c,id,answered=false){
+function linkable(c,id,answered=false,main=null){
  const m=typeof id==='string'&&c.messages.find(x=>x.id===id&&x.role==='user'&&x.generation===c.generation);
  if(!m)throw error('Reply must reference a message in this generation',409);
- if(!answered&&(m.group||m.peer||m.external))throw error('A message from a group, another machine or an outside chat needs a reply of its own',409);
+ // Another message of the same group as the one answered: that answer is shown in that group
+ // already, so it answers this one there too.
+ const sameGroup=m.group&&main?.group&&m.group.id===main.group.id&&!m.peer&&!m.external;
+ if(!answered&&!sameGroup&&(m.group||m.peer||m.external))throw error('A message from a group, another machine or an outside chat needs a reply of its own',409);
  return m;
 }
 function pendingReplies(c) {
@@ -2367,7 +2370,7 @@ function bridge(c,action,data={}) {
   // with a final reply already given to another, adding no bubble: the message links
   // to that reply.
   if(typeof data.answeredBy!=='string'||data.final!==true)throw error('answered_by takes the message_id already answered, with final true');
-  const m=linkable(c,data.messageId),src=linkable(c,data.answeredBy,true);
+  const src=linkable(c,data.answeredBy,true),m=linkable(c,data.messageId,false,src);
   const r=[...c.messages].reverse().find(x=>x.role==='assistant'&&x.final===true&&x.inReplyTo===src.id&&x.generation===c.generation);
   if(!r)throw error('answered_by must name a message you have already sent a final reply to',409);
   if(m.delivery!=='completed'){m.delivery='completed';m.answeredIn=r.id;g.lastError='';armWrapUp(c,g,m);save(c);}
@@ -2387,7 +2390,7 @@ function bridge(c,action,data={}) {
   if(previous&&(previous.inReplyTo!==target.id||previous.text!==data.text||previous.final!==final))throw error('Reply retry does not match the original',409);
   // Closed only once attachments are saved; a retry of the same reply cannot change what it originally completed.
   if(!previous){
-   for(const id of data.alsoAnswers||[])linkable(c,id);
+   for(const id of data.alsoAnswers||[])linkable(c,id,false,target);
    const files=attachments.fromPaths(stateRoot,c,data.files,attachableFolders(c));
    // A wrap-up check that found everything done is not worth a notification.
    const r=add(c,'assistant',data.text,{replyKey:data.replyKey,inReplyTo:target.id,final,...(target.loginNotice&&final||target.wrapUp&&final&&WRAP_UP_DONE.test(data.text)?{notifyPending:false,quiet:true}:{notifyPending:true}),...(files.length?{attachments:files}:{})});
@@ -2397,7 +2400,7 @@ function bridge(c,action,data={}) {
    g.lastError='';
    if(final){target.delivery='completed';armWrapUp(c,g,target);try{peerReply(c,target,r);}catch(e){console.error('peer reply:',e.message);}}
    // The others this same answer completes, each linked to it.
-   if(final)for(const id of new Set(data.alsoAnswers||[])){const x=linkable(c,id);if(x!==target&&x.delivery!=='completed'){x.delivery='completed';x.answeredIn=r.id;}}
+   if(final)for(const id of new Set(data.alsoAnswers||[])){const x=linkable(c,id,false,target);if(x!==target&&x.delivery!=='completed'){x.delivery='completed';x.answeredIn=r.id;}}
   }
  }
  else if(action==='memory'){
