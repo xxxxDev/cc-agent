@@ -216,6 +216,10 @@ const INTERRUPTED = '[Request interrupted by user';
 // A turn whose end never showed up stops counting once nothing has been written
 // for this long with no tool running.
 const TURN_QUIET_MS = 20 * 60 * 1000;
+// Claude Code writes a command's prompt right after it (well under a second); Claude
+// Code's own notes are never one.
+const COMMAND_PROMPT_MS = 2 * 1000;
+const NOT_COMMAND_PROMPT = /^(<system-reminder>|\[|Being added to this conversation)/;
 const NOTE_MAX = 300;
 // This only classifies working state; it gives an agent's message no user authority.
 // Claude Code writes it as <cross-session-message> (missing it, a wake from
@@ -226,24 +230,44 @@ const AGENT_WAKE = /^Another Claude session sent a message:\s*<(agent-message|cr
 // it worked.
 const LIMIT_RESUME = /^Your claude\.ai usage limit has reset\. Continue the task/;
 function trackTurn(state, record) {
-  if (record.type === 'system' && TURN_END.has(record.subtype)) { state.turnOpen = false; if (record.timestamp) state.turnEndedAt = record.timestamp; return; }
+  // A Stop hook that blocks the end (CC Agent's own reminder, /goal's condition) writes
+  // its feedback first and its summary after, and the model goes on: that summary is not
+  // the end.
+  if (record.type === 'system' && record.subtype === 'stop_hook_summary' && state.stopBlocked) { state.stopBlocked = false; return; }
+  if (record.type === 'system' && TURN_END.has(record.subtype)) { state.turnOpen = false; state.commandPrompt = false; state.stopBlocked = false; if (record.timestamp) state.turnEndedAt = record.timestamp; return; }
   if (record.type !== 'user' || record.isCompactSummary || record.isVisibleInTranscriptOnly) return;
   const content = record.message?.content;
   if (typeof content === 'string') {
     const text = content.trimStart();
-    if (NOT_A_PROMPT.test(text) || COMPACT_COMMAND.test(text)) return;
-    // Claude Code's own notes are meta; so are channel messages, which are prompts.
+    // A slash command typed into the terminal (the composer's, or the owner's own) that
+    // hands Claude a prompt, a skill or /goal: Claude Code writes the command, then the
+    // prompt it expands to as a meta note. That note is the turn's start.
+    // /goal prints its own output ("Goal set: …") before its prompt, so output alone does
+    // not end the wait.
+    if (NOT_A_PROMPT.test(text)) { if (/^<command-(name|message)>/.test(text) && !/<command-name>\/compact</.test(text)) state.commandPrompt = Date.parse(record.timestamp || '') || Date.now(); return; }
+    if (COMPACT_COMMAND.test(text)) return;
     // A Stop hook that blocks the end sends its feedback as a meta note and the model goes
-    // on with the same turn: open again.
-    if (record.isMeta && text.startsWith('Stop hook feedback')) { state.turnOpen = true; return; }
+    // on with the same turn: open again. Checked before
+    // the command's prompt, so a local command typed mid-turn cannot hide it.
+    if (record.isMeta && text.startsWith('Stop hook feedback')) { state.turnOpen = true; state.stopBlocked = true; state.commandPrompt = false; return; }
+    const fromCommand = state.commandPrompt; state.commandPrompt = false;
+    // Only the note written with the command: a local one (/model) writes none, and a meta
+    // note much later is not its prompt.
+    if (record.isMeta && fromCommand && !NOT_COMMAND_PROMPT.test(text) && (Date.parse(record.timestamp || '') || Date.now()) - fromCommand < COMMAND_PROMPT_MS) { state.turnOpen = true; state.stopBlocked = false; state.turnSince = record.timestamp || null; state.note = null; return; }
+    // Claude Code's own notes are meta; so are channel messages, which are prompts.
     if (record.isMeta && !text.startsWith('<channel ') && !AGENT_WAKE.test(text) && !LIMIT_RESUME.test(text)) return;
-    state.turnOpen = true;
+    state.turnOpen = true; state.stopBlocked = false;
     // How long the turn has run, as Claude Code's own timer counts it, and what it
     // has said in it so far, both from its start.
     state.turnSince = record.timestamp || null;
     state.note = null;
+  } else if (Array.isArray(content) && record.isMeta && state.commandPrompt && content[0]?.type === 'text' && typeof content[0].text === 'string') {
+    // A skill's prompt comes as content blocks, not a string (a skill typed in the
+    // terminal).
+    const fromCommand = state.commandPrompt; state.commandPrompt = false;
+    if (!NOT_COMMAND_PROMPT.test(content[0].text) && (Date.parse(record.timestamp || '') || Date.now()) - fromCommand < COMMAND_PROMPT_MS) { state.turnOpen = true; state.stopBlocked = false; state.turnSince = record.timestamp || null; state.note = null; }
   } else if (Array.isArray(content) && content.some(b => b?.type === 'text' && typeof b.text === 'string' && b.text.startsWith(INTERRUPTED))) {
-    state.turnOpen = false;
+    state.turnOpen = false; state.stopBlocked = false;
   }
 }
 function inTurn(state, now = Date.now()) {
