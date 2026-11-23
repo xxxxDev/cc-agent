@@ -451,7 +451,7 @@ const english = {
   
 "新增群組":"New group","全部已讀":"Mark all read","釘選":"Pin","取消釘選":"Unpin","已釘選":"Pinned",
 "群組名稱":"Group name",
-"刪除群組":"Delete group","收合群組":"Collapse group","群聊通知":"Group notifications","成員討論出結果、在群裡 @你 時才會通知你。":"You are notified only when a member calls on you with @ in the group, once it has a result.","開啟通知":"Turn on notifications for","關閉通知":"Turn off notifications for","通知已關":"Notifications off","更多":"More","昨天":"Yesterday","編輯群組順序":"Edit group order","搜尋群組或成員":"Search groups or members","沒有符合的群組":"No matching groups","移除這個時間":"Remove this time","再加一個時間":"Add another time","展開群組":"Expand group",
+"刪除群組":"Delete group","收合群組":"Collapse group","群聊通知":"Group notifications","成員討論出結果、在群裡 @你 時才會通知你。":"You are notified only when a member calls on you with @ in the group, once it has a result.","開啟通知":"Turn on notifications for","關閉通知":"Turn off notifications for","通知已關":"Notifications off","更多":"More","昨天":"Yesterday","編輯群組順序":"Edit group order","搜尋群組或成員":"Search groups or members","沒有符合的群組":"No matching groups","移除這個時間":"Remove this time","再加一個時間":"Add another time","指定日期":"Set dates","移除這個日期":"Remove this date","再加一個日期":"Add another date","日期":"Date","展開群組":"Expand group",
 "點一下改名":"Tap to rename",
 "無法載入這個 Agent":"This Agent could not be loaded",
 "拖曳調整欄寬":"Drag to change the column widths",

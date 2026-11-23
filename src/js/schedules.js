@@ -10,7 +10,9 @@ export const scheduleFocus = ref(null);
 
 // 'weekdays' is the sheet's own preset for weekly on Monday to Friday; the server
 // only ever sees it as weekly.
-export const FREQUENCY_TYPES = ['daily', 'weekdays', 'weekly', 'monthly', 'interval'];
+export const FREQUENCY_TYPES = ['daily', 'weekdays', 'weekly', 'monthly', 'interval', 'dates'];
+// Set dates: each runs once; the server takes up to this many.
+export const MAX_DATES = 24;
 // Monday first, as a week is read here; 0 is Sunday, as the server stores it.
 export const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
 export const WEEKDAYS = [1, 2, 3, 4, 5];
@@ -33,6 +35,12 @@ export function frequencyText(f, zh) {
   }
   if (f.type === 'monthly') return zh ? `每月 ${f.day} 日 ${f.time}` : `Monthly on day ${f.day} ${f.time}`;
   if (f.type === 'interval') return zh ? `每 ${f.hours} 小時` : `Every ${f.hours} ${Number(f.hours) === 1 ? 'hour' : 'hours'}`;
+  if (f.type === 'dates') {
+    // 12/8、2027/3/6: the year only when it is not this one.
+    const year = new Date().getFullYear();
+    const days = (f.dates || []).map((d) => { const [y, m, day] = d.split('-').map(Number); return (y === year ? '' : y + '/') + m + '/' + day; });
+    return zh ? `${days.join('、')} ${f.time}` : `${days.join(', ')} at ${f.time}`;
+  }
   return '';
 }
 
@@ -53,6 +61,7 @@ export function editableFrequency(f = {}) {
     days: Array.isArray(f.days) && f.days.length ? [...f.days] : [1],
     day: Number(f.day) || 1,
     hours: Number(f.hours) || 6,
+    dates: Array.isArray(f.dates) && f.dates.length ? [...f.dates] : [''],
   };
 }
 
@@ -78,6 +87,11 @@ export function frequencyFor(e) {
   if (e.type === 'monthly') {
     const day = Number(e.day);
     return Number.isInteger(day) && day >= 1 && day <= 31 ? {type: 'monthly', ...at, day} : null;
+  }
+  if (e.type === 'dates') {
+    const list = (e.dates || []).filter(Boolean);
+    if (!list.length || list.length > MAX_DATES || !list.every(validDate)) return null;
+    return {type: 'dates', ...at, dates: [...new Set(list)].sort()};
   }
   return null;
 }

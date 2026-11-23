@@ -140,7 +140,7 @@ Agents on two of your computers can talk to each other, for example a build agen
 
 ## Schedules
 
-- **Timed messages.** Wake an agent daily, weekly, monthly or every few hours, at one or several clock times, until a last day if you set one. Quiet hours hold notifications until they end.
+- **Timed messages.** Wake an agent daily, weekly, monthly, every few hours or on set dates (each run once), at one or several clock times, until a last day if you set one. Quiet hours hold notifications until they end.
 - **Agents suggest, you agree.** An agent can suggest a schedule in its conversation. An admin's agent with full access can set one up at once; any other agent's suggestion waits for an admin to approve it on the Schedules page.
 - **RSS and Atom feeds.** CC Agent reads the feed at each due time and hands the agent only the entries it has not seen (the newest 3 the first time), for example to sum them up.
 - **Background scripts.** A small Python, Node or shell script runs at each due time without waking the agent. It runs in a sandbox, may reach only the sites you list, has no secrets, and keeps its own state folder. Its result goes to you as a notification, or to the agent. You can trial-run it first. This part needs macOS.

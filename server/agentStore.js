@@ -4285,6 +4285,8 @@ function runSchedules({now=Date.now(),ownerActive,only}={}){
   if(only&&x.id!==only)continue;
   // Past its last day: switched off, once.
   if(x.status==='active'&&!x.pendingRun&&require('./schedules').expired(x.until,new Date(now))){scheduleEnd(x,at,'skipped','已過到期日，排程已關閉',{extra:{status:'off',nextAt:null}});continue;}
+  // Set dates all run: switched off, once, its last run kept as it was.
+  if(x.status==='active'&&!x.pendingRun&&!x.nextAt&&x.frequency?.type==='dates'){scheduleRun(x,{status:'off'});continue;}
   // Switched off with a run under way (a script's result waiting for its agent):
   // that run ends rather than waiting for ever.
   if(x.status!=='active'&&x.pendingRun&&!x.pendingRun.manual&&!x.pendingRun.scriptRunning){scheduleEnd(x,at,'skipped','排程已關閉');continue;}
@@ -4293,7 +4295,7 @@ function runSchedules({now=Date.now(),ownerActive,only}={}){
   const c=state.conversations.find(c=>c.id===x.conversationId);
   if(!x.pendingRun){
    if(!x.nextAt||Date.parse(x.nextAt)>now)continue;
-   const due=Date.parse(x.nextAt),next=require('./schedules').nextRun(x.frequency,new Date(now)).toISOString();
+   const due=Date.parse(x.nextAt),next=require('./schedules').nextRun(x.frequency,new Date(now))?.toISOString()??null;
    if(!c||c.archived){scheduleEnd(x,at,'skipped','Agent 已刪除',{extra:{nextAt:next}});continue;}
    if(!ownerActive(c.owner)){scheduleEnd(x,at,'skipped','擁有者帳號已停用',{extra:{nextAt:next}});continue;}
    const g=reconcile(c,{fresh:true})&&active(c);
@@ -4323,7 +4325,8 @@ function runSchedules({now=Date.now(),ownerActive,only}={}){
   // Started for this run: given up after the wait. Waited for: given up when the
   // next run falls due, which then takes its place.
   if(x.pendingRun.launched){if(now-Date.parse(x.pendingRun.launched)>SCHEDULE_WAIT_MS)scheduleEnd(x,at,'failed','Agent 十分鐘內沒有啟動完成');continue;}
-  const deadline=x.pendingRun.manual?Date.parse(x.pendingRun.since)+SCHEDULE_WAIT_MS:Date.parse(x.nextAt||0);
+  // The last of set dates has no next run: it waits a day.
+  const deadline=x.pendingRun.manual?Date.parse(x.pendingRun.since)+SCHEDULE_WAIT_MS:x.nextAt?Date.parse(x.nextAt):Date.parse(x.pendingRun.since)+86400_000;
   if(now>=deadline)scheduleEnd(x,at,'skipped',c.pausedByOwner?'Agent 由你暫停中，等到下次仍未上線':'Agent 一直沒有上線');
  }
 }

@@ -136,7 +136,23 @@
               <option value="weekly">{{ ct('每週') }}</option>
               <option value="monthly">{{ ct('每月') }}</option>
               <option value="interval">{{ ct('每隔幾小時') }}</option>
+              <option value="dates">{{ ct('指定日期') }}</option>
             </f7-list-input>
+            <!-- Set dates: each runs once, up to 24. -->
+            <template v-if="draft.freq.type === 'dates'">
+              <li v-for="(d, i) in draft.freq.dates" :key="'d' + i" class="field-date field-time-row">
+                <div class="item-content item-input"><div class="item-inner">
+                  <div class="item-title item-label">{{ i ? ct('日期') + ' ' + (i + 1) : ct('日期') }}</div>
+                  <div class="item-input-wrap time-with-remove">
+                    <input type="date" :value="d" :readonly="!editable" :aria-label="ct('日期') + ' ' + (i + 1)" @input="draft.freq.dates[i] = $event.target.value" />
+                    <button v-if="editable && draft.freq.dates.length > 1" type="button" class="time-remove" :aria-label="ct('移除這個日期')" @click="draft.freq.dates.splice(i, 1)"><i class="icon f7-icons">minus_circle_fill</i></button>
+                  </div>
+                </div></div>
+              </li>
+              <li v-if="editable && draft.freq.dates.length < MAX_DATES" class="time-add-row"><div class="item-content"><div class="item-inner">
+                <a href="#" class="date-add time-add" @click.prevent="draft.freq.dates.push('')"><i class="icon f7-icons">plus_circle</i>{{ ct('再加一個日期') }}</a>
+              </div></div></li>
+            </template>
             <li v-if="draft.freq.type === 'weekly'" class="weekday-row">
               <div class="item-content"><div class="item-inner">
                 <div class="weekday-chips" role="group" :aria-label="ct('星期')">
@@ -244,7 +260,7 @@ import { t, lang } from '../js/i18n.js';
 import { ct, listJoin } from '../js/agent-i18n.js';
 import { activeTab } from '../js/tab-session.js';
 import { sheetSwipe, guardSheet, closeAsking } from '../js/sheetSwipe.js';
-import { MAX_DOMAINS, WEEKDAYS, WEEK_ORDER, editableFrequency, frequencyFor, frequencyText, interpreterLabel, parseDomains, scheduleFocus, shortHash, shortTime, timeoutFor, untilText, validDate, validTime, weekdayLabel } from '../js/schedules.js';
+import { MAX_DATES, MAX_DOMAINS, WEEKDAYS, WEEK_ORDER, editableFrequency, frequencyFor, frequencyText, interpreterLabel, parseDomains, scheduleFocus, shortHash, shortTime, timeoutFor, untilText, validDate, validTime, weekdayLabel } from '../js/schedules.js';
 
 const workspace = inject('workspace', null);
 const zh = computed(() => lang.value === 'zh-TW');

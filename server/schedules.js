@@ -12,8 +12,11 @@ const MAX_SCHEDULES = 500;
 // other agents' proposals out of it.
 const MAX_PENDING_PER_AGENT = 20;
 const MAX_PENDING = 200;
-const TYPES = ['daily', 'weekly', 'monthly', 'interval'];
+const TYPES = ['daily', 'weekly', 'monthly', 'interval', 'dates'];
 const MAX_TIMES = 6;
+// Set dates: each one runs once, and the schedule switches itself off after the last.
+const MAX_DATES = 24;
+const isDate = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && new Date(v + 'T00:00:00Z').toISOString().slice(0, 10) === v;
 
 function error(message, status = 400) { return Object.assign(new Error(message), { status }); }
 const text = (value, max, label) => {
@@ -40,6 +43,11 @@ function frequencyOf(input) {
   const times = [...new Set(list)].sort();
   const at = times.length > 1 ? { time: times[0], times } : { time: times[0] };
   if (f.type === 'daily') return { type: 'daily', ...at };
+  if (f.type === 'dates') {
+    const dates = Array.isArray(f.dates) ? [...new Set(f.dates)].sort() : [];
+    if (!dates.length || dates.length > MAX_DATES || !dates.every(isDate)) throw error(`日期須為 YYYY-MM-DD，1–${MAX_DATES} 個`);
+    return { type: 'dates', ...at, dates };
+  }
   if (f.type === 'weekly') {
     const days = Array.isArray(f.days) ? [...new Set(f.days)].sort() : [];
     if (!days.length || days.some((d) => !Number.isInteger(d) || d < 0 || d > 6)) throw error('每週須選至少一天');
@@ -50,9 +58,13 @@ function frequencyOf(input) {
 }
 
 // The first time strictly after `after` that the frequency names. A monthly day
-// past the month's end falls on its last day.
+// past the month's end falls on its last day. Set dates that are all past give null.
 function nextRun(frequency, after = new Date()) {
   const from = new Date(after);
+  if (frequency.type === 'dates') {
+    const [first] = frequency.dates.flatMap((d) => (frequency.times || [frequency.time]).map((t) => new Date(d + 'T' + t + ':00'))).filter((w) => w > from).sort((a, b) => a - b);
+    return first || null;
+  }
   if (frequency.type === 'interval') return new Date(from.getTime() + frequency.hours * 3600_000);
   // With several times, the earliest of each one's next run.
   if (frequency.times?.length > 1) return new Date(Math.min(...frequency.times.map((time) => nextRun({ ...frequency, time, times: undefined }, from).getTime())));
@@ -73,6 +85,13 @@ function nextRun(frequency, after = new Date()) {
     if (frequency.type === 'daily' || frequency.days.includes(when.getDay())) return when;
   }
   throw error('無法計算下次時間');
+}
+
+// The next run of a schedule being set up or switched on; set dates all past are refused.
+function firstRun(frequency, after) {
+  const when = nextRun(frequency, after);
+  if (!when) throw error('指定的日期都已經過了');
+  return when.toISOString();
 }
 
 // A background script: the agent writes it, the owner approves that
@@ -203,22 +222,23 @@ function create(stateRoot, { now = () => new Date() } = {}) {
     room(!active);
     const at = now().toISOString();
     const s = { id: randomUUID(), owner: conversation.owner, conversationId: conversation.id, agentTitle: String(conversation.title || ''), ...f, reason, proposedBy: 'agent', createdAt: at, lastRun: null,
-      ...(active ? { status: 'active', approvedAt: at, nextAt: nextRun(f.frequency, now()).toISOString(), notifyPending: false } : { status: 'pending', nextAt: null, notifyPending: true }) };
+      ...(active ? { status: 'active', approvedAt: at, nextAt: firstRun(f.frequency, now()), notifyPending: false } : { status: 'pending', nextAt: null, notifyPending: true }) };
     load().push(s); save(); return { schedule: s, created: true };
   }
   // The owner's own, running from now.
   function add(conversation, input = {}) {
     const f = complete(fields({ ...input, prompt: input.prompt === '' ? undefined : input.prompt }));
     room(false);
-    const s = { id: randomUUID(), owner: conversation.owner, conversationId: conversation.id, ...f, reason: '', proposedBy: 'owner', status: 'active', createdAt: now().toISOString(), approvedAt: now().toISOString(), nextAt: nextRun(f.frequency, now()).toISOString(), lastRun: null };
+    const s = { id: randomUUID(), owner: conversation.owner, conversationId: conversation.id, ...f, reason: '', proposedBy: 'owner', status: 'active', createdAt: now().toISOString(), approvedAt: now().toISOString(), nextAt: firstRun(f.frequency, now()), lastRun: null };
     load().push(s); save(); return s;
   }
   function approve(id, input = {}) {
     const s = get(id); if (!s) throw error('找不到這個排程', 404);
     if (s.status !== 'pending') throw error('這個排程已經處理過', 409);
     room(false);
-    Object.assign(s, fields(input, s), { status: 'active', approvedAt: now().toISOString(), notifyPending: false });
-    s.nextAt = nextRun(s.frequency, now()).toISOString();
+    const f = fields(input, s);
+    const nextAt = firstRun(f.frequency, now());
+    Object.assign(s, f, { status: 'active', approvedAt: now().toISOString(), notifyPending: false, nextAt });
     save(); return s;
   }
   // A frequency changed, or a schedule turned back on, counts from now: nothing
@@ -238,6 +258,8 @@ function create(stateRoot, { now = () => new Date() } = {}) {
     if (replaceScript && input.script) f.script = scriptOf(input.script);
     // What it runs is one thing: the one just given takes the place of the others.
     const kind = input.feed ? 'feed' : input.check ? 'check' : input.script ? 'script' : null;
+    const willRun = input.enabled !== undefined ? input.enabled : s.status === 'active';
+    const nextAt = willRun && (input.enabled === true || JSON.stringify(f.frequency) !== before || (!s.nextAt && !s.pendingRun)) ? firstRun(f.frequency, now()) : undefined;
     Object.assign(s, f);
     if (kind) {
       for (const k of ['feed', 'check', 'script']) if (k !== kind) delete s[k];
@@ -252,7 +274,7 @@ function create(stateRoot, { now = () => new Date() } = {}) {
       // A script already running finishes; its run is not orphaned into a second one.
       if (!input.enabled && !s.pendingRun?.scriptRunning) delete s.pendingRun;
     }
-    if (s.status === 'active' && (input.enabled === true || JSON.stringify(s.frequency) !== before || !s.nextAt)) s.nextAt = nextRun(s.frequency, now()).toISOString();
+    if (s.status === 'active' && nextAt) s.nextAt = nextAt;
     if (s.status !== 'active') s.nextAt = null;
     save(); return s;
   }
