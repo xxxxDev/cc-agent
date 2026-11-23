@@ -211,7 +211,7 @@
             <f7-block-title>{{ ct('試跑') }}</f7-block-title>
             <f7-block class="trial">
               <p class="trial-note">{{ ct('試跑用空白的狀態，不會推播，也不會交給 Agent。') }}<template v-if="trialStale"> {{ ct('網站與時間上限用已保存的設定，不含剛才的修改。') }}</template></p>
-              <f7-button round outline class="trial-run" :disabled="testing || saving" @click="trial"><f7-preloader v-if="testing" :size="18" class="trial-spinner" /><span>{{ testing ? ct('試跑中…') : ct('試跑') }}</span></f7-button>
+              <f7-button tonal round large class="trial-run" :disabled="testing || saving" @click="trial"><f7-preloader v-if="testing" :size="18" class="trial-spinner" /><span>{{ testing ? ct('試跑中…') : ct('試跑') }}</span></f7-button>
             </f7-block>
             <div v-if="trialResult" class="block block-strong inset trial-result" :class="trialResult.ok ? 'trial-ok' : 'trial-failed'">
               <div class="trial-status"><i class="icon f7-icons">{{ trialResult.ok ? 'checkmark_circle_fill' : 'xmark_circle_fill' }}</i><span>{{ trialResult.ok ? ct('成功') : trialResult.timedOut ? ct('逾時') : ct('失敗') }}<template v-if="trialResult.durationMs != null"> · {{ seconds(trialResult.durationMs / 1000) }}</template><template v-if="!trialResult.ok && trialResult.exitCode != null"> · {{ ct('結束碼') }} {{ trialResult.exitCode }}</template></span></div>
@@ -237,7 +237,7 @@
             </ul></div>
           </template>
           <f7-block v-if="mode === 'edit' && editable && draft.id" class="sheet-actions">
-            <f7-button round outline class="run-now" :disabled="saving || draft.waiting || draft.running" @click="runNow">{{ draft.running ? ct('執行中') : draft.waiting ? ct('等待執行中') : ct('立即執行') }}</f7-button>
+            <f7-button tonal round large class="run-now" :disabled="saving || draft.waiting || draft.running" @click="runNow">{{ draft.running ? ct('執行中') : draft.waiting ? ct('等待執行中') : ct('立即執行') }}</f7-button>
           </f7-block>
           <f7-block v-if="mode === 'approve' && editable" class="sheet-actions">
             <f7-button fill round large class="approve" :disabled="!ready || saving" @click="save">{{ ct('核准') }}</f7-button>
