@@ -3262,6 +3262,7 @@ function attachTerminalFile(c,fileId){
 // nothing; terminalMirror.seen remembers what was added, at most TERMINAL_SEEN_MAX.
 const TERMINAL_SEEN_MAX=200;
 const PICTURE_EXT={'image/png':'.png','image/jpeg':'.jpg','image/gif':'.gif','image/webp':'.webp'};
+const SERVER_STARTED=Date.now();
 function mirrorTerminal(c){
  if(c.archived||c.mode!=='claude')return false;
  const g=active(c);
@@ -3274,6 +3275,13 @@ function mirrorTerminal(c){
  for(const e of found?.events||[]){
   if(seen.has(e.uuid)||!(Date.parse(e.at)>=from))continue;
   if(e.kind==='prompt'){
+   // Commands are shown from this server's start: the ones typed before it would otherwise
+   // all come into the chat at once the first time this runs.
+   if(e.command&&!(Date.parse(e.at)>=SERVER_STARTED)){seen.add(e.uuid);c.terminalMirror.seen=[...(c.terminalMirror.seen||[]),e.uuid].slice(-TERMINAL_SEEN_MAX);changed=true;continue;}
+   // A command run from the composer is in the chat already, as its note: its answers go
+   // under that note instead of a second bubble.
+   const ran=e.command&&c.messages.findLast(m=>m.role==='system'&&!m.sourceUuid&&m.text==='已在終端機執行 '+e.text&&Math.abs(Date.parse(m.at)-Date.parse(e.at))<60000);
+   if(ran){ran.sourceUuid=e.uuid;seen.add(e.uuid);c.terminalMirror.seen=[...(c.terminalMirror.seen||[]),e.uuid].slice(-TERMINAL_SEEN_MAX);changed=true;continue;}
    const files=terminalTurnFiles(c,e);
    // Nothing to show (a picture alone that could not be kept): looked at once, not again at
    // every heartbeat; terminalTurnFiles said why.
@@ -3283,7 +3291,7 @@ function mirrorTerminal(c){
    add(c,'user',withoutPaths(e.text,files),{via:'terminal',sourceUuid:e.uuid,generation:found.generation,...(files.length?{attachments:files}:{})});
   }else if(e.kind==='answer'){
    // Only under a prompt that is in the chat: an answer to one from before is not shown alone.
-   const asked=c.messages.findLast(m=>m.via==='terminal'&&m.role==='user'&&m.sourceUuid===e.prompt);
+   const asked=c.messages.findLast(m=>m.sourceUuid===e.prompt&&(m.via==='terminal'&&m.role==='user'||m.role==='system'));
    if(!asked)continue;
    add(c,'assistant',e.text,{via:'terminal',sourceUuid:e.uuid,generation:found.generation,inReplyTo:asked.id,quiet:true});
   }else continue;
