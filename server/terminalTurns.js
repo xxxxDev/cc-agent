@@ -214,14 +214,30 @@ function track(state, record) {
 
 // A command, or what it printed: the command opens its own turn and shows as typed; its
 // output is its first answer.
+// What a command printed, for the chat. A screen laid out in columns (/context: a coloured
+// grid with words beside it) keeps its layout as a code block, as the terminal shows it, rather
+// than running together as prose; a line or plain text stays as it is.
+function printedText(raw) {
+  const styled = ANSI.test(raw); ANSI.lastIndex = 0;
+  const plain = raw.replace(ANSI, '').replace(/^\s*\n/, '').trimEnd();
+  if (!plain.trim()) return '';
+  const lines = plain.split('\n');
+  if (lines.length < 3 || !(styled || lines.some(l => /\S {2,}\S/.test(l)))) return Array.from(plain.trim()).slice(0, TEXT_MAX).join('');
+  // The common indent of the lines under the first, which Claude Code starts one space in.
+  const strip = Math.min(...lines.slice(1).filter(l => l.trim()).map(l => l.match(/^ */)[0].length));
+  const body = Array.from([lines[0].trimStart(), ...lines.slice(1).map(l => l.slice(strip))].join('\n')).slice(0, TEXT_MAX - 20).join('');
+  const fence = '`'.repeat(Math.max(3, ...(body.match(/`+/g) || []).map(r => r.length + 1)));
+  return fence + 'text\n' + body + '\n' + fence;
+}
+
 function command(state, record, text) {
   const out = COMMAND_OUTPUT.exec(text);
   if (out) {
     const open = state.open;
     if (!open || !open.command || open.output) return;
     open.output = true;
-    const printed = out[2].replace(ANSI, '').trim();
-    if (printed) push(state, {kind: 'answer', uuid: record.uuid, prompt: open.uuid, at: record.timestamp || null, text: Array.from(printed).slice(0, TEXT_MAX).join('')});
+    const printed = printedText(out[2]);
+    if (printed) push(state, {kind: 'answer', uuid: record.uuid, prompt: open.uuid, at: record.timestamp || null, text: printed});
     return;
   }
   const typed = commandText(text);
