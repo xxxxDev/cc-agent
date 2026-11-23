@@ -164,21 +164,50 @@ export function bindConversationViewport(page,{viewport=window.visualViewport}={
   function touchStart(event){
     const el=event.target.closest?.('[contenteditable]')||event.target;
     const point=event.touches?.[0];
+    drag=point&&event.touches.length===1&&event.target.closest?.('.messagebar')?{x:point.clientX,y:point.clientY,at:Date.now()}:null;
     tap=event.touches?.length===1&&el.matches?.('textarea,input,[contenteditable]')&&(document.activeElement!==el||reopens(el))
       ?{el,x:point.clientX,y:point.clientY}:null;
+  }
+  // A finger dragged on the composer while the keyboard is up: nothing there scrolls (or
+  // the editor is already at its end), so iOS pans the whole visual viewport instead, and
+  // restoreShell pulling the document back each frame made the page bounce for seconds
+  // (the viewport offset moving 0..168 against a document reset to 0). The same drag on the history scrolls the history and never
+  // reached this. Such a drag is held here; one the editor can still take stays native,
+  // and so does a long press (the caret loupe and selection).
+  let drag=null;
+  function editorCanScroll(target,dy){
+    for(let el=target;el&&el!==page;el=el.parentElement){
+      if(el.scrollHeight>el.clientHeight+1&&/(auto|scroll)/.test(getComputedStyle(el).overflowY))
+        return dy>0?el.scrollTop>0:el.scrollTop+el.clientHeight<el.scrollHeight-1;
+      if(el.classList?.contains('messagebar'))return false;
+    }
+    return false;
+  }
+  function holdComposerDrag(event,point){
+    if(!drag||!keyboard||!event.cancelable)return;
+    const dx=point.clientX-drag.x,dy=point.clientY-drag.y;drag.x=point.clientX;drag.y=point.clientY;
+    if(drag.native||!dx&&!dy)return;
+    if(drag.moved===undefined){
+      drag.moved=true;
+      // A long press first: the loupe or a selection, left to iOS for the whole touch; so is
+      // a swipe mostly sideways, which scrolls a row of draft attachments.
+      if(Date.now()-drag.at>350||Math.abs(dx)>=Math.abs(dy)||editorCanScroll(event.target,dy)){drag.native=true;return;}
+    }else if(editorCanScroll(event.target,dy))return;
+    event.preventDefault();
   }
   function touchMove(event){
     const point=event.touches?.[0];
     if(!point||event.touches.length!==1||tap&&Math.hypot(point.clientX-tap.x,point.clientY-tap.y)>8)tap=null;
+    if(point&&event.touches.length===1)holdComposerDrag(event,point);
   }
   function touchEnd(event){
-    const pending=tap;tap=null;
+    const pending=tap;tap=null;drag=null;
     if(!pending||event.touches?.length||!event.cancelable)return;
     // Focus after release, then suppress Safari's default focus/caret action
     // for this same tap. A moved invisible editor must not be re-hit-tested.
     touchFocus({target:pending.el,preventDefault:()=>event.preventDefault()});
   }
-  function touchCancel(){tap=null;}
+  function touchCancel(){tap=null;drag=null;}
   // A search taking the reader to an older message: the next keyboard move must
   // not pin them back to the newest. The keyboard closing after a tap in the search
   // did exactly that, so the jump seemed to need a second tap.
@@ -195,6 +224,6 @@ export function bindConversationViewport(page,{viewport=window.visualViewport}={
   const touchOptions={passive:false};
   viewport.addEventListener('resize',sync);viewport.addEventListener('scroll',shellScrolled);window.addEventListener('resize',sync);
   page.ownerDocument?.addEventListener('scroll',shellScrolled,true);
-  page.addEventListener('touchstart',touchStart,{passive:true});page.addEventListener('touchmove',touchMove,{passive:true});page.addEventListener('touchend',touchEnd,touchOptions);page.addEventListener('touchcancel',touchCancel);page.addEventListener('focusin',focus);page.addEventListener('focusout',stuckBlur);page.addEventListener('focusout',sync);page.addEventListener('conversation:unpin',unpin);page.addEventListener('scroll',historyScrolled,true);sync();
-  return ()=>{shown?.disconnect();cancelAnimationFrame(motionFrame);cancelAnimationFrame(focusFrame);reveal();page.style.removeProperty('--conversation-visible-height');page.style.removeProperty('--conversation-composer-lift');page.classList.remove('conversation-keyboard');page.removeEventListener('focusout',stuckBlur);viewport.removeEventListener('resize',sync);viewport.removeEventListener('scroll',shellScrolled);page.ownerDocument?.removeEventListener('scroll',shellScrolled,true);releaseShell();window.removeEventListener('resize',sync);page.removeEventListener('touchstart',touchStart);page.removeEventListener('touchmove',touchMove);page.removeEventListener('touchend',touchEnd,touchOptions);page.removeEventListener('touchcancel',touchCancel);page.removeEventListener('focusin',focus);page.removeEventListener('focusout',sync);page.removeEventListener('conversation:unpin',unpin);page.removeEventListener('scroll',historyScrolled,true);};
+  page.addEventListener('touchstart',touchStart,{passive:true});page.addEventListener('touchmove',touchMove,touchOptions);page.addEventListener('touchend',touchEnd,touchOptions);page.addEventListener('touchcancel',touchCancel);page.addEventListener('focusin',focus);page.addEventListener('focusout',stuckBlur);page.addEventListener('focusout',sync);page.addEventListener('conversation:unpin',unpin);page.addEventListener('scroll',historyScrolled,true);sync();
+  return ()=>{shown?.disconnect();cancelAnimationFrame(motionFrame);cancelAnimationFrame(focusFrame);reveal();page.style.removeProperty('--conversation-visible-height');page.style.removeProperty('--conversation-composer-lift');page.classList.remove('conversation-keyboard');page.removeEventListener('focusout',stuckBlur);viewport.removeEventListener('resize',sync);viewport.removeEventListener('scroll',shellScrolled);page.ownerDocument?.removeEventListener('scroll',shellScrolled,true);releaseShell();window.removeEventListener('resize',sync);page.removeEventListener('touchstart',touchStart);page.removeEventListener('touchmove',touchMove,touchOptions);page.removeEventListener('touchend',touchEnd,touchOptions);page.removeEventListener('touchcancel',touchCancel);page.removeEventListener('focusin',focus);page.removeEventListener('focusout',sync);page.removeEventListener('conversation:unpin',unpin);page.removeEventListener('scroll',historyScrolled,true);};
 }
