@@ -24,7 +24,7 @@ const shown=computed(()=>props.items.slice(0,props.expanded?undefined:1));
 .reply-quote-row:focus-visible .reply-quote-text{color:var(--f7-message-received-text-color)}
 @media (hover:hover) and (pointer:fine){.reply-quote-row:hover .reply-quote-text{color:var(--f7-message-received-text-color)}}
 .reply-quote-avatar{flex:none;width:16px;height:16px;border-radius:38%;object-fit:cover}
-.reply-quote-who{flex:none;font-weight:600;color:#0a84ff}
+.reply-quote-who{flex:0 1 auto;min-width:0;max-width:60%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;color:#0a84ff}
 .reply-quote-text{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .reply-quote-more{flex:none;width:auto;margin:0;padding:0 7px;border:0;border-radius:8px;background:rgba(127,127,127,.2);color:inherit;font:inherit;font-size:11px;line-height:18px;cursor:pointer}
 </style>
