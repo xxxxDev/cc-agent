@@ -3300,6 +3300,10 @@ function mirrorTerminal(c){
  if(changed)save(c);
  return changed;
 }
+// The terminal mirror once a second too, not only at the runner's heartbeat (every 5 s): what
+// was typed in the terminal and its answer reach the chat about as soon as the terminal shows
+// them. The transcript is read only for what was added.
+setInterval(()=>{for(const c of state.conversations){if(c.archived||c.mode!=='claude')continue;const g=active(c);if(!g?.launchedAt||['stopped','error'].includes(g.phase))continue;try{mirrorTerminal(c);}catch(e){console.error(`terminal mirror for ${c.id}: ${e.message}`);}}},1000).unref();
 // The pictures of a typed prompt, and the files of this chat's own attachment folder its text
 // names (a file dropped on the terminal, attachTerminalFile), as the message's attachments. A
 // file already in that folder and not yet sent is the same attachment, taken as sent now; a
