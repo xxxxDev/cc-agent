@@ -1294,9 +1294,65 @@ function typedSettings(stateRoot, conversation) {
 function skills(stateRoot, conversation) {
   const run = (conversation?.runs || []).at(-1);
   if (conversation?.mode !== 'claude' || !run) return [];
-  const file = locate(path.join(stateRoot, 'workspaces', conversation.id, 'g' + run.number), run.sessionId);
+  const workspace = path.join(stateRoot, 'workspaces', conversation.id, 'g' + run.number);
+  const file = locate(workspace, run.sessionId);
   const state = file ? readCurrent(file) : null;
-  return state && state !== LATER ? [...state.skills].map(([name, description]) => ({name, description: description.slice(0, 300)})) : [];
+  if (state && state !== LATER && state.skills.size) return [...state.skills].map(([name, description]) => ({name, description: description.slice(0, 300)}));
+  // Before Claude Code has listed them (an agent that has had no message yet has no
+  // transcript): the skills on disk, the workspace's, and the user's own for a full-access
+  // agent (a scoped one starts with --setting-sources project).
+  const own = conversation.access?.full === true ? [{dir: path.join(os.homedir(), '.claude', 'skills'), confined: null}] : [];
+  let real;
+  try { real = fs.realpathSync(workspace); } catch { return skillsOnDisk(own); }
+  return skillsOnDisk([...own, {dir: path.join(real, '.claude', 'skills'), confined: real}]);
+}
+
+// The first 8 KB of a SKILL.md, or null. Never blocking (a pipe in its place would stop
+// the service) and only a regular file. Under an agent's workspace (confined: its real
+// path), the agent writes the folders, so no link at any level and one name only: the
+// open file must still be the one its path names, inside the workspace, once it is open.
+// The user's own skills may be links, their choice.
+function skillHead(file, confined) {
+  let fd;
+  try {
+    fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK || 0) | (confined ? (fs.constants.O_NOFOLLOW || 0) : 0));
+    const open = fs.fstatSync(fd, {bigint: true});
+    if (!open.isFile()) return null;
+    if (confined) {
+      if (!fs.constants.O_NOFOLLOW || open.nlink !== 1n) return null;
+      const named = fs.lstatSync(file, {bigint: true});
+      if (named.dev !== open.dev || named.ino !== open.ino || named.nlink !== 1n) return null;
+      if (!fs.realpathSync(file).startsWith(confined + path.sep)) return null;
+      for (let dir = path.dirname(file); dir.length > confined.length; dir = path.dirname(dir)) if (!fs.lstatSync(dir).isDirectory()) return null;
+    }
+    const buf = Buffer.alloc(8192);
+    return buf.toString('utf8', 0, fs.readSync(fd, buf, 0, buf.length, 0));
+  } catch { return null; } finally { if (fd !== undefined) try { fs.closeSync(fd); } catch {} }
+}
+
+function skillsOnDisk(dirs) {
+  const found = new Map();
+  for (const {dir, confined} of dirs) {
+    let names = [];
+    try { names = fs.readdirSync(dir).sort(); } catch { continue; }
+    // At most 400 folders tried per folder of skills, 200 skills in all.
+    for (const folder of names.slice(0, 400)) {
+      if (found.size >= 200) break;
+      const text = skillHead(path.join(dir, folder, 'SKILL.md'), confined);
+      if (text === null) continue;
+      const head = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)?.[1] || '';
+      const field = key => {
+        const m = new RegExp(`^${key}:[ \\t]*(.*)((?:\\r?\\n[ \\t]+.*)*)`, 'm').exec(head);
+        if (!m) return '';
+        const value = /^[|>][-+]?$/.test(m[1].trim()) ? m[2] : m[1] + m[2];
+        return value.replace(/\s+/g, ' ').trim().replace(/^(['"])(.*)\1$/, '$2');
+      };
+      const name = field('name') || folder;
+      if (!/^[\w.:-]{1,80}$/.test(name) || found.has(name)) continue;
+      found.set(name, field('description').replace(/\s+/g, ' ').slice(0, 300));
+    }
+  }
+  return [...found].map(([name, description]) => ({name, description}));
 }
 
 // The claude.ai connectors an agent has had tools from (they are named in its
