@@ -1185,7 +1185,7 @@ function send(c,text,key,attachmentIds=[],extra={}) {
  // Anyone's message wakes it already: the automatic one is not sent after it.
  if(!extra.limitResume)delete g.limitResume;
  // Work goes on: the wrap-up check waits for the next finished answer.
- if(!extra.wrapUp&&!extra.loginNotice)delete g.wrapUp;
+ if(!extra.wrapUp&&!extra.loginNotice&&!extra.relayWait)delete g.wrapUp;
  const m=add(c,'user',text.trim(),{requestId:key,delivery:'queued',...(files.length?{attachments:files}:{}),...extra});
  // The placeholder title becomes the first message, for an agent an admin made
  // untitled; one an earlier build made from a template (templateId) keeps its name.
