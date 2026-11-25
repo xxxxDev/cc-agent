@@ -627,6 +627,8 @@ const openOutputs = ref({});
 .schedule-list { user-select: none; -webkit-user-select: none; }
 .schedule-row :deep(.item-content) { cursor: pointer; }
 .schedule-list :deep(.item-text) { -webkit-line-clamp: 2; line-clamp: 2; }
+/* Six times a day do not fit one line on a phone: the line wraps rather than cutting the last. */
+.schedule-list :deep(.item-subtitle) { white-space: normal; }
 .schedule-off :deep(.item-title) { opacity: 0.55; }
 .last-run { color: inherit; }
 .outcome-failed, .outcome-failed :deep(.item-after) { color: #ff453a; }

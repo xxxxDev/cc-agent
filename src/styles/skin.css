@@ -635,6 +635,20 @@ img[src$="/sources/anthropic-native.svg"] {
   margin: 0;
   font-size: 12px;
   line-height: 1.4;
+  white-space: nowrap;
+}
+/* Six tabs on a phone leave about 55px each: English "Schedules" in bold all but touched
+   "Terminal", so on a narrow phone the label gets the whole tab and a slightly smaller,
+   tighter size (cut with "…" it read worse). */
+@media (max-width: 420px) {
+  .cc-app .toolbar-views-ui__segmented-toolbar .button {
+    padding-left: 1px;
+    padding-right: 1px;
+  }
+  .cc-app .toolbar-views-ui__segmented-toolbar .button .tabbar-label {
+    font-size: 11px;
+    letter-spacing: -0.2px;
+  }
 }
 
 .cc-app .toolbar-views-ui__segmented-toolbar .segmented-highlight {

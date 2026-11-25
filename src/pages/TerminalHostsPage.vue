@@ -364,7 +364,8 @@ function remove(h) {
 .host-action .icon { font-size: 19px; width: 19px; height: 19px; line-height: 19px; display: inline-flex; align-items: center; justify-content: center; }
 .host-action .icon :deep(svg) { width: 19px; height: 19px; display: block; }
 .hosts-list :deep(.item-after) { align-self: center; margin-left: 8px; }
-.hosts-list :deep(.item-text) { -webkit-line-clamp: 1; }
+/* user@address is one long word: a one-line clamp would cut it mid-character with no ellipsis. */
+.hosts-list :deep(.item-text) { display: block; -webkit-line-clamp: unset; line-clamp: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hosts-error { color: var(--f7-color-red, #ff453a); }
 .hosts-empty, .host-form-note { color: var(--f7-list-item-subtitle-text-color, #8e8e93); font-size: 13px; }
 </style>
