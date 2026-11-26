@@ -28,7 +28,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const FIRST_LINE_CAP = 64 * 1024;
 // The setting that moves the audit log (services/audit.js) is named by the product.
 const AUDIT_LOG_ENV = require('../siteConfig').PRODUCT.env.auditLog;
-const DEFAULT_FILES = Object.freeze(['api-audit.log']);
+const DEFAULT_FILES = Object.freeze(['api-audit.log', 'agent-monitor.log']);
 
 function defaultLogsDir() {
   // Rotate where the audit log is written (services/audit.js): beside it when
@@ -39,10 +39,10 @@ function defaultLogsDir() {
     : path.resolve(__dirname, '..', 'logs');
 }
 
-// The audit log, under the name that setting gives it.
+// The audit log, under the name that setting gives it, and the agent monitor's log.
 function defaultFiles() {
   return process.env[AUDIT_LOG_ENV]
-    ? [path.basename(process.env[AUDIT_LOG_ENV])]
+    ? [...new Set([path.basename(process.env[AUDIT_LOG_ENV]), 'agent-monitor.log'])]
     : DEFAULT_FILES;
 }
 

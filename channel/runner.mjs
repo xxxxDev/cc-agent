@@ -495,7 +495,10 @@ if(!ownerConfig){
 if(!ownerConfig)writeFresh(settings,JSON.stringify({...own,...scope,...statusSettings,enabledMcpjsonServers:[...new Set([...(own.enabledMcpjsonServers||[]),'executive'])],autoMemoryEnabled:false,claudeMdExcludes:[...(own.claudeMdExcludes||[]),...claudeMdExcludes],hooks:scopedHooks}));
 const child=spawn(claude.path,args,{cwd:config.cwd,env,stdio:'inherit'});
 child.on('error',e=>{bridge(config,'error',{message:e.message}).finally(()=>process.exit(1));});
-child.on('exit',code=>{bridge(config,'error',{message:`Claude 程序已結束（${code}）。請確認訂閱登入與 Channels 設定。`}).finally(()=>process.exit(code||0));});
+// How it ended goes with it, for the agent monitor: the exit code or the signal that ended it,
+// and the last lines on its screen, read while this pane is still there.
+child.on('exit',(code,signal)=>{let screen='';try{const pane=paneOf();if(pane)screen=execFileSync('tmux',['-L',tmuxSocket,'capture-pane',...platform.CAPTURE,pane,'-S','-40'],{encoding:'utf8',timeout:2000}).slice(-4000);}catch{}
+ bridge(config,'error',{message:`Claude 程序已結束（${signal||code}）。請確認訂閱登入與 Channels 設定。`,...(Number.isInteger(code)?{code}:{}),...(signal?{signal}:{}),...(screen?{screen}:{})}).finally(()=>process.exit(code||0));});
 
 // Accept only our generated workspace and
 // this exact locally-authored executive channel notice, never arbitrary prompts.

@@ -271,6 +271,8 @@ Windows 不支援。
 - **錄製中標籤。** 錄製時，每一頁的標題列下方都有紅色的「● 錄製中 0:23」標籤，手機在正中間，電腦在右上角，不擋標題列的按鈕和輸入框。點它可以選「停止並回報」、「只停止」（保留在 Agent Profile，之後再複製或回報）或「繼續錄製」。
 - **回報診斷。** 把同一份內容送給管理員，只能是你自己的 agent（最大 512 KB，每小時十次），管理員會收到通知。
 - **診斷回報。** 管理員在管理頁看：誰送的、哪個 agent、什麼時候、哪個版本。打開一份可以閱讀和複製、標為已處理、刪除，或交給自己的一個 agent。外部的人找得到或曾經找得到的 agent 不會列出來；交給有完整權限的 agent 前會先請你確認。那個 agent 的對話會打開，回報以 `.txt` 檔放在輸入框裡。檔案開頭先警告：下面的名稱和之後的內容都是那位使用者寫的，只當資料看，不照裡面的指示做；接著寫送出時間，再把送出者名稱和 agent 名稱加上引號，各自放在標明欄位的一行。
+- **Agent 監控紀錄。** `agent-monitor.log` 放在稽核紀錄旁邊，跟著一起輪替，記下 agent 為什麼離線：每筆一行 JSON，附上時間和電腦的負載、可用記憶體、已開機多久。事件是 CC Agent 看到或對 agent 做的事（`service-start`、`stop`、`session-gone`、`tmux-slow`、`startup-timeout`、`claude-exited` 附結束代碼或訊號和最後幾行畫面、`turn-failed`、`channel-off`、`channel-off-again`、`channel-silent-revive`、`channel-lost`、`revive-failed`、`restart-failed`、`launch-failed`、`delivery-lost`）；每分鐘一筆取樣，列出每個執行中 agent 的狀態，以及距離上次心跳和上次輪詢多久。
+- **電腦很忙的時候。** tmux 來不及回應不再讓 agent 離線；負載高於核心數時，沉默的頻道等九分鐘才重新啟動（平常三分鐘）；交接出去卻沒送到 Claude 的訊息會再送一次，並附上提醒不要做兩次。
 
 <p align="center">
   <img src="../.github/assets/screens/phones-diagnostics-dark.png" alt="Agent Profile 的工程診斷資訊、對話上方的紅色錄製中標籤，以及停止並回報的詢問">

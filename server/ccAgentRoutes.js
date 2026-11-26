@@ -12,6 +12,17 @@ app.post('/bridge/peer/exchange',(req,res,next)=>{try{res.json(agents.peerExchan
 app.all('/bridge/peer/:any',(req,res)=>res.status(404).json({message:'Not found'}));
 app.all('/bridge/:id/:action',(req,res,next)=>{try{
  const c=agents.byToken(req.params.id,(req.headers.authorization||'').replace(/^Bearer /,''));
+ // A poll the channel already gave up on (a computer so loaded the answer came after its
+ // timeout) is not answered with a message: nobody is there to take it. One whose answer does
+ // not get through puts its message back in line (agentStore pollLost).
+ if(req.params.action==='poll'){
+  // The connection itself (req.destroyed turns true once the body has been read).
+  if(res.destroyed||req.socket?.destroyed)return;
+  const r=agents.bridge(c,'poll',req.method==='GET'?req.query:req.body);
+  const id=r?.message?.id;
+  if(id)res.on('close',()=>{if(!res.writableFinished){try{agents.pollLost(c,id);}catch(e){console.error(`poll lost for ${c.id}: ${e.message}`);}}});
+  res.json(r);return;
+ }
  res.json(agents.bridge(c,req.params.action,req.method==='GET'?req.query:req.body));
 }catch(e){next(e);}});
 

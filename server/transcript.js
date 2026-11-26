@@ -826,8 +826,11 @@ function unreceived(stateRoot, conversation, handed) {
       const buf = Buffer.alloc(size - from); fs.readSync(fd, buf, 0, buf.length, from); text = buf.toString('utf8');
     } finally { fs.closeSync(fd); }
   } catch { return out; }
-  // A message id is a UUID: read from the earliest mark on, it is found only where it arrived.
-  const missing = known.filter(h => !text.includes(h.id)).map(h => h.id);
+  // A message id is a UUID: read from the earliest mark on, it is found only where it arrived, as
+  // the message_id of a channel tag (in the JSON line, its quotes escaped). A bare id is not enough:
+  // a Stop hook's reminder or a later reply_to names a message that never came.
+  const arrived = (t, id) => t.includes('message_id=\\"' + id + '\\"') || t.includes('message_id="' + id + '"');
+  const missing = known.filter(h => !arrived(text, h.id)).map(h => h.id);
   if (!missing.length) return out;
   // Claude may have moved to another folder's session: /resume takes up in place any session of
   // a folder in the same git repository (agent workspaces sit inside one), and writes there from
@@ -836,7 +839,7 @@ function unreceived(stateRoot, conversation, handed) {
   // knowing.
   const elsewhere = writtenSince(since, file);
   if (elsewhere === null) return out;
-  for (const id of missing) if (!elsewhere.some(t => t.includes(id))) out.add(id);
+  for (const id of missing) if (!elsewhere.some(t => arrived(t, id))) out.add(id);
   return out;
 }
 // The part of every transcript other than `own` written since `since` (ms), read back from its end

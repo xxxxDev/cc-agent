@@ -19,6 +19,8 @@ function startService({ app, port, live: liveOptions = {}, onListening = () => {
   // archive/ once their first line is a week old, and kept a year: at start, then
   // daily. A move is a rename, so even a large first one takes no time.
   const stopLogRotation = require('./services/logRotation').startLogRotation({ logsDir: path.dirname(require('./services/audit').AUDIT_LOG) });
+  // The agent monitor's mark of each start: a gap before it is the service down.
+  require('./agentMonitor').event('service-start', null, null, { pid: process.pid });
   const own = product(server) || {};
   // Which build is served and who is there, to open pages (liveUpdates.js).
   const live = require('./liveUpdates').installLiveUpdates(server, liveOptions);
